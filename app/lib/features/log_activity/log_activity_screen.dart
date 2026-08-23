@@ -5,6 +5,7 @@ import '../../data/mock/mock_categories.dart';
 import '../../data/mock/mock_goals.dart';
 import '../../models/tracked_block.dart';
 import '../../shared/widgets/category_chip.dart';
+import '../../shared/widgets/date_swipe_nav.dart';
 import '../../state/categories_providers.dart';
 import '../../state/day_view_providers.dart';
 import '../../state/log_entry_providers.dart';
@@ -61,7 +62,15 @@ class LogActivityScreen extends ConsumerWidget {
         ? null
         : goalForCategory(draft.categoryId!);
 
-    return ColoredBox(
+    void stepTab(int delta) {
+      final next = (ref.read(currentTabIndexProvider) + delta).clamp(0, 3);
+      ref.read(currentTabIndexProvider.notifier).state = next;
+    }
+
+    return DateSwipeNav(
+      onPrevious: () => stepTab(-1),
+      onNext: () => stepTab(1),
+      child: ColoredBox(
       color: AppColors.bg,
       child: Column(
         children: [
@@ -218,6 +227,7 @@ class LogActivityScreen extends ConsumerWidget {
             ),
           ),
         ],
+      ),
       ),
     );
   }

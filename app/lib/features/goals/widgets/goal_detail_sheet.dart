@@ -67,11 +67,13 @@ class GoalDetailSheet extends ConsumerWidget {
     bool inThisWeek(DateTime start) =>
         !start.isBefore(weekStart) && start.isBefore(weekEnd);
 
-    final plannedActivity = watchRef
-        .watch(allPlannedBlocksProvider)
-        .where((b) => b.categoryId == progress!.goal.categoryId && inThisWeek(b.start))
-        .toList()
-      ..sort((a, b) => a.start.compareTo(b.start));
+    final generatedThisWeek = watchRef.watch(goalGeneratedBlocksThisWeekProvider);
+    final plannedActivity = [
+      ...watchRef
+          .watch(allPlannedBlocksProvider)
+          .where((b) => b.categoryId == progress!.goal.categoryId && inThisWeek(b.start)),
+      ...generatedThisWeek.where((b) => b.goalId == progress!.goal.id),
+    ]..sort((a, b) => a.start.compareTo(b.start));
 
     final actualActivity = watchRef
         .watch(allTrackedBlocksProvider)
@@ -159,7 +161,17 @@ class GoalDetailSheet extends ConsumerWidget {
                   )
                 else
                   for (final block in plannedActivity)
-                    _PlannedRow(block: block, color: category.color),
+                    _PlannedRow(
+                      block: block,
+                      color: category.color,
+                      // A generated block from a duration-mode goal has no
+                      // fixed clock time of its own — the placement shown
+                      // here is just wherever it happened to land that day,
+                      // recomputed on the fly, not something stored on the
+                      // goal. Flag it so it doesn't read as an editable
+                      // commitment the way a time-range goal's block is.
+                      isAutoPlaced: block.isGoalAutoPlaced,
+                    ),
                 const SizedBox(height: AppSpacing.s2),
                 DecoratedBox(
                   decoration: BoxDecoration(
@@ -212,11 +224,18 @@ class _StatRow extends StatelessWidget {
 String _clock(DateTime t) =>
     '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
+String _dayLabel(DateTime t) => DateFormat('EEE').format(t).toUpperCase();
+
 class _PlannedRow extends StatelessWidget {
-  const _PlannedRow({required this.block, required this.color});
+  const _PlannedRow({
+    required this.block,
+    required this.color,
+    required this.isAutoPlaced,
+  });
 
   final PlannedBlock block;
   final Color color;
+  final bool isAutoPlaced;
 
   @override
   Widget build(BuildContext context) {
@@ -238,7 +257,8 @@ class _PlannedRow extends StatelessWidget {
                 children: [
                   Text(block.title, style: AppTextStyles.label()),
                   Text(
-                    '${_clock(block.start)}–${_clock(block.end)}',
+                    '${_dayLabel(block.start)} ${_clock(block.start)}–${_clock(block.end)}'
+                    '${isAutoPlaced ? ' · auto-placed' : ''}',
                     style: AppTextStyles.mono(),
                   ),
                 ],
@@ -298,7 +318,8 @@ class _ActualRow extends StatelessWidget {
                 children: [
                   Text(block.title, style: AppTextStyles.label()),
                   Text(
-                    '${_clock(block.start)}–${_clock(block.end)} · ${block.sourceId}',
+                    '${_dayLabel(block.start)} ${_clock(block.start)}–${_clock(block.end)} '
+                    '· ${block.sourceId}',
                     style: AppTextStyles.mono(),
                   ),
                 ],

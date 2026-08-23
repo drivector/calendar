@@ -2,7 +2,9 @@ import 'package:flutter/material.dart' show MaterialPageRoute;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../shared/widgets/date_swipe_nav.dart';
 import '../../state/goals_providers.dart';
+import '../../state/root_shell_providers.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
@@ -22,7 +24,15 @@ class GoalsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final progressList = ref.watch(goalProgressListProvider);
 
-    return ColoredBox(
+    void stepTab(int delta) {
+      final next = (ref.read(currentTabIndexProvider) + delta).clamp(0, 3);
+      ref.read(currentTabIndexProvider.notifier).state = next;
+    }
+
+    return DateSwipeNav(
+      onPrevious: () => stepTab(-1),
+      onNext: () => stepTab(1),
+      child: ColoredBox(
       color: AppColors.bg,
       child: Column(
         children: [
@@ -96,6 +106,7 @@ class GoalsScreen extends ConsumerWidget {
             ),
           ),
         ],
+      ),
       ),
     );
   }

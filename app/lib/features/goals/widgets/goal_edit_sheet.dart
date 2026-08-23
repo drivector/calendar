@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../models/clock_time.dart';
 import '../../../models/goal.dart';
+import '../../../models/goal_progress.dart';
 import '../../../shared/widgets/category_chip.dart';
 import '../../../shared/widgets/segmented_control.dart';
 import '../../../state/categories_providers.dart';
@@ -14,15 +15,15 @@ import '../../../theme/app_spacing.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../utils/duration_format.dart';
 
-const _weekdayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const _step = Duration(minutes: 5);
-const _maxPerDay = Duration(hours: 8);
+const _minPerEntry = Duration(minutes: 5);
+const _maxPerEntry = Duration(hours: 8);
 const _defaultRangeStart = TimeOfDay(hour: 9, minute: 0);
 const _defaultRangeEnd = TimeOfDay(hour: 17, minute: 0);
 
-Map<int, Duration> _defaultTargets() => {
+Map<int, List<DayScheduleEntry>> _defaultSchedule() => {
       for (var weekday = 1; weekday <= 7; weekday++)
-        weekday: const Duration(minutes: 30),
+        weekday: [const DayScheduleEntry.duration(Duration(minutes: 30))],
     };
 
 /// Create or edit a goal. Pass [existing] to edit it in place (with a
@@ -64,18 +65,27 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
       widget.existing?.startDate ?? widget.ref.read(selectedDateProvider);
   late DateTime _endDate =
       widget.existing?.endDate ?? _startDate.add(ongoingGoalSpan);
-  late GoalScheduleMode _scheduleMode =
-      widget.existing?.scheduleMode ?? GoalScheduleMode.duration;
-  late final Map<int, Duration> _targets =
-      Map.of(widget.existing?.targetsByWeekday ?? _defaultTargets());
-  late final Map<int, ClockRange> _timeRanges =
-      Map.of(widget.existing?.timeRangesByWeekday ?? {});
+
+  // One unified per-day schedule — each day holds a list of entries, each
+  // either a plain duration or a clock time range, summed for that day's
+  // target. A deep-enough copy (fresh lists) so editing here never mutates
+  // the goal still sitting in the provider until Save is tapped.
+  late final Map<int, List<DayScheduleEntry>> _schedule = {
+    for (var weekday = 1; weekday <= 7; weekday++)
+      weekday: List.of(
+        widget.existing?.entriesForWeekday(weekday) ??
+            _defaultSchedule()[weekday]!,
+      ),
+  };
 
   bool get _isEditing => widget.existing != null;
 
-  Duration get _weeklyTotal => _scheduleMode == GoalScheduleMode.duration
-      ? _targets.values.fold(Duration.zero, (a, b) => a + b)
-      : _timeRanges.values.fold(Duration.zero, (a, r) => a + r.duration);
+  Duration _dayTotal(int weekday) => (_schedule[weekday] ?? const [])
+      .fold(Duration.zero, (total, e) => total + e.effectiveDuration);
+
+  Duration get _weeklyTotal => [
+        for (var weekday = 1; weekday <= 7; weekday++) _dayTotal(weekday),
+      ].fold(Duration.zero, (a, b) => a + b);
 
   @override
   void dispose() {
@@ -83,32 +93,75 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
     super.dispose();
   }
 
-  void _stepTarget(int weekday, int deltaMinutes) {
+  void _addDurationEntry(int weekday) {
     setState(() {
-      final current = _targets[weekday] ?? Duration.zero;
+      _schedule[weekday]!.add(const DayScheduleEntry.duration(Duration(minutes: 30)));
+    });
+  }
+
+  Future<void> _addTimeRangeEntry(int weekday) async {
+    final start = await showTimePicker(context: context, initialTime: _defaultRangeStart);
+    if (start == null || !mounted) return;
+    final end = await showTimePicker(context: context, initialTime: _defaultRangeEnd);
+    if (end == null) return;
+    setState(() {
+      _schedule[weekday]!.add(DayScheduleEntry.timeRange(ClockRange(
+        ClockTime(start.hour, start.minute),
+        ClockTime(end.hour, end.minute),
+      )));
+    });
+  }
+
+  void _removeEntry(int weekday, int index) {
+    setState(() => _schedule[weekday]!.removeAt(index));
+  }
+
+  void _stepDurationEntry(int weekday, int index, int deltaMinutes) {
+    setState(() {
+      final entries = _schedule[weekday]!;
+      final current = entries[index].duration!;
       final next = current + Duration(minutes: deltaMinutes);
-      _targets[weekday] = next < Duration.zero
-          ? Duration.zero
-          : (next > _maxPerDay ? _maxPerDay : next);
+      final clamped = next < _minPerEntry
+          ? _minPerEntry
+          : (next > _maxPerEntry ? _maxPerEntry : next);
+      entries[index] = DayScheduleEntry.duration(clamped);
+    });
+  }
+
+  Future<void> _editRangeStart(int weekday, int index) async {
+    final current = _schedule[weekday]![index].timeRange!;
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: current.start.hour, minute: current.start.minute),
+    );
+    if (picked == null) return;
+    setState(() {
+      _schedule[weekday]![index] = DayScheduleEntry.timeRange(
+        ClockRange(ClockTime(picked.hour, picked.minute), current.end),
+      );
+    });
+  }
+
+  Future<void> _editRangeEnd(int weekday, int index) async {
+    final current = _schedule[weekday]![index].timeRange!;
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: current.end.hour, minute: current.end.minute),
+    );
+    if (picked == null) return;
+    setState(() {
+      _schedule[weekday]![index] = DayScheduleEntry.timeRange(
+        ClockRange(current.start, ClockTime(picked.hour, picked.minute)),
+      );
     });
   }
 
   void _applySameEveryDay() {
     setState(() {
-      if (_scheduleMode == GoalScheduleMode.duration) {
-        final mondayValue = _targets[DateTime.monday] ?? Duration.zero;
-        for (var weekday = 1; weekday <= 7; weekday++) {
-          _targets[weekday] = mondayValue;
-        }
-      } else {
-        final mondayRange = _timeRanges[DateTime.monday];
-        for (var weekday = 1; weekday <= 7; weekday++) {
-          if (mondayRange == null) {
-            _timeRanges.remove(weekday);
-          } else {
-            _timeRanges[weekday] = mondayRange;
-          }
-        }
+      final mondayEntries =
+          List.of(_schedule[DateTime.monday] ?? const <DayScheduleEntry>[]);
+      for (var weekday = 1; weekday <= 7; weekday++) {
+        _schedule[weekday] = List.of(mondayEntries);
       }
     });
   }
@@ -130,52 +183,7 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
     });
   }
 
-  Future<void> _enableTimeRange(int weekday) async {
-    final start = await showTimePicker(context: context, initialTime: _defaultRangeStart);
-    if (start == null || !mounted) return;
-    final end = await showTimePicker(context: context, initialTime: _defaultRangeEnd);
-    if (end == null) return;
-    setState(() {
-      _timeRanges[weekday] = ClockRange(
-        ClockTime(start.hour, start.minute),
-        ClockTime(end.hour, end.minute),
-      );
-    });
-  }
-
-  Future<void> _editRangeStart(int weekday) async {
-    final current = _timeRanges[weekday];
-    if (current == null) return;
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay(hour: current.start.hour, minute: current.start.minute),
-    );
-    if (picked == null) return;
-    setState(() {
-      _timeRanges[weekday] = ClockRange(ClockTime(picked.hour, picked.minute), current.end);
-    });
-  }
-
-  Future<void> _editRangeEnd(int weekday) async {
-    final current = _timeRanges[weekday];
-    if (current == null) return;
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay(hour: current.end.hour, minute: current.end.minute),
-    );
-    if (picked == null) return;
-    setState(() {
-      _timeRanges[weekday] = ClockRange(current.start, ClockTime(picked.hour, picked.minute));
-    });
-  }
-
-  void _clearTimeRange(int weekday) => setState(() => _timeRanges.remove(weekday));
-
   void _save() {
-    final targets = _scheduleMode == GoalScheduleMode.duration
-        ? Map.of(_targets)
-        : {for (final entry in _timeRanges.entries) entry.key: entry.value.duration};
-
     final goal = Goal(
       id: widget.existing?.id ?? 'goal-${DateTime.now().microsecondsSinceEpoch}',
       name: _nameController.text.trim().isEmpty
@@ -183,12 +191,12 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
           : _nameController.text.trim(),
       categoryId: _categoryId,
       type: _type,
-      targetsByWeekday: targets,
+      scheduleByWeekday: {
+        for (var weekday = 1; weekday <= 7; weekday++)
+          weekday: List.of(_schedule[weekday] ?? const []),
+      },
       startDate: _startDate,
       endDate: _endDate,
-      scheduleMode: _scheduleMode,
-      timeRangesByWeekday:
-          _scheduleMode == GoalScheduleMode.timeRange ? Map.of(_timeRanges) : null,
     );
     if (_isEditing) {
       widget.ref.read(goalsProvider.notifier).updateGoal(goal);
@@ -210,6 +218,10 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
     // build risks a Riverpod assertion. A snapshot is fine for a short-lived
     // modal the category list won't change while it's open.
     final categories = widget.ref.read(categoriesProvider);
+    // The actual calendar date for each weekday row — the week containing
+    // whatever day the app currently has open, so "Mon" reads as a real
+    // date, not an abstract day-of-week.
+    final weekStart = weekStartFor(widget.ref.read(selectedDateProvider));
 
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
@@ -303,54 +315,36 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
                     style: AppTextStyles.mono(),
                   ),
                   const SizedBox(height: AppSpacing.s3),
-                  _Label('Schedule by'),
-                  SegmentedControl<GoalScheduleMode>(
-                    selected: _scheduleMode,
-                    onChanged: (value) => setState(() => _scheduleMode = value),
-                    options: const [
-                      SegmentedOption(value: GoalScheduleMode.duration, label: 'Duration'),
-                      SegmentedOption(value: GoalScheduleMode.timeRange, label: 'Time range'),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.s3),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.end,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      _Label(_scheduleMode == GoalScheduleMode.duration
-                          ? 'Daily targets'
-                          : 'Daily time range'),
-                      GestureDetector(
-                        onTap: _applySameEveryDay,
-                        behavior: HitTestBehavior.opaque,
-                        child: Padding(
-                          padding: const EdgeInsets.only(bottom: 5),
-                          child: Text(
-                            'same every day',
-                            style: AppTextStyles.mono(color: AppColors.accent),
-                          ),
-                        ),
-                      ),
+                      _Label('Daily targets'),
+                      _SmallActionButton(label: 'same every day', onTap: _applySameEveryDay),
                     ],
                   ),
-                  if (_scheduleMode == GoalScheduleMode.duration)
-                    for (var weekday = 1; weekday <= 7; weekday++)
-                      _WeekdayTargetRow(
-                        label: _weekdayLabels[weekday - 1],
-                        value: _targets[weekday] ?? Duration.zero,
-                        onDecrement: () => _stepTarget(weekday, -_step.inMinutes),
-                        onIncrement: () => _stepTarget(weekday, _step.inMinutes),
-                      )
-                  else
-                    for (var weekday = 1; weekday <= 7; weekday++)
-                      _WeekdayTimeRangeRow(
-                        label: _weekdayLabels[weekday - 1],
-                        range: _timeRanges[weekday],
-                        onEnable: () => _enableTimeRange(weekday),
-                        onTapStart: () => _editRangeStart(weekday),
-                        onTapEnd: () => _editRangeEnd(weekday),
-                        onClear: () => _clearTimeRange(weekday),
-                      ),
+                  const SizedBox(height: AppSpacing.s1),
+                  Text(
+                    'each day can mix any number of plain durations and time '
+                    'ranges — a time range\'s duration is derived from its clock '
+                    'times automatically',
+                    style: AppTextStyles.mono(),
+                  ),
+                  const SizedBox(height: AppSpacing.s2),
+                  for (var weekday = 1; weekday <= 7; weekday++)
+                    _DayScheduleSection(
+                      label: DateFormat('EEE d MMM')
+                          .format(weekStart.add(Duration(days: weekday - 1))),
+                      entries: _schedule[weekday] ?? const [],
+                      total: _dayTotal(weekday),
+                      onAddDuration: () => _addDurationEntry(weekday),
+                      onAddTimeRange: () => _addTimeRangeEntry(weekday),
+                      onRemove: (index) => _removeEntry(weekday, index),
+                      onStepDuration: (index, delta) =>
+                          _stepDurationEntry(weekday, index, delta),
+                      onEditRangeStart: (index) => _editRangeStart(weekday, index),
+                      onEditRangeEnd: (index) => _editRangeEnd(weekday, index),
+                    ),
                   const SizedBox(height: AppSpacing.s1),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -448,103 +442,160 @@ class _DateField extends StatelessWidget {
   }
 }
 
-class _WeekdayTargetRow extends StatelessWidget {
-  const _WeekdayTargetRow({
+/// One weekday's block in the unified schedule: a header row (day label +
+/// running total), one row per entry (duration stepper or time-range
+/// chips, each with its own remove control), then two small links to add
+/// another entry of either kind — so a day can hold a mix, or several of
+/// the same kind (a split shift, extra untimed time on top of a shift...).
+class _DayScheduleSection extends StatelessWidget {
+  const _DayScheduleSection({
     required this.label,
-    required this.value,
-    required this.onDecrement,
-    required this.onIncrement,
+    required this.entries,
+    required this.total,
+    required this.onAddDuration,
+    required this.onAddTimeRange,
+    required this.onRemove,
+    required this.onStepDuration,
+    required this.onEditRangeStart,
+    required this.onEditRangeEnd,
   });
 
   final String label;
-  final Duration value;
-  final VoidCallback onDecrement;
-  final VoidCallback onIncrement;
+  final List<DayScheduleEntry> entries;
+  final Duration total;
+  final VoidCallback onAddDuration;
+  final VoidCallback onAddTimeRange;
+  final ValueChanged<int> onRemove;
+  final void Function(int index, int deltaMinutes) onStepDuration;
+  final ValueChanged<int> onEditRangeStart;
+  final ValueChanged<int> onEditRangeEnd;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 34, child: Text(label, style: AppTextStyles.mono())),
-          const Spacer(),
-          _MiniStepButton(label: '–', onTap: onDecrement),
-          SizedBox(
-            width: 72,
-            child: Text(
-              value == Duration.zero ? 'off' : formatDuration(value),
-              textAlign: TextAlign.center,
-              style: AppTextStyles.mono(color: AppColors.text),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(label, style: AppTextStyles.mono(color: AppColors.text)),
+              Text(
+                total == Duration.zero ? 'off' : formatDuration(total),
+                style: AppTextStyles.mono(color: AppColors.text),
+              ),
+            ],
+          ),
+          for (var i = 0; i < entries.length; i++)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: entries[i].isTimeRange
+                  ? _EntryTimeRangeRow(
+                      range: entries[i].timeRange!,
+                      onTapStart: () => onEditRangeStart(i),
+                      onTapEnd: () => onEditRangeEnd(i),
+                      onRemove: () => onRemove(i),
+                    )
+                  : _EntryDurationRow(
+                      value: entries[i].duration!,
+                      onDecrement: () => onStepDuration(i, -_step.inMinutes),
+                      onIncrement: () => onStepDuration(i, _step.inMinutes),
+                      onRemove: () => onRemove(i),
+                    ),
+            ),
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Row(
+              children: [
+                _SmallActionButton(label: '+ duration', onTap: onAddDuration),
+                const SizedBox(width: AppSpacing.s2),
+                _SmallActionButton(label: '+ time range', onTap: onAddTimeRange),
+              ],
             ),
           ),
-          _MiniStepButton(label: '+', onTap: onIncrement),
         ],
       ),
     );
   }
 }
 
-class _WeekdayTimeRangeRow extends StatelessWidget {
-  const _WeekdayTimeRangeRow({
-    required this.label,
-    required this.range,
-    required this.onEnable,
-    required this.onTapStart,
-    required this.onTapEnd,
-    required this.onClear,
+class _EntryDurationRow extends StatelessWidget {
+  const _EntryDurationRow({
+    required this.value,
+    required this.onDecrement,
+    required this.onIncrement,
+    required this.onRemove,
   });
 
-  final String label;
-  final ClockRange? range;
-  final VoidCallback onEnable;
-  final VoidCallback onTapStart;
-  final VoidCallback onTapEnd;
-  final VoidCallback onClear;
+  final Duration value;
+  final VoidCallback onDecrement;
+  final VoidCallback onIncrement;
+  final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) {
-    final range = this.range;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          SizedBox(width: 34, child: Text(label, style: AppTextStyles.mono())),
-          const SizedBox(width: AppSpacing.s2),
-          if (range == null)
-            Expanded(
-              child: GestureDetector(
-                onTap: onEnable,
-                behavior: HitTestBehavior.opaque,
-                child: Container(
-                  constraints: const BoxConstraints(minHeight: 32),
-                  alignment: Alignment.centerLeft,
-                  child: Text('off — tap to set', style: AppTextStyles.mono()),
-                ),
-              ),
-            )
-          else ...[
-            Expanded(
-              child: _ClockChip(label: range.start.format(), onTap: onTapStart),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Text('–', style: AppTextStyles.mono()),
-            ),
-            Expanded(
-              child: _ClockChip(label: range.end.format(), onTap: onTapEnd),
-            ),
-            GestureDetector(
-              onTap: onClear,
-              behavior: HitTestBehavior.opaque,
-              child: Padding(
-                padding: const EdgeInsets.only(left: AppSpacing.s2),
-                child: Text('×', style: AppTextStyles.mono(color: AppColors.accent)),
-              ),
-            ),
-          ],
-        ],
-      ),
+    return Row(
+      children: [
+        const Spacer(),
+        _MiniStepButton(label: '–', onTap: onDecrement),
+        SizedBox(
+          width: 72,
+          child: Text(
+            formatDuration(value),
+            textAlign: TextAlign.center,
+            style: AppTextStyles.mono(color: AppColors.text),
+          ),
+        ),
+        _MiniStepButton(label: '+', onTap: onIncrement),
+        Padding(
+          padding: const EdgeInsets.only(left: AppSpacing.s2),
+          child: _RemoveButton(onTap: onRemove),
+        ),
+      ],
+    );
+  }
+}
+
+class _EntryTimeRangeRow extends StatelessWidget {
+  const _EntryTimeRangeRow({
+    required this.range,
+    required this.onTapStart,
+    required this.onTapEnd,
+    required this.onRemove,
+  });
+
+  final ClockRange range;
+  final VoidCallback onTapStart;
+  final VoidCallback onTapEnd;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        // The time range itself, on the left — the thing you actually set.
+        Expanded(child: _ClockChip(label: range.start.format(), onTap: onTapStart)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Text('–', style: AppTextStyles.mono()),
+        ),
+        Expanded(child: _ClockChip(label: range.end.format(), onTap: onTapEnd)),
+        // What that range comes out to, on the right — derived, not editable
+        // here; change the times to change it.
+        SizedBox(
+          width: 56,
+          child: Text(
+            formatDuration(range.duration),
+            textAlign: TextAlign.right,
+            style: AppTextStyles.mono(color: AppColors.text),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(left: AppSpacing.s2),
+          child: _RemoveButton(onTap: onRemove),
+        ),
+      ],
     );
   }
 }
@@ -587,6 +638,57 @@ class _MiniStepButton extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(border: Border.all(color: AppColors.text)),
         child: Text(label, style: AppTextStyles.label()),
+      ),
+    );
+  }
+}
+
+/// A small bordered action — "+ duration", "+ time range", "same every
+/// day" — flat with a soft 30%-ink border, same visual language as an
+/// unselected [CategoryChip], so these read clearly as buttons rather than
+/// plain inline text, with a real tap target rather than just the glyph's
+/// own bounding box.
+class _SmallActionButton extends StatelessWidget {
+  const _SmallActionButton({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 32),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s2),
+        decoration: BoxDecoration(border: Border.all(color: AppColors.ink(0.3))),
+        child: Text(label, style: AppTextStyles.mono(color: AppColors.accent)),
+      ),
+    );
+  }
+}
+
+/// A schedule entry's remove control — a small bordered square, same
+/// footprint family as [_MiniStepButton]/[_ClockChip], so it reads as a
+/// deliberate button next to them instead of a stray glyph.
+class _RemoveButton extends StatelessWidget {
+  const _RemoveButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        width: 32,
+        height: 32,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(border: Border.all(color: AppColors.ink(0.3))),
+        child: Text('×', style: AppTextStyles.mono(color: AppColors.accent)),
       ),
     );
   }

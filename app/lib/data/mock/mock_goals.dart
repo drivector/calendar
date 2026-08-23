@@ -6,6 +6,16 @@ import 'mock_categories.dart';
 final _ongoingStart = DateTime(2020, 1, 1);
 final _ongoingEnd = DateTime(2099, 12, 31);
 
+/// Wraps a plain weekday->Duration map (the natural way to write these
+/// mocks) into the goal model's per-day entry lists — a zero-duration day
+/// becomes an empty list (day off), rather than a zero-length entry.
+Map<int, List<DayScheduleEntry>> _durationSchedule(Map<int, Duration> targets) => {
+      for (final entry in targets.entries)
+        entry.key: entry.value == Duration.zero
+            ? const <DayScheduleEntry>[]
+            : [DayScheduleEntry.duration(entry.value)],
+    };
+
 Map<int, Duration> _weekdayVsWeekend(Duration weekday, Duration weekend) => {
       DateTime.monday: weekday,
       DateTime.tuesday: weekday,
@@ -28,7 +38,7 @@ final mockGoals = [
     categoryId: walkingCategoryId,
     type: GoalType.target,
     // 5×1h + 2×2h30 = 10h/wk
-    targetsByWeekday: {
+    scheduleByWeekday: _durationSchedule({
       DateTime.monday: Duration(hours: 1),
       DateTime.tuesday: Duration(hours: 1),
       DateTime.wednesday: Duration(hours: 1),
@@ -36,7 +46,7 @@ final mockGoals = [
       DateTime.friday: Duration(hours: 1),
       DateTime.saturday: Duration(hours: 2, minutes: 30),
       DateTime.sunday: Duration(hours: 2, minutes: 30),
-    },
+    }),
   ),
   Goal(
     id: 'goal-deep-work',
@@ -46,7 +56,7 @@ final mockGoals = [
     categoryId: deepWorkCategoryId,
     type: GoalType.target,
     // 5×4h = 20h/wk, none on weekends
-    targetsByWeekday: {
+    scheduleByWeekday: _durationSchedule({
       DateTime.monday: Duration(hours: 4),
       DateTime.tuesday: Duration(hours: 4),
       DateTime.wednesday: Duration(hours: 4),
@@ -54,7 +64,7 @@ final mockGoals = [
       DateTime.friday: Duration(hours: 4),
       DateTime.saturday: Duration.zero,
       DateTime.sunday: Duration.zero,
-    },
+    }),
   ),
   Goal(
     id: 'goal-meetings',
@@ -64,7 +74,7 @@ final mockGoals = [
     categoryId: meetingsCategoryId,
     type: GoalType.cap,
     // 2h + 4×1h30 = 8h/wk cap
-    targetsByWeekday: {
+    scheduleByWeekday: _durationSchedule({
       DateTime.monday: Duration(hours: 2),
       DateTime.tuesday: Duration(hours: 1, minutes: 30),
       DateTime.wednesday: Duration(hours: 1, minutes: 30),
@@ -72,7 +82,7 @@ final mockGoals = [
       DateTime.friday: Duration(hours: 1, minutes: 30),
       DateTime.saturday: Duration.zero,
       DateTime.sunday: Duration.zero,
-    },
+    }),
   ),
   Goal(
     id: 'goal-admin',
@@ -82,7 +92,7 @@ final mockGoals = [
     categoryId: adminCategoryId,
     type: GoalType.cap,
     // 1h + 4×45m = 4h/wk cap
-    targetsByWeekday: {
+    scheduleByWeekday: _durationSchedule({
       DateTime.monday: Duration(hours: 1),
       DateTime.tuesday: Duration(minutes: 45),
       DateTime.wednesday: Duration(minutes: 45),
@@ -90,7 +100,7 @@ final mockGoals = [
       DateTime.friday: Duration(minutes: 45),
       DateTime.saturday: Duration.zero,
       DateTime.sunday: Duration.zero,
-    },
+    }),
   ),
   Goal(
     id: 'goal-screen-time',
@@ -100,10 +110,10 @@ final mockGoals = [
     categoryId: screenTimeCategoryId,
     type: GoalType.cap,
     // 5×20m + 2×40m = 3h/wk cap, more slack on weekends
-    targetsByWeekday: _weekdayVsWeekend(
+    scheduleByWeekday: _durationSchedule(_weekdayVsWeekend(
       const Duration(minutes: 20),
       const Duration(minutes: 40),
-    ),
+    )),
   ),
 ];
 

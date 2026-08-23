@@ -1,10 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:calendar_tracker/models/clock_time.dart';
 import 'package:calendar_tracker/models/goal.dart';
 import 'package:calendar_tracker/models/goal_progress.dart';
 
-Map<int, Duration> _uniform(Duration perDay) => {
-      for (var weekday = 1; weekday <= 7; weekday++) weekday: perDay,
+Map<int, List<DayScheduleEntry>> _uniform(Duration perDay) => {
+      for (var weekday = 1; weekday <= 7; weekday++)
+        weekday: [DayScheduleEntry.duration(perDay)],
     };
 
 final _ongoingStart = DateTime(2020, 1, 1);
@@ -18,10 +20,14 @@ void main() {
         name: 'Walking',
         categoryId: 'walking',
         type: GoalType.target,
-        targetsByWeekday: const {
-          DateTime.monday: Duration(hours: 1),
-          DateTime.saturday: Duration(hours: 2, minutes: 30),
-          DateTime.sunday: Duration(hours: 2, minutes: 30),
+        scheduleByWeekday: {
+          DateTime.monday: [const DayScheduleEntry.duration(Duration(hours: 1))],
+          DateTime.saturday: [
+            const DayScheduleEntry.duration(Duration(hours: 2, minutes: 30)),
+          ],
+          DateTime.sunday: [
+            const DayScheduleEntry.duration(Duration(hours: 2, minutes: 30)),
+          ],
         },
         startDate: _ongoingStart,
         endDate: _ongoingEnd,
@@ -36,7 +42,7 @@ void main() {
         name: 'Reading',
         categoryId: 'reading',
         type: GoalType.target,
-        targetsByWeekday: _uniform(const Duration(minutes: 30)),
+        scheduleByWeekday: _uniform(const Duration(minutes: 30)),
         startDate: _ongoingStart,
         endDate: _ongoingEnd,
       );
@@ -49,7 +55,7 @@ void main() {
         name: 'Walking',
         categoryId: 'walking',
         type: GoalType.target,
-        targetsByWeekday: _uniform(const Duration(minutes: 30)),
+        scheduleByWeekday: _uniform(const Duration(minutes: 30)),
         startDate: _ongoingStart,
         endDate: _ongoingEnd,
       );
@@ -64,7 +70,7 @@ void main() {
         name: 'August challenge',
         categoryId: 'walking',
         type: GoalType.target,
-        targetsByWeekday: _uniform(const Duration(minutes: 30)),
+        scheduleByWeekday: _uniform(const Duration(minutes: 30)),
         startDate: DateTime(2026, 8, 1),
         endDate: DateTime(2026, 8, 31),
       );
@@ -76,23 +82,54 @@ void main() {
       expect(goal.isActiveOn(DateTime(2026, 9, 1)), isFalse);
     });
 
-    test('a goal scheduled by time range derives its duration from the range', () {
+    test('a time-range entry derives its duration from the range', () {
       final goal = Goal(
         id: 'g',
         name: 'Work',
         categoryId: 'work',
         type: GoalType.target,
         // 09:00-18:00 = 9h, Mon-Fri only.
-        targetsByWeekday: _uniform(const Duration(hours: 9))
-          ..[DateTime.saturday] = Duration.zero
-          ..[DateTime.sunday] = Duration.zero,
+        scheduleByWeekday: {
+          for (var weekday = 1; weekday <= 5; weekday++)
+            weekday: [
+              const DayScheduleEntry.timeRange(
+                ClockRange(ClockTime(9, 0), ClockTime(18, 0)),
+              ),
+            ],
+          DateTime.saturday: const [],
+          DateTime.sunday: const [],
+        },
         startDate: _ongoingStart,
         endDate: _ongoingEnd,
-        scheduleMode: GoalScheduleMode.timeRange,
       );
-      expect(goal.scheduleMode, GoalScheduleMode.timeRange);
       expect(goal.targetForWeekday(DateTime.monday), const Duration(hours: 9));
       expect(goal.targetForWeekday(DateTime.saturday), Duration.zero);
+    });
+
+    test('a day sums multiple entries, mixing duration and time range', () {
+      final goal = Goal(
+        id: 'g',
+        name: 'Split shift',
+        categoryId: 'work',
+        type: GoalType.target,
+        // A morning shift, an afternoon shift, plus 30 min of untimed
+        // admin on top — three entries, one day.
+        scheduleByWeekday: {
+          DateTime.monday: [
+            const DayScheduleEntry.timeRange(
+              ClockRange(ClockTime(9, 0), ClockTime(12, 0)),
+            ),
+            const DayScheduleEntry.timeRange(
+              ClockRange(ClockTime(14, 0), ClockTime(18, 0)),
+            ),
+            const DayScheduleEntry.duration(Duration(minutes: 30)),
+          ],
+        },
+        startDate: _ongoingStart,
+        endDate: _ongoingEnd,
+      );
+      // 3h + 4h + 30m = 7h30
+      expect(goal.targetForWeekday(DateTime.monday), const Duration(hours: 7, minutes: 30));
     });
   });
 
@@ -103,14 +140,14 @@ void main() {
       name: 'Deep work',
       categoryId: 'deep_work',
       type: GoalType.target,
-      targetsByWeekday: {
-        DateTime.monday: const Duration(hours: 4),
-        DateTime.tuesday: const Duration(hours: 4),
-        DateTime.wednesday: const Duration(hours: 4),
-        DateTime.thursday: const Duration(hours: 4),
-        DateTime.friday: const Duration(hours: 4),
-        DateTime.saturday: Duration.zero,
-        DateTime.sunday: Duration.zero,
+      scheduleByWeekday: {
+        DateTime.monday: [const DayScheduleEntry.duration(Duration(hours: 4))],
+        DateTime.tuesday: [const DayScheduleEntry.duration(Duration(hours: 4))],
+        DateTime.wednesday: [const DayScheduleEntry.duration(Duration(hours: 4))],
+        DateTime.thursday: [const DayScheduleEntry.duration(Duration(hours: 4))],
+        DateTime.friday: [const DayScheduleEntry.duration(Duration(hours: 4))],
+        DateTime.saturday: const [],
+        DateTime.sunday: const [],
       },
       startDate: _ongoingStart,
       endDate: _ongoingEnd,
@@ -138,7 +175,7 @@ void main() {
       name: 'Walking',
       categoryId: 'walking',
       type: GoalType.target,
-      targetsByWeekday: _uniform(const Duration(hours: 1, minutes: 26)), // ~10h/wk
+      scheduleByWeekday: _uniform(const Duration(hours: 1, minutes: 26)), // ~10h/wk
       startDate: _ongoingStart,
       endDate: _ongoingEnd,
     );
@@ -168,7 +205,7 @@ void main() {
       name: 'Meetings',
       categoryId: 'meetings',
       type: GoalType.cap,
-      targetsByWeekday: _uniform(const Duration(hours: 1, minutes: 9)), // ~8h/wk
+      scheduleByWeekday: _uniform(const Duration(hours: 1, minutes: 9)), // ~8h/wk
       startDate: _ongoingStart,
       endDate: _ongoingEnd,
     );

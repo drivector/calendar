@@ -2,16 +2,36 @@ import 'clock_time.dart';
 
 enum GoalType { target, cap }
 
-/// How a goal's per-day target is defined:
-/// - [duration]: just an amount, no fixed time — "piano, 15 min, any time".
-/// - [timeRange]: a specific clock window each active day — "work, 09:00
-///   to 18:00". The duration is derived from the range.
-enum GoalScheduleMode { duration, timeRange }
-
 /// A goal always has a start and end date — there's no separate "ongoing"
 /// flag. An open-ended goal is just one whose end date is far out; a
 /// time-bound challenge is one whose end date is close to its start.
 const ongoingGoalSpan = Duration(days: 365);
+
+/// One piece of a day's schedule — either a plain amount of time with no
+/// fixed clock position ("piano, 15 min, any time"), or a specific clock
+/// window ("work, 09:00 to 18:00"), whose duration is derived from the
+/// range rather than stored separately. A day can hold more than one of
+/// these (e.g. two work shifts, or a time range plus some extra untimed
+/// duration on top) — the day's target is the sum of all its entries.
+class DayScheduleEntry {
+  const DayScheduleEntry.duration(Duration amount)
+      : duration = amount,
+        timeRange = null;
+
+  const DayScheduleEntry.timeRange(ClockRange range)
+      : timeRange = range,
+        duration = null;
+
+  /// Set only for a plain-duration entry.
+  final Duration? duration;
+
+  /// Set only for a time-range entry.
+  final ClockRange? timeRange;
+
+  bool get isTimeRange => timeRange != null;
+
+  Duration get effectiveDuration => timeRange?.duration ?? duration!;
+}
 
 class Goal {
   const Goal({
@@ -19,11 +39,9 @@ class Goal {
     required this.name,
     required this.categoryId,
     required this.type,
-    required this.targetsByWeekday,
+    required this.scheduleByWeekday,
     required this.startDate,
     required this.endDate,
-    this.scheduleMode = GoalScheduleMode.duration,
-    this.timeRangesByWeekday,
   });
 
   final String id;
@@ -31,24 +49,13 @@ class Goal {
   final String categoryId;
   final GoalType type;
 
-  /// Per-day targets, keyed by [DateTime.weekday] (Monday = 1 .. Sunday = 7).
-  /// Always populated regardless of [scheduleMode] — when [scheduleMode] is
-  /// [GoalScheduleMode.timeRange] this is derived from [timeRangesByWeekday]
-  /// (each day's target = that day's range duration), kept in sync by
-  /// whatever builds the [Goal] (the edit sheet). Everything that computes
-  /// progress only ever reads this map, never the ranges directly.
-  final Map<int, Duration> targetsByWeekday;
+  /// Each day's schedule, keyed by [DateTime.weekday] (Monday = 1 ..
+  /// Sunday = 7) — a list of [DayScheduleEntry], possibly empty (day off).
+  /// A day with no key at all is treated the same as an empty list.
+  final Map<int, List<DayScheduleEntry>> scheduleByWeekday;
 
   final DateTime startDate;
   final DateTime endDate;
-
-  final GoalScheduleMode scheduleMode;
-
-  /// Only meaningful when [scheduleMode] is [GoalScheduleMode.timeRange] —
-  /// kept alongside the derived [targetsByWeekday] so the edit sheet can
-  /// show the original clock times back, not just a duration. A day absent
-  /// from this map has no fixed time that day (not scheduled).
-  final Map<int, ClockRange>? timeRangesByWeekday;
 
   /// True once a goal's window is short enough to read as a deliberate
   /// challenge rather than an open-ended habit — anything created via the
@@ -63,14 +70,20 @@ class Goal {
     return !day.isBefore(start) && !day.isAfter(end);
   }
 
-  Duration targetForWeekday(int weekday) =>
-      targetsByWeekday[weekday] ?? Duration.zero;
+  List<DayScheduleEntry> entriesForWeekday(int weekday) =>
+      scheduleByWeekday[weekday] ?? const <DayScheduleEntry>[];
 
-  Duration get weeklyTarget =>
-      targetsByWeekday.values.fold(Duration.zero, (a, b) => a + b);
+  Duration targetForWeekday(int weekday) => entriesForWeekday(weekday)
+      .fold(Duration.zero, (total, e) => total + e.effectiveDuration);
+
+  Duration get weeklyTarget => [
+        for (var weekday = 1; weekday <= 7; weekday++) targetForWeekday(weekday),
+      ].fold(Duration.zero, (a, b) => a + b);
 
   double get weeklyTargetHours => weeklyTarget.inMinutes / 60;
 
-  /// True if every day asks for the same amount.
-  bool get isUniformAcrossWeek => targetsByWeekday.values.toSet().length <= 1;
+  /// True if every day asks for the same total amount.
+  bool get isUniformAcrossWeek => <Duration>{
+        for (var weekday = 1; weekday <= 7; weekday++) targetForWeekday(weekday),
+      }.length <= 1;
 }

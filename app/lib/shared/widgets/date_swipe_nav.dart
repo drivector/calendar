@@ -3,10 +3,14 @@ import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/widgets.dart';
 
-/// Wraps [child] with two ways to step through dates the way a desktop
-/// calendar app does: a touch swipe (drag) and a trackpad horizontal scroll.
-/// Arrow *buttons* are a separate, explicit affordance (see
-/// [StepArrowButton]) — this widget only covers the gestural paths.
+/// Wraps [child] with two ways to step forward/back through whatever
+/// [onPrevious]/[onNext] represent — a touch swipe (drag) and a trackpad
+/// horizontal scroll. Used both for date/week navigation (Day, Week) and,
+/// on screens with no competing horizontal gesture (Goals, Log activity),
+/// for stepping between tabs — never both on the same screen, since two
+/// nested instances would fight over the same swipe. Arrow *buttons* are a
+/// separate, explicit affordance (see [StepArrowButton]) — this widget only
+/// covers the gestural paths.
 class DateSwipeNav extends StatefulWidget {
   const DateSwipeNav({
     super.key,
@@ -40,7 +44,7 @@ class _DateSwipeNavState extends State<DateSwipeNav> {
     if (event is! PointerScrollEvent) return;
     final delta = event.scrollDelta;
     // A predominantly-vertical scroll (mouse wheel, or scrolling page
-    // content) isn't a date-navigation gesture — only react to a clearly
+    // content) isn't a navigation gesture — only react to a clearly
     // horizontal one.
     if (delta.dx.abs() <= delta.dy.abs()) return;
 

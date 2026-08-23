@@ -8,6 +8,7 @@ import '../../../shared/widgets/date_swipe_nav.dart';
 import '../../../state/categories_providers.dart';
 import '../../../state/day_view_providers.dart';
 import '../../../state/derived_providers.dart';
+import '../../../state/goals_providers.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import 'actual_block_widget.dart';
@@ -49,7 +50,7 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
     super.initState();
     _scrollController = ScrollController(
       initialScrollOffset: _scrollOffsetForFirstEvent(
-        ref.read(plannedBlocksProvider),
+        ref.read(dayViewPlannedBlocksProvider),
         ref.read(trackedBlocksProvider),
       ),
     );
@@ -94,13 +95,13 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
     ref.listen<DateTime>(selectedDateProvider, (previous, next) {
       if (previous == next) return;
       final target = _scrollOffsetForFirstEvent(
-        ref.read(plannedBlocksProvider),
+        ref.read(dayViewPlannedBlocksProvider),
         ref.read(trackedBlocksProvider),
       );
       if (_scrollController.hasClients) _scrollController.jumpTo(target);
     });
 
-    final planned = ref.watch(plannedBlocksProvider);
+    final planned = ref.watch(dayViewPlannedBlocksProvider);
     final tracked = ref.watch(trackedBlocksProvider);
     final gaps = ref.watch(untrackedGapsProvider);
     final dayLayer = ref.watch(dayLayerProvider);
