@@ -1,0 +1,197 @@
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:calendar_tracker/models/goal.dart';
+import 'package:calendar_tracker/models/goal_progress.dart';
+
+Map<int, Duration> _uniform(Duration perDay) => {
+      for (var weekday = 1; weekday <= 7; weekday++) weekday: perDay,
+    };
+
+final _ongoingStart = DateTime(2020, 1, 1);
+final _ongoingEnd = DateTime(2099, 12, 31);
+
+void main() {
+  group('Goal', () {
+    test('weeklyTarget sums every day', () {
+      final goal = Goal(
+        id: 'g',
+        name: 'Walking',
+        categoryId: 'walking',
+        type: GoalType.target,
+        targetsByWeekday: const {
+          DateTime.monday: Duration(hours: 1),
+          DateTime.saturday: Duration(hours: 2, minutes: 30),
+          DateTime.sunday: Duration(hours: 2, minutes: 30),
+        },
+        startDate: _ongoingStart,
+        endDate: _ongoingEnd,
+      );
+      expect(goal.weeklyTarget, const Duration(hours: 6));
+      expect(goal.isUniformAcrossWeek, isFalse);
+    });
+
+    test('isUniformAcrossWeek is true when every day matches', () {
+      final goal = Goal(
+        id: 'g',
+        name: 'Reading',
+        categoryId: 'reading',
+        type: GoalType.target,
+        targetsByWeekday: _uniform(const Duration(minutes: 30)),
+        startDate: _ongoingStart,
+        endDate: _ongoingEnd,
+      );
+      expect(goal.isUniformAcrossWeek, isTrue);
+    });
+
+    test('a goal with a far-out end date reads as ongoing', () {
+      final goal = Goal(
+        id: 'g',
+        name: 'Walking',
+        categoryId: 'walking',
+        type: GoalType.target,
+        targetsByWeekday: _uniform(const Duration(minutes: 30)),
+        startDate: _ongoingStart,
+        endDate: _ongoingEnd,
+      );
+      expect(goal.isDateBound, isFalse);
+      expect(goal.isActiveOn(DateTime(2020, 1, 1)), isTrue);
+      expect(goal.isActiveOn(DateTime(2099, 1, 1)), isTrue);
+    });
+
+    test('a goal is only active within its start/end range, inclusive', () {
+      final goal = Goal(
+        id: 'g',
+        name: 'August challenge',
+        categoryId: 'walking',
+        type: GoalType.target,
+        targetsByWeekday: _uniform(const Duration(minutes: 30)),
+        startDate: DateTime(2026, 8, 1),
+        endDate: DateTime(2026, 8, 31),
+      );
+      expect(goal.isDateBound, isTrue);
+      expect(goal.isActiveOn(DateTime(2026, 7, 31)), isFalse);
+      expect(goal.isActiveOn(DateTime(2026, 8, 1)), isTrue);
+      expect(goal.isActiveOn(DateTime(2026, 8, 15, 23, 59)), isTrue);
+      expect(goal.isActiveOn(DateTime(2026, 8, 31)), isTrue);
+      expect(goal.isActiveOn(DateTime(2026, 9, 1)), isFalse);
+    });
+
+    test('a goal scheduled by time range derives its duration from the range', () {
+      final goal = Goal(
+        id: 'g',
+        name: 'Work',
+        categoryId: 'work',
+        type: GoalType.target,
+        // 09:00-18:00 = 9h, Mon-Fri only.
+        targetsByWeekday: _uniform(const Duration(hours: 9))
+          ..[DateTime.saturday] = Duration.zero
+          ..[DateTime.sunday] = Duration.zero,
+        startDate: _ongoingStart,
+        endDate: _ongoingEnd,
+        scheduleMode: GoalScheduleMode.timeRange,
+      );
+      expect(goal.scheduleMode, GoalScheduleMode.timeRange);
+      expect(goal.targetForWeekday(DateTime.monday), const Duration(hours: 9));
+      expect(goal.targetForWeekday(DateTime.saturday), Duration.zero);
+    });
+  });
+
+  group('expectedByNowHours', () {
+    // Deep work: 4h Mon–Fri, 0 on weekends.
+    final deepWork = Goal(
+      id: 'g',
+      name: 'Deep work',
+      categoryId: 'deep_work',
+      type: GoalType.target,
+      targetsByWeekday: {
+        DateTime.monday: const Duration(hours: 4),
+        DateTime.tuesday: const Duration(hours: 4),
+        DateTime.wednesday: const Duration(hours: 4),
+        DateTime.thursday: const Duration(hours: 4),
+        DateTime.friday: const Duration(hours: 4),
+        DateTime.saturday: Duration.zero,
+        DateTime.sunday: Duration.zero,
+      },
+      startDate: _ongoingStart,
+      endDate: _ongoingEnd,
+    );
+
+    test('Monday 00:00 expects nothing yet', () {
+      expect(expectedByNowHours(deepWork, DateTime(2026, 8, 17, 0, 0)), 0.0);
+    });
+
+    test('Wednesday noon expects Mon+Tue in full plus half of Wednesday', () {
+      // Mon 4h + Tue 4h + (Wed 4h * 0.5) = 10h
+      final hours = expectedByNowHours(deepWork, DateTime(2026, 8, 19, 12, 0));
+      expect(hours, closeTo(10.0, 0.001));
+    });
+
+    test('Saturday expects the full Mon-Fri total, since Saturday asks for 0', () {
+      final hours = expectedByNowHours(deepWork, DateTime(2026, 8, 22, 12, 0));
+      expect(hours, closeTo(20.0, 0.001));
+    });
+  });
+
+  group('computeGoalProgress', () {
+    final target = Goal(
+      id: 'g1',
+      name: 'Walking',
+      categoryId: 'walking',
+      type: GoalType.target,
+      targetsByWeekday: _uniform(const Duration(hours: 1, minutes: 26)), // ~10h/wk
+      startDate: _ongoingStart,
+      endDate: _ongoingEnd,
+    );
+
+    test('on pace when actual meets or beats the expected-by-now pace', () {
+      final progress = computeGoalProgress(
+        goal: target,
+        actualHours: 6,
+        plannedHours: 0,
+        date: DateTime(2026, 8, 20, 12, 0), // Thursday noon: ~half the week
+      );
+      expect(progress.status, GoalStatus.onPace);
+    });
+
+    test('behind pace when actual trails the expected-by-now pace', () {
+      final progress = computeGoalProgress(
+        goal: target,
+        actualHours: 1,
+        plannedHours: 0,
+        date: DateTime(2026, 8, 20, 12, 0),
+      );
+      expect(progress.status, GoalStatus.behindPace);
+    });
+
+    final cap = Goal(
+      id: 'g2',
+      name: 'Meetings',
+      categoryId: 'meetings',
+      type: GoalType.cap,
+      targetsByWeekday: _uniform(const Duration(hours: 1, minutes: 9)), // ~8h/wk
+      startDate: _ongoingStart,
+      endDate: _ongoingEnd,
+    );
+
+    test('cap goals report overCap once actual exceeds the weekly target', () {
+      final progress = computeGoalProgress(
+        goal: cap,
+        actualHours: 11,
+        plannedHours: 0,
+        date: DateTime(2026, 8, 23, 12, 0),
+      );
+      expect(progress.status, GoalStatus.overCap);
+      expect(formatGoalStatus(progress), startsWith('over cap by'));
+    });
+
+    test('cap goals stay on pace under the weekly target', () {
+      final progress = computeGoalProgress(
+        goal: cap,
+        actualHours: 2,
+        plannedHours: 0,
+        date: DateTime(2026, 8, 23, 12, 0),
+      );
+      expect(progress.status, GoalStatus.onPace);
+    });
+  });
+}
