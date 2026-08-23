@@ -120,11 +120,19 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
 `AsyncLoading`. Widget tests don't need this explicitly since
 `pumpAndSettle()` flushes it.
 
-## Git status — uncommitted
+## Git status — committed locally, not pushed
 
-- `main` was pushed and clean at the *start* of this session; this session's
-  Firebase Auth + Firestore work (see below) is **uncommitted** — ask before
-  committing/pushing, per this repo's `CLAUDE.md`.
+- `main` was pushed and clean at the start of this whole stretch of work
+  (Firebase Auth/Firestore + the fourth session's UX fixes/CI). All of it
+  is now one local commit (`55e84e7`, "Add Firebase Auth + Firestore
+  backend, fix goal/logging UX, add CI") — **not yet pushed**; ask before
+  pushing, per this repo's `CLAUDE.md` (each push needs its own go-ahead,
+  a prior one doesn't carry forward).
+- That commit's author identity was auto-detected from the local
+  username/hostname (git printed its usual first-commit notice) — worth
+  double-checking `git config --global user.name`/`user.email` are what
+  the user actually wants attributed on `drivector/calendar`, since this
+  wasn't explicitly set.
 - Pushing needs **GitHub CLI** (`gh`), installed via Homebrew at
   `/opt/homebrew/bin/gh` and authenticated as the `drivector` account
   (`repo` scope). **`/opt/homebrew/bin` may not be on PATH in a fresh
