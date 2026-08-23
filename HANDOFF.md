@@ -15,8 +15,8 @@ fallback), red accent `#ec3013`, OKLCH-derived category hues.
 
 Repo root: `/Users/alexandrospanagiotidis/DriVector/Calendar/`
 Flutter app: `/Users/alexandrospanagiotidis/DriVector/Calendar/app/`
-Git remote: `https://github.com/drivector/calendar.git` (empty remote — see
-**Git status** below, nothing has been pushed yet).
+Git remote: `https://github.com/drivector/calendar.git` — up to date, see
+**Git status** below.
 
 ## Stack
 
@@ -92,23 +92,27 @@ flutter analyze
 flutter test
 ```
 
-## Git status — ⚠️ nothing has been pushed
+## Git status — clean, pushed
 
-- One local commit exists (`a18a953`, "Build Calendar Tracker: ...") but it
-  was made **before** most of the Goals/navigation work below and was
-  **never pushed** — the remote (`drivector/calendar`) is genuinely empty
-  (confirmed via `git ls-remote`/`git fetch`, both return nothing).
-- Since that commit, a large amount of uncommitted work has accumulated: the
-  entire unified goal-schedule model, goal-block generation, live Week view,
-  day/week/tab navigation, and button redesign. `git status` shows ~12
-  modified files plus 2 new untracked files
-  (`lib/models/goal_planned_blocks.dart`,
-  `test/models/goal_planned_blocks_test.dart`).
-- **This session never got explicit permission to commit this second batch**
-  — only the very first commit was pre-approved. Ask before committing/pushing.
-- No git credentials were configured for pushing earlier in this session
-  (HTTPS push failed with no stored credential) — that may or may not still
-  be true; re-check before assuming a push will work non-interactively.
+- `main` is pushed and up to date with `origin/main`; working tree clean.
+- Two commits on top of the initial scaffold:
+  - `a18a953` — "Build Calendar Tracker: Day/Week/Goals/Log/Categories
+    screens on Flutter" (the original app build, including day/week nav
+    arrows and the live Week view refactor).
+  - `6517d13` — "Unify goal scheduling, live-generate plan blocks, cross-tab
+    trackpad nav" (everything described in **What's built so far** above:
+    the unified per-day schedule model, goal-block generation into the Day
+    view, and Goals/+Log tab-switch swipe). Also added this `HANDOFF.md`.
+- Pushing needed **GitHub CLI** (`gh`), installed via Homebrew at
+  `/opt/homebrew/bin/gh` and authenticated as the `drivector` account
+  (`repo` scope) — the plain HTTPS credential helper (`osxkeychain`) had
+  nothing stored, so a bare `git push` failed with "could not read Username"
+  until `gh auth login` was completed. **`/opt/homebrew/bin` may not be on
+  PATH in a fresh non-interactive shell** — add it explicitly
+  (`export PATH="/opt/homebrew/bin:$PATH"`) before relying on `gh` or `brew`.
+- Homebrew itself is now installed too (wasn't at the start of the session) —
+  confirmed via `gh`'s Cellar path; `brew` itself wasn't independently
+  re-verified on PATH, same caveat as above applies.
 
 ## In progress: real accounts (Firebase Auth) + Firestore persistence
 
