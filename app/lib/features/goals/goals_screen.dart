@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../shared/widgets/date_swipe_nav.dart';
+import '../../state/auth_providers.dart';
 import '../../state/goals_providers.dart';
 import '../../state/root_shell_providers.dart';
 import '../../theme/app_colors.dart';
@@ -49,12 +50,22 @@ class GoalsScreen extends ConsumerWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text('Goals', style: AppTextStyles.title()),
-                  GestureDetector(
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const CategoriesScreen()),
-                    ),
-                    behavior: HitTestBehavior.opaque,
-                    child: Text('categories', style: AppTextStyles.mono()),
+                  Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const CategoriesScreen()),
+                        ),
+                        behavior: HitTestBehavior.opaque,
+                        child: Text('categories', style: AppTextStyles.mono()),
+                      ),
+                      const SizedBox(width: AppSpacing.s3),
+                      GestureDetector(
+                        onTap: () => ref.read(firebaseAuthProvider).signOut(),
+                        behavior: HitTestBehavior.opaque,
+                        child: Text('sign out', style: AppTextStyles.mono()),
+                      ),
+                    ],
                   ),
                 ],
               ),

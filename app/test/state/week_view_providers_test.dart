@@ -1,16 +1,40 @@
+import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:calendar_tracker/data/mock/mock_categories.dart';
 import 'package:calendar_tracker/models/untracked_gap.dart';
+import 'package:calendar_tracker/state/auth_providers.dart';
 import 'package:calendar_tracker/state/day_view_providers.dart';
 import 'package:calendar_tracker/state/derived_providers.dart';
+import 'package:calendar_tracker/state/firestore_providers.dart';
 import 'package:calendar_tracker/state/week_view_providers.dart';
+
+import '../support/firestore_test_fixtures.dart';
+
+Future<ProviderContainer> _signedInContainer() async {
+  const uid = 'test-uid';
+  final firestore = await seededFirestore(uid);
+  final container = ProviderContainer(overrides: [
+    firebaseAuthProvider.overrideWithValue(
+      MockFirebaseAuth(signedIn: true, mockUser: MockUser(uid: uid)),
+    ),
+    firestoreProvider.overrideWithValue(firestore),
+  ]);
+  // The mock auth stream's first emission is asynchronous, and every
+  // per-user repository provider depends on it via currentUidProvider — so
+  // wait for that first, then for the first Firestore snapshot on each
+  // collection this suite reads, before any synchronous `container.read`.
+  await container.read(authStateChangesProvider.future);
+  await container.read(allPlannedBlocksStreamProvider.future);
+  await container.read(allTrackedBlocksStreamProvider.future);
+  return container;
+}
 
 void main() {
   group('weekDaySummariesProvider', () {
-    test('covers the 7 days of the week containing the selected date, Monday first', () {
-      final container = ProviderContainer();
+    test('covers the 7 days of the week containing the selected date, Monday first', () async {
+      final container = await _signedInContainer();
       addTearDown(container.dispose);
       container.read(selectedDateProvider.notifier).state = DateTime(2026, 8, 20); // Thursday
 
@@ -23,8 +47,8 @@ void main() {
       }
     });
 
-    test('a day with real blocks reports real per-category hours, not synthetic ones', () {
-      final container = ProviderContainer();
+    test('a day with real blocks reports real per-category hours, not synthetic ones', () async {
+      final container = await _signedInContainer();
       addTearDown(container.dispose);
       container.read(selectedDateProvider.notifier).state = DateTime(2026, 8, 20);
 
@@ -40,8 +64,8 @@ void main() {
       );
     });
 
-    test('untracked hours match computeUntrackedGaps run against that day directly', () {
-      final container = ProviderContainer();
+    test('untracked hours match computeUntrackedGaps run against that day directly', () async {
+      final container = await _signedInContainer();
       addTearDown(container.dispose);
       final date = DateTime(2026, 8, 20);
       container.read(selectedDateProvider.notifier).state = date;
@@ -65,8 +89,8 @@ void main() {
       expect(thursday.untrackedHours, closeTo(expectedHours, 0.001));
     });
 
-    test('a week with no logged activity reports honest empty days', () {
-      final container = ProviderContainer();
+    test('a week with no logged activity reports honest empty days', () async {
+      final container = await _signedInContainer();
       addTearDown(container.dispose);
       // Far from any seeded mock/dummy data.
       container.read(selectedDateProvider.notifier).state = DateTime(2030, 1, 7);
@@ -80,8 +104,8 @@ void main() {
       }
     });
 
-    test('navigating to a different week changes which days are shown', () {
-      final container = ProviderContainer();
+    test('navigating to a different week changes which days are shown', () async {
+      final container = await _signedInContainer();
       addTearDown(container.dispose);
       container.read(selectedDateProvider.notifier).state = DateTime(2026, 8, 20);
       final firstWeek = container.read(weekDaySummariesProvider);

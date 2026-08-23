@@ -38,6 +38,10 @@ dependencies:
   flutter_riverpod: ^2.6.1
   google_fonts: ^6.2.1
   intl: ^0.19.0
+  firebase_core: ^3.8.0
+  firebase_auth: ^5.3.3
+  cloud_firestore: ^5.5.0
+  collection: ^1.19.1
 
 dev_dependencies:
   flutter_test:
@@ -49,6 +53,9 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  firebase_auth_mocks: ^0.14.2
+  mock_exceptions: ^0.8.2
+  fake_cloud_firestore: ^3.1.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

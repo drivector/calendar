@@ -1,8 +1,13 @@
 # Calendar Tracker — session handoff
 
-Written 2026-08-23 to resume this work in a fresh session. Read this first, then
-verify anything time-sensitive (git status, test count, Firebase state) since it
-may have moved on since this was written.
+Updated 2026-08-24 (fourth session) — Firebase Auth + Firestore are built
+and live; this session was five independent goal/logging UX fixes (see
+**Goal & logging UX fixes** below), a GitHub Actions CI workflow, and
+getting the app ready to install on a physical iPhone (code-side is ready;
+signing needs the user's own Xcode session — see **Installing on a physical
+iPhone**). Read this first, then verify anything time-sensitive (git
+status, test count, Firebase console state) since it may have moved on
+since this was written.
 
 ## What this project is
 
@@ -20,10 +25,16 @@ Git remote: `https://github.com/drivector/calendar.git` — up to date, see
 
 ## Stack
 
-- Flutter, `flutter_riverpod` for state (StateNotifierProvider for mutable
-  collections, derived `Provider`s for computed values — no codegen).
-- All data is currently **in-memory mock data** — nothing persists between app
-  launches. This is what the in-progress Firebase work (see below) replaces.
+- Flutter, `flutter_riverpod` for state (derived `Provider`s for computed
+  values, `StreamProvider`s over Firestore for live collections — no
+  codegen).
+- **Firebase Auth (email/password) + Firestore** are wired in — see
+  **Authentication + Firestore backend** below. A signed-in account's
+  goals/categories/planned/tracked blocks live in Firestore under
+  `users/{uid}/...` and start **empty** for a new account; the old
+  in-memory mock/dummy data (`lib/data/mock/`) is now only a **test
+  fixture**, seeded into a fake Firestore in tests — it no longer feeds the
+  real app.
 - Local Flutter SDK at `~/development/flutter/bin` (already on PATH via
   `~/.zshrc`).
 
@@ -77,108 +88,357 @@ and a Claim-untracked-time bottom sheet.
   widget, now used for both date-nav and tab-switching (never both on one
   screen — see its doc comment for why).
 - `lib/data/mock/mock_goals.dart`, `mock_day_20aug.dart`, `dummy_data.dart` —
-  seed data. `dummy_data.dart` is meant to be user-editable (empty
-  `dummyGoals`/`dummyCategories` templates).
+  now **test-fixture-only** seed data (see **Authentication + Firestore
+  backend**), no longer wired into the live app. `dummy_data.dart` is still
+  user-editable if you want to change what the test fixture seeds.
 
 ## Testing
 
-`flutter analyze` is clean; `flutter test` currently passes **65 tests**
-across `test/models/`, `test/state/`, and `test/widget_test.dart`. Convention
-established this session: after any change, run both and fix before moving on.
-Run from `app/`:
+`flutter analyze` is clean; `flutter test` currently passes **77 tests**
+across `test/models/`, `test/state/`, `test/utils/`, `test/widget_test.dart`,
+and `test/features/auth/login_screen_test.dart`. Convention: after any
+change, run both and fix before moving on. Run from `app/`:
 ```bash
 export PATH="$HOME/development/flutter/bin:$PATH"
 flutter analyze
 flutter test
 ```
+Screen/provider tests that reach `RootShell` now need a signed-in fixture,
+since `RootShell` sits behind the Firebase auth gate and its providers are
+Firestore-backed. `test/support/firestore_test_fixtures.dart` has
+`seededFirestore(uid)`, which pre-populates a `FakeFirebaseFirestore`
+(package `fake_cloud_firestore`) with the mock/dummy data under
+`users/{uid}/...`; pair it with `firebase_auth_mocks`'
+`MockFirebaseAuth(signedIn: true, mockUser: MockUser(uid: uid))` overriding
+`firebaseAuthProvider`, and override `firestoreProvider` with that fake
+Firestore. See `_signedInOverrides()` in `widget_test.dart` for the pattern.
+One gotcha hit repeatedly: `MockFirebaseAuth`'s first `authStateChanges()`
+emission is asynchronous, and every per-user repository provider depends on
+it via `currentUidProvider` — so in a plain (non-widget) test, `await
+container.read(authStateChangesProvider.future)` before touching anything
+uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
+`AsyncLoading`. Widget tests don't need this explicitly since
+`pumpAndSettle()` flushes it.
 
-## Git status — clean, pushed
+## Git status — uncommitted
 
-- `main` is pushed and up to date with `origin/main`; working tree clean.
-- Two commits on top of the initial scaffold:
-  - `a18a953` — "Build Calendar Tracker: Day/Week/Goals/Log/Categories
-    screens on Flutter" (the original app build, including day/week nav
-    arrows and the live Week view refactor).
-  - `6517d13` — "Unify goal scheduling, live-generate plan blocks, cross-tab
-    trackpad nav" (everything described in **What's built so far** above:
-    the unified per-day schedule model, goal-block generation into the Day
-    view, and Goals/+Log tab-switch swipe). Also added this `HANDOFF.md`.
-- Pushing needed **GitHub CLI** (`gh`), installed via Homebrew at
+- `main` was pushed and clean at the *start* of this session; this session's
+  Firebase Auth + Firestore work (see below) is **uncommitted** — ask before
+  committing/pushing, per this repo's `CLAUDE.md`.
+- Pushing needs **GitHub CLI** (`gh`), installed via Homebrew at
   `/opt/homebrew/bin/gh` and authenticated as the `drivector` account
-  (`repo` scope) — the plain HTTPS credential helper (`osxkeychain`) had
-  nothing stored, so a bare `git push` failed with "could not read Username"
-  until `gh auth login` was completed. **`/opt/homebrew/bin` may not be on
-  PATH in a fresh non-interactive shell** — add it explicitly
-  (`export PATH="/opt/homebrew/bin:$PATH"`) before relying on `gh` or `brew`.
-- Homebrew itself is now installed too (wasn't at the start of the session) —
-  confirmed via `gh`'s Cellar path; `brew` itself wasn't independently
-  re-verified on PATH, same caveat as above applies.
+  (`repo` scope). **`/opt/homebrew/bin` may not be on PATH in a fresh
+  non-interactive shell** — add it explicitly
+  (`export PATH="/opt/homebrew/bin:$PATH"`) before relying on `gh`, `brew`,
+  `firebase`, or `flutterfire` (the latter two also need
+  `$HOME/.npm-global/bin` and `$HOME/.pub-cache/bin` respectively, plus the
+  Flutter SDK's `bin` on PATH since `flutterfire` shells out to `dart`).
 
-## In progress: real accounts (Firebase Auth) + Firestore persistence
+## Goal & logging UX fixes (fourth session)
 
-The user asked for "user management" and, after discussion, chose the
-biggest-scope option: real sign-up/login via **Firebase Auth**, plus
-**replacing all in-memory mock data with Firestore**, scoped per account
-(goals, planned/tracked blocks, categories all become per-user Firestore
-collections instead of `StateNotifierProvider`s over local lists).
+Five independent fixes the user asked for after testing the app for real,
+each with its own tests. All verified: `flutter analyze` clean, all 77
+tests pass, plus a live spot-check on the iOS Simulator against the user's
+real signed-in account (items 2, 4, 5 visually confirmed; item 3 relies on
+its widget tests since live taps have been unreliable in this environment
+all project — see **Known environment quirks**).
 
-### Environment setup completed this session
-- Node.js was missing entirely; user installed it via the official
-  nodejs.org macOS ARM64 `.pkg` installer (now `v24.19.0` at `/usr/local/bin`).
-- `npm install -g firebase-tools` failed with `EACCES` (default global prefix
-  `/usr/local/lib/node_modules` isn't user-writable). Fixed by pointing npm's
-  global prefix at a user directory instead of using `sudo`:
+1. **Time-range end defaults to start + 30 min.** Previously both the start
+   and end time pickers in a goal's "+ time range" flow defaulted to fixed
+   clock times (09:00 / 17:00) independent of each other. Now the end
+   picker's initial suggestion is the picked start time + 30 minutes.
+   Extracted the `TimeOfDay` math both `goal_edit_sheet.dart` and
+   `add_block_sheet.dart` needed into `lib/utils/time_of_day_utils.dart`
+   (`addMinutes`) rather than leaving it duplicated — `add_block_sheet.dart`
+   already had its own private copy. Unit-tested directly in
+   `test/utils/time_of_day_utils_test.dart`.
+
+2. **Plain-duration goal entries are never auto-placed on the calendar.**
+   `generateGoalPlannedBlocksForDate` (`lib/models/goal_planned_blocks.dart`)
+   used to greedily place duration-only entries ("piano, 15 min, any time")
+   into free calendar slots, marked `isGoalAutoPlaced`. That whole placement
+   path is gone — only time-range entries (a real clock time) ever generate
+   a `PlannedBlock` now; a plain duration only ever counts toward the
+   goal's weekly target, never appears on the Day view. This let
+   `PlannedBlock.isGoalAutoPlaced` be deleted entirely (model, `toMap`/
+   `fromMap`, and the "· auto-placed" label in `goal_detail_sheet.dart`) —
+   it's now permanently false everywhere, since nothing sets it anymore.
+   `generateGoalPlannedBlocksForDate`'s signature also simplified — it no
+   longer takes `existingBlocksForDate` (that was only ever used for the
+   now-deleted overlap-avoidance logic). Rewrote
+   `test/models/goal_planned_blocks_test.dart` for the new behavior (two of
+   its old tests, about duration-entry overlap placement, no longer apply
+   to anything and were removed rather than adapted).
+
+3. **Unsaved-changes confirmation when exiting the goal edit sheet.**
+   `GoalEditSheet` now snapshots its initial field values on open (via
+   `Goal.toMap()` + `package:collection`'s `DeepCollectionEquality`, rather
+   than adding `==`/`hashCode` to the model just for this) and compares
+   against that snapshot whenever something tries to close the sheet. If
+   nothing changed, it closes immediately, same as before — this applies
+   equally whether creating a new goal or editing an existing one, not
+   just editing (didn't seem worth having two different behaviors for the
+   same sheet). If something changed, a flat, on-brand "Discard changes?"
+   dialog (`_DiscardChangesDialog`, no `AlertDialog` — Material's default
+   has rounded corners) asks first. The sheet's barrier-tap and
+   swipe-to-dismiss are now disabled (`isDismissible: false, enableDrag:
+   false`) so the "cancel" link is the only exit path to guard — wrapped in
+   `PopScope(canPop: false, ...)` too, which costs nothing now (a direct
+   `Navigator.pop()` call, which is all "cancel"/Save use, bypasses
+   `canPop` entirely — confirmed by reading Flutter's own `Navigator.pop`
+   source before relying on this) and will matter once Android ships,
+   where the hardware back button *does* go through `canPop`.
+
+4. **Logging an activity picks a goal, not a category.** The Log activity
+   screen's chip row used to list categories directly
+   (`draftLogEntry.categoryId`); now it lists goals
+   (`draftLogEntry.goalId`, in `lib/state/log_entry_providers.dart`), each
+   chip still colored by its own category
+   (`resolveCategory(categories, goal.categoryId).color`) via the same
+   reusable `CategoryChip` widget. The tracked block's `categoryId` on save
+   is derived from the selected goal. The old "Counts toward" read-out
+   (which looked up a goal *from* the picked category) is gone since
+   picking the goal directly makes it redundant — replaced with a "Weekly
+   target" line showing the selected goal's own `weeklyTargetHours`, which
+   is new information rather than restating the selection. **Real
+   consequence**: a category with no goal of its own can no longer be
+   logged against directly — you now need a goal, not just a category, to
+   log time. Confirmed intentional via the new
+   `Categories: a new category needs a goal of its own before it shows up
+   as a Log activity chip` test, which walks the full chain (create
+   category → not loggable yet → create a goal for it → now loggable).
+   Screen-time stays excluded from the picker either way (it's
+   auto-tracked, never manually logged) — same exclusion, now expressed as
+   `goals.where((g) => g.categoryId != screenTimeCategoryId)` instead of
+   filtering categories directly.
+
+5. **Planned blocks are colored by category.** `PlanBlockWidget`
+   (`lib/features/day_view/widgets/plan_block_widget.dart`) used a flat
+   neutral gray dashed border for every planned block regardless of
+   category — `ActualBlockWidget` already colored tracked blocks by
+   category, planned blocks just never got the same treatment. Now takes a
+   required `category` param (same pattern as `ActualBlockWidget`) and
+   uses `category.color` for its dashed border. Applies to every planned
+   block (manual and goal-generated alike), not just goal-originated ones,
+   since there's only one `PlanBlockWidget` either way.
+
+## GitHub Actions CI
+
+`.github/workflows/ci.yml`, two jobs, triggered on push/PR to `main`:
+- **`analyze-and-test`** (ubuntu-latest) — `flutter analyze` + `flutter
+  test`, the same gate as local development.
+- **`build-ios`** (macos-latest) — `flutter build ios --release
+  --no-codesign`, to catch iOS/Xcode-project breakage analyze+test alone
+  can't see. Unsigned on purpose — CI has no access to the team's signing
+  identity, so it can't produce something installable; it only proves the
+  code and Xcode project are in a buildable state.
+
+Not yet pushed (this session's work is uncommitted — see **Git status**).
+Once pushed, this needs no further setup — no secrets, no self-hosted
+runner, nothing Firebase-related (tests run entirely against
+`fake_cloud_firestore`/`firebase_auth_mocks`, never the real project).
+
+## Installing on a physical iPhone
+
+Confirmed ready on the code side — `flutter build ios --release
+--no-codesign` succeeds (`Built build/ios/iphoneos/Runner.app`, arm64
+device build, not simulator), bundle id `com.drivector.calendarTracker`
+matches between the Xcode project and `ios/Runner/GoogleService-Info.plist`
+(so Firebase will actually work on-device), deployment target iOS 15.0
+(fine for any modern iPhone). **The only remaining step is code signing**,
+which needs the user's own Apple ID inside an interactive Xcode session —
+not something achievable from this CLI environment, and not something I
+should do even if it were (entering Apple ID credentials on the user's
+behalf is out of bounds). Steps for the user:
+1. Open `ios/Runner.xcworkspace` in Xcode (the `.xcworkspace`, not
+   `.xcodeproj` — CocoaPods/SPM dependencies need the workspace).
+2. Runner project → Runner target → **Signing & Capabilities** tab → set
+   **Team** to your personal Apple ID (Xcode → Settings → Accounts to add
+   it first, if it's not there yet). Leave "Automatically manage signing"
+   checked.
+3. Connect the iPhone via USB (or same-network wireless debugging once
+   paired once), unlock it, tap "Trust This Computer" if prompted.
+4. Pick the connected iPhone from Xcode's device dropdown (top toolbar),
+   then hit Run (▶). First launch needs one more trust step *on the
+   iPhone*: Settings → General → VPN & Device Management → select the
+   developer profile → Trust.
+5. **A free (non-paid) Apple ID's signing expires after 7 days** — Xcode
+   will need to re-sign (just hit Run again) weekly. A paid Apple Developer
+   Program membership ($99/yr) removes that limit and also unlocks
+   TestFlight, if that's ever wanted instead of a cable-tethered install.
+6. After the one-time Xcode signing setup, `flutter run --release -d
+   <device-id>` from `app/` works directly too, if CLI is preferred over
+   clicking Run in Xcode each time.
+
+## Authentication + Firestore backend
+
+Real sign-up/login via **Firebase Auth** (email/password), plus **all
+in-memory mock data replaced with Firestore**, scoped per account — this is
+now built and tested, gated only on the user finishing Firebase console
+setup (see **Not yet done**).
+
+### What's built
+- **`lib/features/auth/login_screen.dart`** — email/password sign-in and
+  sign-up in one screen (toggle link between the two modes), Modernist
+  styling, friendly error messages mapped from `FirebaseAuthException.code`.
+- **`lib/features/auth/auth_gate.dart`** — `AuthGate` watches
+  `authStateChangesProvider`; shows `LoginScreen` when signed out,
+  `RootShell` when signed in, a loading state in between. Wired in as
+  `app.dart`'s `home:` (was `RootShell` directly).
+- **Sign out** — a "sign out" link next to "categories" in the Goals screen
+  header (`goals_screen.dart`) — there's no dedicated settings screen yet,
+  this was the simplest existing entry point.
+- **`lib/state/auth_providers.dart`** — `firebaseAuthProvider`
+  (`Provider<FirebaseAuth>`), `authStateChangesProvider`
+  (`StreamProvider<User?>`).
+- **`lib/state/firestore_providers.dart`** — `firestoreProvider`
+  (`Provider<FirebaseFirestore>`), `currentUidProvider` (`Provider<String>`,
+  force-unwraps the signed-in uid — only ever watched from inside
+  `RootShell`'s subtree, which `AuthGate` only mounts once signed in).
+- **`lib/data/firestore/firestore_list_repository.dart`** —
+  `FirestoreListRepository<T>`, the shared shape behind all four
+  collections: `watchAll()` (live stream), `upsert(item)` (create-or-replace
+  by id), `remove(id)`. Backs `categoriesRepositoryProvider`,
+  `goalsRepositoryProvider`, `plannedBlocksRepositoryProvider`,
+  `trackedBlocksRepositoryProvider` (one per collection, defined alongside
+  each domain's other providers in `state/categories_providers.dart`,
+  `state/goals_providers.dart`, `state/day_view_providers.dart`).
+- **Firestore document shape** — `users/{uid}/categories/{id}`,
+  `.../goals/{id}`, `.../plannedBlocks/{id}`, `.../trackedBlocks/{id}`, one
+  doc per item, id-keyed. `toMap()`/`fromMap()` added to `Category`, `Goal`
+  (incl. `DayScheduleEntry`), `PlannedBlock`, `TrackedBlock` for
+  serialization — see those model files.
+- **Existing `categoriesProvider`, `goalsProvider`, `allPlannedBlocksProvider`,
+  `allTrackedBlocksProvider` provider names/shapes are unchanged** (still
+  plain `Provider<List<X>>`, not `AsyncValue`) — each is now
+  `streamProvider.valueOrNull ?? []` under the hood, so no consuming widget
+  needed to change. Only the **write** call sites changed, from
+  `ref.read(xProvider.notifier).addX(...)` to
+  `ref.read(xRepositoryProvider).upsert(...)` (and `.remove(id)` for
+  deletes) — 9 call sites across `goal_edit_sheet.dart`,
+  `category_edit_sheet.dart`, `add_block_sheet.dart`,
+  `log_activity_screen.dart`.
+- **Seed-data decision (asked the user explicitly)**: a brand-new account
+  starts **completely empty** — no goals/categories/blocks. This meant two
+  real bugs to fix: `add_block_sheet.dart`'s and `goal_edit_sheet.dart`'s
+  "new item" flows both defaulted `categoryId` to `categoriesProvider.first`,
+  which throws on an empty list — both now no-op (don't open the sheet) if
+  there are no categories yet, since there's nothing sensible to default to.
+  There's no other empty-state messaging anywhere in the app yet (Day view,
+  Goals, etc. all just render nothing) — that's a legitimate follow-up if
+  onboarding UX is wanted, out of scope for this session.
+- **`_actualHoursForGoal` in `goals_providers.dart` had its mock-baseline
+  hack removed** — it used to add a hardcoded `mockGoalActualHours` constant
+  on top of real tracked-block hours (a workaround for the old seeded mock
+  data not being distinguishable from real activity). Now that a real
+  account has no seed data to begin with, it just sums real tracked blocks
+  for the week — this is a genuine behavior fix, not just a refactor
+  side-effect.
+- **`selectedDateProvider` now defaults to today's real date**
+  (`DateTime.now()`, date-only) instead of the hardcoded mock day (20 Aug
+  2026) — tests that relied on the old default now explicitly override it
+  to `mockDay` (see **Testing** above).
+- **`goalForCategory`** (shown as "counts toward X" while logging an
+  activity) used to read the hardcoded `mockGoals` constant regardless of
+  the app's real state — moved to `goals_providers.dart` as a plain function
+  over a live `List<Goal>`, called from `log_activity_screen.dart` with
+  `ref.watch(goalsProvider)`.
+- **Firestore config**: `firestore.rules` (every collection under
+  `users/{uid}/{collection}/{docId}`, readable/writable only by that uid),
+  `firestore.indexes.json` (empty), `firebase.json` updated with a
+  `"firestore"` block, `.firebaserc` pins the `trackmyday-6380a` project as
+  default. **Not yet deployed** — see **Not yet done**.
+- Verified: `flutter analyze` clean, all 73 tests pass, `flutter build macos
+  --debug` succeeds and the built app launches and stays running (with
+  `Firebase.initializeApp()` against the real `trackmyday-6380a` project) —
+  confirms the macOS App Sandbox's existing `network.client` entitlement
+  (already present in both `DebugProfile.entitlements` and
+  `Release.entitlements`) is sufficient for Firebase's network calls, no
+  entitlement changes needed.
+
+### Firebase project setup completed (this and prior session)
+- Node.js, `firebase-tools` v15.28.1, `flutterfire_cli` v1.4.1 all installed
+  and confirmed working; user logged in to the Firebase CLI; Firebase
+  project created (display name "TrackMyDay", project ID `trackmyday-6380a`).
+- `flutterfire configure --project=trackmyday-6380a --platforms=ios,macos`
+  run this session — registered the iOS + macOS apps, generated
+  `lib/firebase_options.dart`, `ios/Runner/GoogleService-Info.plist`,
+  `macos/Runner/GoogleService-Info.plist` (all now in the repo).
+- `firebase_core`, `firebase_auth`, `cloud_firestore` added to
+  `pubspec.yaml` and resolved.
+
+### Firebase console setup — done
+- **Email/Password sign-in** enabled by the user.
+- **Firestore database created and rules deployed.** Location is
+  **`nam5` (US multi-region)**, not the `europe-west3` originally agreed —
+  see the incident note below for why, and note this is now **permanent**
+  (Firestore location can't be changed without deleting and recreating the
+  database). Confirmed via:
   ```bash
-  npm config set prefix "$HOME/.npm-global"
+  export PATH="/opt/homebrew/bin:$HOME/.npm-global/bin:$PATH"
+  firebase firestore:databases:get "(default)" --project trackmyday-6380a
   ```
-  `~/.npm-global/bin` and `~/.pub-cache/bin` (for `flutterfire_cli`, installed
-  via `dart pub global activate flutterfire_cli`) were both added to PATH in
-  `~/.zshrc`. **A brand-new terminal window will have these on PATH
-  automatically; a terminal that was already open before this session won't
-  — `source ~/.zshrc` or open a new window/tab.**
-- `firebase-tools` v15.28.1 and `flutterfire_cli` v1.4.1 are installed and
-  confirmed working (`firebase --version`, `flutterfire --version`).
-- User is **logged in** to the Firebase CLI (`firebase login` completed
-  successfully via the `--no-localhost` device-code flow — there was some
-  back-and-forth with duplicate/mismatched login sessions from running the
-  command in two different terminals; it resolved once they used one
-  consistent terminal for the whole flow).
-- User created a Firebase project: **display name "TrackMyDay", project ID
-  `trackmyday-6380a`** (confirmed via `firebase projects:list`). Not yet
-  confirmed whether Email/Password auth and Firestore have actually been
-  enabled in that project's console (the instructions given asked for both,
-  but this wasn't independently re-verified after project creation).
+- Rules are live: `firebase deploy --only firestore:rules --project
+  trackmyday-6380a` completed successfully this session.
+
+**Incident note**: running that same `firebase deploy --only
+firestore:rules` command is what actually created the `(default)` database
+— its output included "Creating the new Firestore database (default)...".
+The user had created a database via the console shortly before (intending
+`europe-west3`/`europe-west8`), but `firebase firestore:databases:list`
+kept 403ing as if no database existed, for longer than ordinary propagation
+lag — the console-created database apparently hadn't actually registered
+server-side. When the rules deploy ran its own "ensure database exists"
+step, it won the race and created a fresh one in Firestore's fallback
+location (`nam5`) before the console one showed up. Asked the user how to
+handle it (delete-and-recreate correctly vs. keep); **they chose to keep
+`nam5`**. Lesson for next time: check
+`firebase firestore:databases:get "(default)"` explicitly for an existing
+database *before* running any command that might auto-create one (`deploy`,
+`firestore:databases:create`), rather than assuming a 403 means "not
+created yet" when it could mean "still propagating."
+
+### Live-verified — the user signed up and used the app for real
+The user tested sign-up on the iOS Simulator (built via `flutter build ios
+--debug --simulator`, installed with this environment's iOS Simulator
+`launch` tool — **the simulator had an old pre-auth build installed from an
+earlier session**, which is why login didn't initially appear; a fresh
+build fixed it). Confirmed working end-to-end: created a category, created
+a "Walking" goal, data genuinely persists in Firestore (visible in a later
+screenshot showing real data on the real current date, not the old
+hardcoded `mockDay`), Auth session persists across app restarts (expected
+Firebase behavior, not a bug — a fresh login is only forced by explicit
+sign-out). Have **not** yet tested a second account to confirm data
+isolation between users.
+
+### Bug found and fixed this session: "create a category first" message
+The user found that trying to create a new goal with zero categories did
+nothing (silent no-op, from the guard added when "start empty" was
+decided) — asked for an actual message instead. Fixed by adding a SnackBar,
+which surfaced a **real crash bug**: this app has **zero `Scaffold`
+widgets** anywhere (deliberately, per the Modernist system), and
+`ScaffoldMessenger.showSnackBar` unconditionally asserts a descendant
+`Scaffold` exists — regardless of `SnackBarBehavior.floating` vs `.fixed`,
+contrary to what might be assumed. Fixed by swapping `app.dart`'s root
+`Material` wrapper for a bare `Scaffold` (`home: Scaffold(backgroundColor:
+AppColors.bg, body: SafeArea(child: AuthGate()))`) — one Scaffold for the
+whole app, no visible chrome (no appBar/FAB/drawer), which is all
+`ScaffoldMessenger` needs. `snackBarTheme` added to `app_theme.dart` (flat:
+zero radius, no elevation, dark background/light text matching the
+design system). Applied to both no-category guards (goal creation in
+`goal_edit_sheet.dart`, day-view tap-to-create in `add_block_sheet.dart`).
+Two new widget tests cover this (`test/widget_test.dart`, the two
+"...with no categories..." tests) — they're what caught the Scaffold
+crash in the first place.
 
 ### Not yet done — pick up here
-1. **Verify** Firestore + Email/Password Auth are enabled on `trackmyday-6380a`
-   in the Firebase console (Build → Authentication → Sign-in method; Build →
-   Firestore Database).
-2. **Run `flutterfire configure`** from `app/` (select the `trackmyday-6380a`
-   project, select iOS + macOS platforms). This generates
-   `lib/firebase_options.dart` and registers/downloads platform config
-   (`GoogleService-Info.plist` etc.) automatically. Neither this file nor
-   those configs exist in the repo yet — confirmed via a fresh search before
-   writing this handoff.
-3. Add `firebase_core`, `firebase_auth`, `cloud_firestore` to `pubspec.yaml`.
-4. Initialize Firebase in `main.dart` (`Firebase.initializeApp` before
-   `runApp`).
-5. Design + build sign-up/login/logout UI in the app's own Modernist system
-   (no existing design reference for this, same situation as Categories
-   admin earlier — built fresh).
-6. Add an auth-gate wrapping `RootShell` (splash/loading while checking auth
-   state, redirect to login if signed out).
-7. Migrate `goalsProvider`, `allPlannedBlocksProvider`, `allTrackedBlocksProvider`,
-   `categoriesProvider` (currently local `StateNotifierProvider`s seeded from
-   `data/mock/`) to Firestore-backed repositories scoped under the
-   authenticated user's UID. Decide the collection shape (likely
-   `users/{uid}/goals`, `users/{uid}/plannedBlocks`, etc.) before writing
-   security rules.
-8. Write Firestore security rules so a user can only read/write their own
-   `users/{uid}/**` subtree; deploy via `firebase deploy --only firestore:rules`.
-9. Decide what happens to the existing mock/dummy seed data — likely becomes
-   either a one-time seed-on-first-login, or is dropped once real Firestore
-   data exists, or stays as a fallback for signed-out/demo mode. Not yet
-   decided — ask the user rather than assuming.
+1. Test a **second account** to confirm per-user Firestore data isolation
+   (one user can't see another's categories/goals/blocks) — not yet done,
+   only single-account testing so far.
+2. No password-reset flow, no email verification requirement, no
+   Google/Apple sign-in — email/password only, matching what was asked for.
+   Worth asking the user if any of those are wanted before considering auth
+   "done."
 
 ## Known environment quirks
 

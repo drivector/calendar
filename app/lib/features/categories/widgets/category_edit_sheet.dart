@@ -50,16 +50,12 @@ class _CategoryEditSheetState extends State<_CategoryEditSheet> {
       name: _nameController.text.trim().isEmpty ? 'Untitled category' : _nameController.text.trim(),
       color: _color,
     );
-    if (_isEditing) {
-      widget.ref.read(categoriesProvider.notifier).updateCategory(category);
-    } else {
-      widget.ref.read(categoriesProvider.notifier).addCategory(category);
-    }
+    widget.ref.read(categoriesRepositoryProvider).upsert(category);
     Navigator.of(context).pop();
   }
 
   void _delete() {
-    widget.ref.read(categoriesProvider.notifier).removeCategory(widget.existing!.id);
+    widget.ref.read(categoriesRepositoryProvider).remove(widget.existing!.id);
     Navigator.of(context).pop();
   }
 

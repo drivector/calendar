@@ -9,6 +9,7 @@ import '../../../state/day_view_providers.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../theme/app_text_styles.dart';
+import '../../../utils/time_of_day_utils.dart';
 
 /// Tapping empty space in either lane of the Day view timeline opens this —
 /// a quick add form for a new planned or actual entry, prefilled with the
@@ -19,17 +20,22 @@ Future<void> showAddBlockSheet(
   required bool isPlan,
   required TimeOfDay initialStart,
 }) {
+  // Nothing to file a block under yet — a brand-new account starts with no
+  // categories, so tell the user to create one first rather than opening a
+  // form with no valid default.
+  if (ref.read(categoriesProvider).isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Create a category first')),
+    );
+    return Future.value();
+  }
+
   return showModalBottomSheet<void>(
     context: context,
     backgroundColor: AppColors.bg,
     isScrollControlled: true,
     builder: (context) => _AddBlockSheet(isPlan: isPlan, initialStart: initialStart, ref: ref),
   );
-}
-
-TimeOfDay _addMinutes(TimeOfDay time, int minutes) {
-  final total = (time.hour * 60 + time.minute + minutes) % (24 * 60);
-  return TimeOfDay(hour: total ~/ 60, minute: total % 60);
 }
 
 class _AddBlockSheet extends StatefulWidget {
@@ -50,7 +56,7 @@ class _AddBlockSheet extends StatefulWidget {
 class _AddBlockSheetState extends State<_AddBlockSheet> {
   late final _titleController = TextEditingController();
   late TimeOfDay _start = widget.initialStart;
-  late TimeOfDay _end = _addMinutes(widget.initialStart, 30);
+  late TimeOfDay _end = addMinutes(widget.initialStart, 30);
   late String _categoryId = widget.ref.read(categoriesProvider).first.id;
 
   @override
@@ -100,11 +106,11 @@ class _AddBlockSheetState extends State<_AddBlockSheet> {
     final id = '${widget.isPlan ? 'plan' : 'actual'}-${DateTime.now().microsecondsSinceEpoch}';
 
     if (widget.isPlan) {
-      widget.ref.read(allPlannedBlocksProvider.notifier).addBlock(
+      widget.ref.read(plannedBlocksRepositoryProvider).upsert(
             PlannedBlock(id: id, start: startDt, end: endDt, title: title, categoryId: _categoryId),
           );
     } else {
-      widget.ref.read(allTrackedBlocksProvider.notifier).addBlock(
+      widget.ref.read(trackedBlocksRepositoryProvider).upsert(
             TrackedBlock(
               id: id,
               start: startDt,

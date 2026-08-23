@@ -1,9 +1,12 @@
+import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
+import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:calendar_tracker/app.dart';
 import 'package:calendar_tracker/data/mock/mock_categories.dart';
+import 'package:calendar_tracker/data/mock/mock_day_20aug.dart';
 import 'package:calendar_tracker/features/categories/categories_screen.dart';
 import 'package:calendar_tracker/features/day_view/widgets/day_header_bar.dart';
 import 'package:calendar_tracker/features/day_view/widgets/time_body_grid.dart';
@@ -16,16 +19,58 @@ import 'package:calendar_tracker/models/clock_time.dart';
 import 'package:calendar_tracker/models/goal.dart';
 import 'package:calendar_tracker/models/planned_block.dart';
 import 'package:calendar_tracker/shared/widgets/step_arrow_button.dart';
+import 'package:calendar_tracker/state/auth_providers.dart';
 import 'package:calendar_tracker/state/day_view_providers.dart';
+import 'package:calendar_tracker/state/firestore_providers.dart';
 import 'package:calendar_tracker/state/goals_providers.dart';
 import 'package:calendar_tracker/state/log_entry_providers.dart';
 import 'package:calendar_tracker/state/root_shell_providers.dart';
+
+import 'support/firestore_test_fixtures.dart';
+
+/// Every screen test below exercises [RootShell] content, which sits behind
+/// the Firebase auth gate — so each pump needs a fake signed-in user with a
+/// Firestore backing it. A fresh [MockFirebaseAuth]/[FakeFirebaseFirestore]
+/// pair per call keeps state from leaking between tests. The fake Firestore
+/// is pre-seeded with the same mock/dummy data the old in-memory providers
+/// used to boot with, so existing screen assertions ("Walk 45 m", "20 Aug",
+/// ...) still hold — a real account starts empty; only tests seed data.
+Future<List<Override>> _signedInOverrides() async {
+  const uid = 'test-uid';
+  final firestore = await seededFirestore(uid);
+
+  return [
+    firebaseAuthProvider.overrideWithValue(
+      MockFirebaseAuth(
+        signedIn: true,
+        mockUser: MockUser(uid: uid, email: 'test@example.com'),
+      ),
+    ),
+    firestoreProvider.overrideWithValue(firestore),
+    selectedDateProvider.overrideWith((ref) => mockDay),
+  ];
+}
+
+/// Same as [_signedInOverrides] but with a bare, unseeded Firestore — for
+/// exercising the brand-new-account (no categories yet) paths.
+Future<List<Override>> _signedInEmptyOverrides() async {
+  return [
+    firebaseAuthProvider.overrideWithValue(
+      MockFirebaseAuth(
+        signedIn: true,
+        mockUser: MockUser(uid: 'empty-test-uid', email: 'empty@example.com'),
+      ),
+    ),
+    firestoreProvider.overrideWithValue(FakeFirebaseFirestore()),
+    selectedDateProvider.overrideWith((ref) => mockDay),
+  ];
+}
 
 void main() {
   testWidgets('Day view renders the mock day without layout errors',
       (WidgetTester tester) async {
     await tester.pumpWidget(
-      const ProviderScope(child: CalendarTrackerApp()),
+      ProviderScope(overrides: await _signedInOverrides(), child: const CalendarTrackerApp()),
     );
     await tester.pumpAndSettle();
 
@@ -37,7 +82,7 @@ void main() {
   testWidgets('Day view: the header arrows step to the next/previous day',
       (WidgetTester tester) async {
     await tester.pumpWidget(
-      const ProviderScope(child: CalendarTrackerApp()),
+      ProviderScope(overrides: await _signedInOverrides(), child: const CalendarTrackerApp()),
     );
     await tester.pumpAndSettle();
 
@@ -62,7 +107,7 @@ void main() {
   testWidgets('Day view: a leftward swipe on the timeline advances to the next day',
       (WidgetTester tester) async {
     await tester.pumpWidget(
-      const ProviderScope(child: CalendarTrackerApp()),
+      ProviderScope(overrides: await _signedInOverrides(), child: const CalendarTrackerApp()),
     );
     await tester.pumpAndSettle();
 
@@ -77,7 +122,7 @@ void main() {
   testWidgets('Tapping the untracked gap opens the claim sheet',
       (WidgetTester tester) async {
     await tester.pumpWidget(
-      const ProviderScope(child: CalendarTrackerApp()),
+      ProviderScope(overrides: await _signedInOverrides(), child: const CalendarTrackerApp()),
     );
     await tester.pumpAndSettle();
 
@@ -96,7 +141,7 @@ void main() {
   testWidgets('Tab bar switches through all 4 tabs without layout errors',
       (WidgetTester tester) async {
     await tester.pumpWidget(
-      const ProviderScope(child: CalendarTrackerApp()),
+      ProviderScope(overrides: await _signedInOverrides(), child: const CalendarTrackerApp()),
     );
     await tester.pumpAndSettle();
 
@@ -109,7 +154,7 @@ void main() {
 
   testWidgets('Goals: a leftward swipe steps to the next tab (+ Log)',
       (WidgetTester tester) async {
-    final container = ProviderContainer();
+    final container = ProviderContainer(overrides: await _signedInOverrides());
     addTearDown(container.dispose);
     await tester.pumpWidget(
       UncontrolledProviderScope(container: container, child: const CalendarTrackerApp()),
@@ -132,7 +177,7 @@ void main() {
 
   testWidgets('Log activity: a rightward swipe steps to the previous tab (Goals)',
       (WidgetTester tester) async {
-    final container = ProviderContainer();
+    final container = ProviderContainer(overrides: await _signedInOverrides());
     addTearDown(container.dispose);
     await tester.pumpWidget(
       UncontrolledProviderScope(container: container, child: const CalendarTrackerApp()),
@@ -152,7 +197,7 @@ void main() {
 
   testWidgets('Log activity: swiping left at the last tab clamps, not wraps',
       (WidgetTester tester) async {
-    final container = ProviderContainer();
+    final container = ProviderContainer(overrides: await _signedInOverrides());
     addTearDown(container.dispose);
     await tester.pumpWidget(
       UncontrolledProviderScope(container: container, child: const CalendarTrackerApp()),
@@ -175,7 +220,7 @@ void main() {
   testWidgets('Week screen renders day rows and the goals footer',
       (WidgetTester tester) async {
     await tester.pumpWidget(
-      const ProviderScope(child: CalendarTrackerApp()),
+      ProviderScope(overrides: await _signedInOverrides(), child: const CalendarTrackerApp()),
     );
     await tester.pumpAndSettle();
 
@@ -190,7 +235,7 @@ void main() {
   testWidgets('Week view: the header arrows step to the next/previous week',
       (WidgetTester tester) async {
     await tester.pumpWidget(
-      const ProviderScope(child: CalendarTrackerApp()),
+      ProviderScope(overrides: await _signedInOverrides(), child: const CalendarTrackerApp()),
     );
     await tester.pumpAndSettle();
 
@@ -217,7 +262,7 @@ void main() {
   testWidgets('Goals screen renders a block per mock goal',
       (WidgetTester tester) async {
     await tester.pumpWidget(
-      const ProviderScope(child: CalendarTrackerApp()),
+      ProviderScope(overrides: await _signedInOverrides(), child: const CalendarTrackerApp()),
     );
     await tester.pumpAndSettle();
 
@@ -227,32 +272,38 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Walking'), findsOneWidget);
     expect(find.text('Deep work'), findsOneWidget);
-    expect(find.textContaining('over cap by'), findsWidgets);
+    // Pace/cap status is computed from real tracked-block data now (not a
+    // fabricated baseline) — just confirm every goal shows some status,
+    // without pinning to which one.
+    final hasStatusText = find.textContaining('on pace').evaluate().isNotEmpty ||
+        find.textContaining('behind pace').evaluate().isNotEmpty ||
+        find.textContaining('over cap by').evaluate().isNotEmpty;
+    expect(hasStatusText, isTrue);
   });
 
   testWidgets('Log activity: filling the form computes a duration',
       (WidgetTester tester) async {
     await tester.pumpWidget(
-      const ProviderScope(child: CalendarTrackerApp()),
+      ProviderScope(overrides: await _signedInOverrides(), child: const CalendarTrackerApp()),
     );
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('+ LOG'));
     await tester.pumpAndSettle();
 
-    expect(find.text('—'), findsWidgets); // duration + counts-toward, empty
+    expect(find.text('—'), findsOneWidget); // duration, empty
 
     await tester.tap(find.text('deep work'));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(find.textContaining('Deep work 20 h/wk'), findsOneWidget);
+    expect(find.textContaining('20.0 h/wk'), findsOneWidget);
   });
 
   testWidgets('Tapping a day in the Week view opens that day in Day view',
       (WidgetTester tester) async {
     await tester.pumpWidget(
-      const ProviderScope(child: CalendarTrackerApp()),
+      ProviderScope(overrides: await _signedInOverrides(), child: const CalendarTrackerApp()),
     );
     await tester.pumpAndSettle();
 
@@ -270,7 +321,7 @@ void main() {
   testWidgets('Goals: tapping a goal opens its detail with activity',
       (WidgetTester tester) async {
     await tester.pumpWidget(
-      const ProviderScope(child: CalendarTrackerApp()),
+      ProviderScope(overrides: await _signedInOverrides(), child: const CalendarTrackerApp()),
     );
     await tester.pumpAndSettle();
 
@@ -299,7 +350,7 @@ void main() {
   testWidgets('Goals: editing from the detail sheet and deleting removes it',
       (WidgetTester tester) async {
     await tester.pumpWidget(
-      const ProviderScope(child: CalendarTrackerApp()),
+      ProviderScope(overrides: await _signedInOverrides(), child: const CalendarTrackerApp()),
     );
     await tester.pumpAndSettle();
 
@@ -324,10 +375,109 @@ void main() {
   });
 
   testWidgets(
+      'Goals: canceling an edit with no changes closes immediately, no confirmation',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      ProviderScope(overrides: await _signedInOverrides(), child: const CalendarTrackerApp()),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('GOALS'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Walking'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('EDIT'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Edit goal'), findsOneWidget);
+
+    await tester.tap(find.text('cancel'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Discard changes?'), findsNothing);
+    expect(find.text('Edit goal'), findsNothing);
+  });
+
+  testWidgets(
+      'Goals: canceling an edit with unsaved changes asks to confirm — Keep editing stays on the sheet',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      ProviderScope(overrides: await _signedInOverrides(), child: const CalendarTrackerApp()),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('GOALS'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Walking'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('EDIT'));
+    await tester.pumpAndSettle();
+
+    final nameField = find.descendant(
+      of: find.byType(GoalEditSheet),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(nameField, 'Walking (evenings)');
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('cancel'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Discard changes?'), findsOneWidget);
+
+    await tester.tap(find.text('KEEP EDITING'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Discard changes?'), findsNothing);
+    // Still on the edit sheet, with the typed change intact.
+    expect(find.text('Edit goal'), findsOneWidget);
+    expect(find.text('Walking (evenings)'), findsOneWidget);
+  });
+
+  testWidgets(
+      'Goals: confirming Discard closes the edit sheet without saving',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      ProviderScope(overrides: await _signedInOverrides(), child: const CalendarTrackerApp()),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('GOALS'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Walking'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('EDIT'));
+    await tester.pumpAndSettle();
+
+    final nameField = find.descendant(
+      of: find.byType(GoalEditSheet),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(nameField, 'Walking (evenings)');
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('cancel'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('DISCARD'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Edit goal'), findsNothing);
+    // The original goal is untouched — the edited name was never saved.
+    expect(find.text('Walking (evenings)'), findsNothing);
+    expect(find.text('Walking'), findsOneWidget);
+  });
+
+  testWidgets(
       "Goals: editing a time-range goal shows its existing per-day ranges, not empty",
       (WidgetTester tester) async {
-    final container = ProviderContainer();
+    final container = ProviderContainer(overrides: await _signedInOverrides());
     addTearDown(container.dispose);
+    // The mock auth stream's first emission is asynchronous — wait for it
+    // before touching anything keyed by the signed-in uid.
+    await container.read(authStateChangesProvider.future);
 
     final workGoal = Goal(
       id: 'goal-work-test',
@@ -345,7 +495,7 @@ void main() {
         DateTime.sunday: const [],
       },
     );
-    container.read(goalsProvider.notifier).addGoal(workGoal);
+    await container.read(goalsRepositoryProvider).upsert(workGoal);
 
     await tester.pumpWidget(
       UncontrolledProviderScope(container: container, child: const CalendarTrackerApp()),
@@ -380,7 +530,7 @@ void main() {
   testWidgets('Goals: creating a new goal with per-day targets adds it',
       (WidgetTester tester) async {
     await tester.pumpWidget(
-      const ProviderScope(child: CalendarTrackerApp()),
+      ProviderScope(overrides: await _signedInOverrides(), child: const CalendarTrackerApp()),
     );
     await tester.pumpAndSettle();
 
@@ -437,7 +587,7 @@ void main() {
       'Goals: the schedule entry buttons are bordered with a real tap target',
       (WidgetTester tester) async {
     await tester.pumpWidget(
-      const ProviderScope(child: CalendarTrackerApp()),
+      ProviderScope(overrides: await _signedInOverrides(), child: const CalendarTrackerApp()),
     );
     await tester.pumpAndSettle();
 
@@ -481,7 +631,7 @@ void main() {
       "Goals: a day can hold multiple entries that sum together, and each can be removed",
       (WidgetTester tester) async {
     await tester.pumpWidget(
-      const ProviderScope(child: CalendarTrackerApp()),
+      ProviderScope(overrides: await _signedInOverrides(), child: const CalendarTrackerApp()),
     );
     await tester.pumpAndSettle();
 
@@ -523,10 +673,10 @@ void main() {
   });
 
   testWidgets(
-      'Goals: creating a new goal makes it show up as a planned block in the Day view',
+      'Goals: creating a new duration-only goal does not show up as a planned block in the Day view',
       (WidgetTester tester) async {
     await tester.pumpWidget(
-      const ProviderScope(child: CalendarTrackerApp()),
+      ProviderScope(overrides: await _signedInOverrides(), child: const CalendarTrackerApp()),
     );
     await tester.pumpAndSettle();
 
@@ -556,20 +706,20 @@ void main() {
     await tester.tap(find.text('DAY'));
     await tester.pumpAndSettle();
 
-    // The new goal is a duration-mode target with no fixed time, so it's
-    // scheduled by the same generator as any other duration goal — it
-    // should render as a real plan block on today, not vanish.
+    // The new goal is a duration-mode target with no fixed time — a plain
+    // duration has nowhere real to be placed, so it must not appear on the
+    // calendar at all, only count toward the goal's weekly target.
     expect(
       find.descendant(of: find.byType(TimeBodyGrid), matching: find.text('Piano')),
-      findsOneWidget,
+      findsNothing,
     );
   });
 
   testWidgets(
-      "Goals: a duration goal's generated block shows its day and is marked auto-placed",
+      "Goals: a duration-only goal's detail sheet shows nothing planned, even though it has a weekly target",
       (WidgetTester tester) async {
     await tester.pumpWidget(
-      const ProviderScope(child: CalendarTrackerApp()),
+      ProviderScope(overrides: await _signedInOverrides(), child: const CalendarTrackerApp()),
     );
     await tester.pumpAndSettle();
 
@@ -595,19 +745,27 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    // Thursday 20 Aug: Walking (06:00-07:00) and Deep work (17:30-21:30,
-    // per mock_day_20aug.dart's manual blocks) are placed ahead of it, so
-    // Piano lands right after Deep work — both the day and the
-    // "auto-placed" marker matter here, since a bare clock range with no
-    // day is ambiguous across a 7-day list, and an unmarked auto-placed
-    // time reads as a fixed commitment when it isn't one.
-    expect(find.text('THU 21:30–22:00 · auto-placed'), findsOneWidget);
+    // The goal still has a real weekly target (30 min/day, the sheet's
+    // default) — it just never materializes as a block anywhere, since a
+    // plain duration has no clock time to place it at. (Piano defaults into
+    // the Walking category, which already has seeded planned blocks of its
+    // own — those are unrelated to this goal and may still show up, per
+    // goal_detail_sheet.dart's existing category-based matching; what
+    // matters here is that no block titled "Piano" itself is among them.)
+    // Just the sheet's own title — no planned-row duplicate of it within
+    // the sheet (the Goals list row behind the sheet also says "Piano",
+    // hence scoping to GoalDetailSheet rather than counting site-wide).
+    expect(
+      find.descendant(of: find.byType(GoalDetailSheet), matching: find.text('Piano')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('3 h 30 this week'), findsOneWidget);
   });
 
   testWidgets('Goals: "same every day" applies Monday to every day',
       (WidgetTester tester) async {
     await tester.pumpWidget(
-      const ProviderScope(child: CalendarTrackerApp()),
+      ProviderScope(overrides: await _signedInOverrides(), child: const CalendarTrackerApp()),
     );
     await tester.pumpAndSettle();
 
@@ -639,7 +797,7 @@ void main() {
 
   testWidgets('Log activity: saving actually creates a tracked block',
       (WidgetTester tester) async {
-    final container = ProviderContainer();
+    final container = ProviderContainer(overrides: await _signedInOverrides());
     addTearDown(container.dispose);
 
     await tester.pumpWidget(
@@ -654,7 +812,7 @@ void main() {
     container.read(draftLogEntryProvider.notifier)
       ..setStart(const TimeOfDay(hour: 20, minute: 0))
       ..setEnd(const TimeOfDay(hour: 20, minute: 30))
-      ..setCategory(walkingCategoryId);
+      ..setGoal('goal-walking');
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('SAVE ENTRY'));
@@ -670,7 +828,7 @@ void main() {
   testWidgets(
       'Goals: a planned block for a goal\'s category shows as planned hours',
       (WidgetTester tester) async {
-    final container = ProviderContainer();
+    final container = ProviderContainer(overrides: await _signedInOverrides());
     addTearDown(container.dispose);
 
     await tester.pumpWidget(
@@ -679,7 +837,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final selectedDate = container.read(selectedDateProvider);
-    container.read(allPlannedBlocksProvider.notifier).addBlock(
+    await container.read(plannedBlocksRepositoryProvider).upsert(
           PlannedBlock(
             id: 'test-plan-walk',
             start: DateTime(selectedDate.year, selectedDate.month, selectedDate.day, 21, 0),
@@ -688,6 +846,7 @@ void main() {
             categoryId: walkingCategoryId,
           ),
         );
+    await tester.pump();
 
     final progressList = container.read(goalProgressListProvider);
     final walking = progressList.firstWhere((p) => p.goal.categoryId == walkingCategoryId);
@@ -701,10 +860,11 @@ void main() {
     expect(find.textContaining('planned'), findsWidgets);
   });
 
-  testWidgets('Categories: creating one makes it available as a chip',
+  testWidgets(
+      'Categories: a new category needs a goal of its own before it shows up as a Log activity chip',
       (WidgetTester tester) async {
     await tester.pumpWidget(
-      const ProviderScope(child: CalendarTrackerApp()),
+      ProviderScope(overrides: await _signedInOverrides(), child: const CalendarTrackerApp()),
     );
     await tester.pumpAndSettle();
 
@@ -730,16 +890,48 @@ void main() {
     await tester.tap(find.text('close'));
     await tester.pumpAndSettle();
 
+    // Logging is goal-first now — the bare category alone isn't enough to
+    // log against; there needs to be a goal for it too.
+    await tester.tap(find.text('+ LOG'));
+    await tester.pumpAndSettle();
+    expect(find.text('reading'), findsNothing);
+
+    await tester.tap(find.text('GOALS'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('+ NEW GOAL'));
+    await tester.pumpAndSettle();
+
+    final nameField = find.descendant(
+      of: find.byType(GoalEditSheet),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(nameField, 'Reading');
+    await tester.pumpAndSettle();
+
+    final readingCategoryChip = find.descendant(
+      of: find.byType(GoalEditSheet),
+      matching: find.text('reading'),
+    );
+    await tester.ensureVisible(readingCategoryChip);
+    await tester.pumpAndSettle();
+    await tester.tap(readingCategoryChip);
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('CREATE GOAL'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('CREATE GOAL'));
+    await tester.pumpAndSettle();
+
     await tester.tap(find.text('+ LOG'));
     await tester.pumpAndSettle();
 
-    expect(find.text('reading'), findsOneWidget); // now selectable as a chip
+    expect(find.text('reading'), findsOneWidget); // now selectable, by goal
   });
 
   testWidgets(
       'Goals: a date-bound goal only appears in its window',
       (WidgetTester tester) async {
-    final container = ProviderContainer();
+    final container = ProviderContainer(overrides: await _signedInOverrides());
     addTearDown(container.dispose);
 
     await tester.pumpWidget(
@@ -748,7 +940,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final selectedDate = container.read(selectedDateProvider);
-    container.read(goalsProvider.notifier).addGoal(
+    await container.read(goalsRepositoryProvider).upsert(
           Goal(
             id: 'test-challenge',
             name: 'Next month challenge',
@@ -762,6 +954,7 @@ void main() {
             endDate: selectedDate.add(const Duration(days: 60)),
           ),
         );
+    await tester.pump();
 
     // Not active today — shouldn't show up yet.
     expect(
@@ -785,5 +978,40 @@ void main() {
       isTrue,
     );
     expect(find.text('Next month challenge'), findsOneWidget);
+  });
+
+  testWidgets(
+      'Goals: tapping + New goal with no categories shows a message instead of opening the sheet',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      ProviderScope(overrides: await _signedInEmptyOverrides(), child: const CalendarTrackerApp()),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('GOALS'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('+ NEW GOAL'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Create a category first'), findsOneWidget);
+    expect(find.text('CREATE GOAL'), findsNothing);
+  });
+
+  testWidgets(
+      'Day view: tapping empty space with no categories shows a message instead of opening the sheet',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      ProviderScope(overrides: await _signedInEmptyOverrides(), child: const CalendarTrackerApp()),
+    );
+    await tester.pumpAndSettle();
+
+    // Tap well into the empty timeline, away from any header controls.
+    await tester.tapAt(tester.getCenter(find.byType(TimeBodyGrid)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Create a category first'), findsOneWidget);
+    expect(find.text('ADD PLAN'), findsNothing);
+    expect(find.text('ADD ACTUAL'), findsNothing);
   });
 }

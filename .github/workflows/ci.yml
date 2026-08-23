@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+defaults:
+  run:
+    working-directory: app
+
+jobs:
+  analyze-and-test:
+    name: Analyze & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.1'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+  build-ios:
+    name: Build iOS (unsigned)
+    runs-on: macos-latest
+    # Confirms the app still builds for a real device, not just the
+    # simulator — catches Xcode-project/platform breakage analyze+test
+    # can't see. Unsigned: CI has no access to the team's signing identity,
+    # so this can't produce an installable IPA — see the "install on my
+    # iPhone" instructions in HANDOFF.md for that step, which needs Xcode
+    # signed in with the developer's own Apple ID.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.1'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter build ios --release --no-codesign

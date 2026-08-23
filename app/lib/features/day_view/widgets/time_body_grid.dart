@@ -174,7 +174,10 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
                         end: block.end,
                         left: planLeft,
                         width: laneWidth,
-                        child: PlanBlockWidget(block: block),
+                        child: PlanBlockWidget(
+                          block: block,
+                          category: resolveCategory(categories, block.categoryId),
+                        ),
                       ),
                   for (final block in tracked)
                     _timedPositioned(

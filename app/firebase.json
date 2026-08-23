@@ -1,0 +1,35 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "flutter": {
+    "platforms": {
+      "ios": {
+        "default": {
+          "projectId": "trackmyday-6380a",
+          "appId": "1:158594427041:ios:3bfb0c0fb8cf5db9cae8e0",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "macos": {
+        "default": {
+          "projectId": "trackmyday-6380a",
+          "appId": "1:158594427041:ios:3bfb0c0fb8cf5db9cae8e0",
+          "uploadDebugSymbols": false,
+          "fileOutput": "macos/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "trackmyday-6380a",
+          "configurations": {
+            "ios": "1:158594427041:ios:3bfb0c0fb8cf5db9cae8e0",
+            "macos": "1:158594427041:ios:3bfb0c0fb8cf5db9cae8e0"
+          }
+        }
+      }
+    }
+  }
+}

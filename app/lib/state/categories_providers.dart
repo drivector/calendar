@@ -1,28 +1,31 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../data/mock/dummy_data.dart';
-import '../data/mock/mock_categories.dart';
+import '../data/firestore/firestore_list_repository.dart';
 import '../models/category.dart';
 import '../theme/app_colors.dart';
+import 'firestore_providers.dart';
 
-class CategoriesNotifier extends StateNotifier<List<Category>> {
-  CategoriesNotifier() : super([...mockCategories, ...dummyCategories]);
+final categoriesRepositoryProvider = Provider<FirestoreListRepository<Category>>((ref) {
+  return FirestoreListRepository<Category>(
+    firestore: ref.watch(firestoreProvider),
+    uid: ref.watch(currentUidProvider),
+    collectionName: 'categories',
+    fromMap: Category.fromMap,
+    toMap: (category) => category.toMap(),
+    idOf: (category) => category.id,
+  );
+});
 
-  void addCategory(Category category) => state = [...state, category];
+final categoriesStreamProvider = StreamProvider<List<Category>>((ref) {
+  return ref.watch(categoriesRepositoryProvider).watchAll();
+});
 
-  void updateCategory(Category updated) => state = [
-        for (final category in state)
-          if (category.id == updated.id) updated else category,
-      ];
-
-  void removeCategory(String id) =>
-      state = state.where((category) => category.id != id).toList();
-}
-
-final categoriesProvider = StateNotifierProvider<CategoriesNotifier, List<Category>>(
-  (ref) => CategoriesNotifier(),
-);
+/// The signed-in user's categories, live from Firestore — empty for a
+/// brand-new account, and while the first snapshot is still loading.
+final categoriesProvider = Provider<List<Category>>((ref) {
+  return ref.watch(categoriesStreamProvider).valueOrNull ?? [];
+});
 
 const _unknownCategory = Category(
   id: 'unknown',

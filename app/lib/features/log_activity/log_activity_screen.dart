@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/mock/mock_categories.dart';
-import '../../data/mock/mock_goals.dart';
+import '../../models/goal.dart';
 import '../../models/tracked_block.dart';
 import '../../shared/widgets/category_chip.dart';
 import '../../shared/widgets/date_swipe_nav.dart';
 import '../../state/categories_providers.dart';
 import '../../state/day_view_providers.dart';
+import '../../state/goals_providers.dart';
 import '../../state/log_entry_providers.dart';
 import '../../state/root_shell_providers.dart';
 import '../../theme/app_colors.dart';
@@ -25,25 +26,25 @@ class LogActivityScreen extends ConsumerWidget {
     final draft = ref.read(draftLogEntryProvider);
     final start = draft.start;
     final end = draft.end;
-    final categoryId = draft.categoryId;
+    final goalId = draft.goalId;
 
-    if (start != null && end != null && categoryId != null) {
+    if (start != null && end != null && goalId != null) {
       final date = ref.read(selectedDateProvider);
       final startDt = DateTime(date.year, date.month, date.day, start.hour, start.minute);
       var endDt = DateTime(date.year, date.month, date.day, end.hour, end.minute);
       if (!endDt.isAfter(startDt)) endDt = endDt.add(const Duration(days: 1));
 
-      final categories = ref.read(categoriesProvider);
-      final category = resolveCategory(categories, categoryId);
-      final title = draft.activity.trim().isEmpty ? category.name : draft.activity.trim();
+      final goals = ref.read(goalsProvider);
+      final goal = goals.firstWhere((g) => g.id == goalId);
+      final title = draft.activity.trim().isEmpty ? goal.name : draft.activity.trim();
 
-      ref.read(allTrackedBlocksProvider.notifier).addBlock(
+      ref.read(trackedBlocksRepositoryProvider).upsert(
             TrackedBlock(
               id: 'manual-${DateTime.now().microsecondsSinceEpoch}',
               start: startDt,
               end: endDt,
               title: title,
-              categoryId: categoryId,
+              categoryId: goal.categoryId,
               sourceId: 'manual',
             ),
           );
@@ -58,9 +59,14 @@ class LogActivityScreen extends ConsumerWidget {
     final draft = ref.watch(draftLogEntryProvider);
     final notifier = ref.read(draftLogEntryProvider.notifier);
     final categories = ref.watch(categoriesProvider);
-    final countsToward = draft.categoryId == null
-        ? null
-        : goalForCategory(draft.categoryId!);
+    final goals = ref.watch(goalsProvider);
+    Goal? selectedGoal;
+    for (final goal in goals) {
+      if (goal.id == draft.goalId) {
+        selectedGoal = goal;
+        break;
+      }
+    }
 
     void stepTab(int delta) {
       final next = (ref.read(currentTabIndexProvider) + delta).clamp(0, 3);
@@ -144,39 +150,33 @@ class LogActivityScreen extends ConsumerWidget {
                     child: const SizedBox(width: double.infinity, height: 1),
                   ),
                   const SizedBox(height: AppSpacing.s3),
-                  _FieldLabel('Category'),
+                  _FieldLabel('Goal'),
                   Wrap(
                     spacing: AppSpacing.s2,
                     runSpacing: AppSpacing.s2,
                     children: [
-                      // Screen 5's chip row is walking/deep work/meeting/admin
-                      // only — "screen time" is auto-tracked, not something
-                      // you'd manually log.
-                      for (final category in categories.where(
-                        (c) => c.id != screenTimeCategoryId,
+                      // Logging is goal-first, not category-first — the
+                      // screen-time goal is excluded since it's auto-tracked,
+                      // not something you'd manually log.
+                      for (final goal in goals.where(
+                        (g) => g.categoryId != screenTimeCategoryId,
                       ))
                         CategoryChip(
-                          label: category.name.toLowerCase(),
-                          color: category.color,
-                          selected: draft.categoryId == category.id,
-                          onTap: () => notifier.setCategory(category.id),
+                          label: goal.name.toLowerCase(),
+                          color: resolveCategory(categories, goal.categoryId).color,
+                          selected: draft.goalId == goal.id,
+                          onTap: () => notifier.setGoal(goal.id),
                         ),
-                      CategoryChip(
-                        label: '+',
-                        color: AppColors.text,
-                        selected: false,
-                        onTap: () {},
-                      ),
                     ],
                   ),
-                  const SizedBox(height: AppSpacing.s3),
-                  _FieldLabel('Counts toward'),
-                  Text(
-                    countsToward == null
-                        ? '—'
-                        : '${countsToward.name} ${countsToward.weeklyTargetHours.toStringAsFixed(0)} h/wk',
-                    style: AppTextStyles.mono(color: AppColors.text),
-                  ),
+                  if (selectedGoal != null) ...[
+                    const SizedBox(height: AppSpacing.s3),
+                    _FieldLabel('Weekly target'),
+                    Text(
+                      '${selectedGoal.weeklyTargetHours.toStringAsFixed(1)} h/wk',
+                      style: AppTextStyles.mono(color: AppColors.text),
+                    ),
+                  ],
                   const SizedBox(height: AppSpacing.s3),
                   _FieldLabel('Note'),
                   TextField(

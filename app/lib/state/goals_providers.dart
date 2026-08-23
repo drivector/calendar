@@ -1,54 +1,51 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../data/mock/dummy_data.dart';
-import '../data/mock/mock_day_20aug.dart';
-import '../data/mock/mock_goals.dart';
+import '../data/firestore/firestore_list_repository.dart';
 import '../models/goal.dart';
 import '../models/goal_planned_blocks.dart';
 import '../models/goal_progress.dart';
 import '../models/planned_block.dart';
 import '../models/tracked_block.dart';
 import 'day_view_providers.dart';
+import 'firestore_providers.dart';
 
-class GoalsNotifier extends StateNotifier<List<Goal>> {
-  GoalsNotifier() : super([...mockGoals, ...dummyGoals]);
+final goalsRepositoryProvider = Provider<FirestoreListRepository<Goal>>((ref) {
+  return FirestoreListRepository<Goal>(
+    firestore: ref.watch(firestoreProvider),
+    uid: ref.watch(currentUidProvider),
+    collectionName: 'goals',
+    fromMap: Goal.fromMap,
+    toMap: (goal) => goal.toMap(),
+    idOf: (goal) => goal.id,
+  );
+});
 
-  void addGoal(Goal goal) => state = [...state, goal];
+final goalsStreamProvider = StreamProvider<List<Goal>>((ref) {
+  return ref.watch(goalsRepositoryProvider).watchAll();
+});
 
-  void updateGoal(Goal updated) => state = [
-        for (final goal in state)
-          if (goal.id == updated.id) updated else goal,
-      ];
+/// The signed-in user's goals, live from Firestore — empty for a brand-new
+/// account, and while the first snapshot is still loading.
+final goalsProvider = Provider<List<Goal>>((ref) {
+  return ref.watch(goalsStreamProvider).valueOrNull ?? [];
+});
 
-  void removeGoal(String id) =>
-      state = state.where((goal) => goal.id != id).toList();
-}
 
-final goalsProvider = StateNotifierProvider<GoalsNotifier, List<Goal>>(
-  (ref) => GoalsNotifier(),
-);
-
-/// Actual hours this week = the canonical baseline from the handoff's ledger
-/// (see [mockGoalActualHours]) plus anything logged since — any tracked
-/// block that isn't one of the original seed blocks, so newly logged
-/// activity (via Log activity or the Day view) is reflected without
-/// double-counting the blocks already folded into the baseline.
+/// Actual hours this week = tracked blocks in the goal's category that fall
+/// within the current week.
 double _actualHoursForGoal(
   Goal goal,
   List<TrackedBlock> allTracked,
   DateTime selectedDate,
 ) {
-  final baseline = mockGoalActualHours[goal.categoryId] ?? 0;
   final weekStart = weekStartFor(selectedDate);
   final weekEnd = weekStart.add(const Duration(days: 7));
-  final addedHours = allTracked
+  return allTracked
       .where((b) =>
           b.categoryId == goal.categoryId &&
-          !mockTrackedBlocks.contains(b) &&
           !b.start.isBefore(weekStart) &&
           b.start.isBefore(weekEnd))
       .fold(0.0, (total, b) => total + b.duration.inMinutes / 60);
-  return baseline + addedHours;
 }
 
 /// Planned hours this week = manually planned blocks in this goal's category
@@ -84,27 +81,25 @@ final activeGoalsProvider = Provider<List<Goal>>((ref) {
   return goals.where((goal) => goal.isActiveOn(selectedDate)).toList();
 });
 
-/// Every goal's own schedule (duration or time-range mode), rendered as real
+/// Every goal's own time-range schedule entries, rendered as real
 /// [PlannedBlock]s for each day of the week containing [selectedDateProvider]
-/// — this is what makes a goal's schedule actually show up on the calendar,
-/// in the Day view and in goal detail's activity list, rather than existing
-/// only as a target number. Recomputed live from [goalsProvider], so
-/// creating, editing, or deleting a goal is reflected immediately with no
-/// separate sync step.
+/// — this is what makes a goal like "work 9am-6pm" actually show up on the
+/// calendar. Plain-duration entries never generate a block (see
+/// [generateGoalPlannedBlocksForDate]) — they only count toward the goal's
+/// weekly target. Recomputed live from [goalsProvider], so creating,
+/// editing, or deleting a goal is reflected immediately with no separate
+/// sync step.
 final goalGeneratedBlocksThisWeekProvider = Provider<List<PlannedBlock>>((ref) {
   final selectedDate = ref.watch(selectedDateProvider);
   final weekStart = weekStartFor(selectedDate);
   final goals = ref.watch(goalsProvider);
-  final manualPlanned = ref.watch(allPlannedBlocksProvider);
 
   final generated = <PlannedBlock>[];
   for (var i = 0; i < 7; i++) {
     final day = weekStart.add(Duration(days: i));
-    final manualForDay = manualPlanned.where((b) => isSameDay(b.start, day)).toList();
     generated.addAll(generateGoalPlannedBlocksForDate(
       goals: goals,
       date: day,
-      existingBlocksForDate: manualForDay,
     ));
   }
   return generated;

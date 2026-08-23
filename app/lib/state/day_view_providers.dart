@@ -1,15 +1,20 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../data/mock/dummy_data.dart';
-import '../data/mock/mock_day_20aug.dart';
+import '../data/firestore/firestore_list_repository.dart';
 import '../models/planned_block.dart';
 import '../models/tracked_block.dart';
+import 'firestore_providers.dart';
 
 /// Which columns the day view shows — mirrors the header's
 /// "Day | Plan + actual" segmented control.
 enum DayLayer { actual, planAndActual }
 
-final selectedDateProvider = StateProvider<DateTime>((ref) => mockDay);
+DateTime _today() {
+  final now = DateTime.now();
+  return DateTime(now.year, now.month, now.day);
+}
+
+final selectedDateProvider = StateProvider<DateTime>((ref) => _today());
 
 final dayLayerProvider =
     StateProvider<DayLayer>((ref) => DayLayer.planAndActual);
@@ -17,29 +22,47 @@ final dayLayerProvider =
 bool isSameDay(DateTime a, DateTime b) =>
     a.year == b.year && a.month == b.month && a.day == b.day;
 
-class PlannedBlocksNotifier extends StateNotifier<List<PlannedBlock>> {
-  PlannedBlocksNotifier() : super([...mockPlannedBlocks, ...dummyPlannedBlocks]);
+final plannedBlocksRepositoryProvider =
+    Provider<FirestoreListRepository<PlannedBlock>>((ref) {
+  return FirestoreListRepository<PlannedBlock>(
+    firestore: ref.watch(firestoreProvider),
+    uid: ref.watch(currentUidProvider),
+    collectionName: 'plannedBlocks',
+    fromMap: PlannedBlock.fromMap,
+    toMap: (block) => block.toMap(),
+    idOf: (block) => block.id,
+  );
+});
 
-  void addBlock(PlannedBlock block) => state = [...state, block];
-}
+final trackedBlocksRepositoryProvider =
+    Provider<FirestoreListRepository<TrackedBlock>>((ref) {
+  return FirestoreListRepository<TrackedBlock>(
+    firestore: ref.watch(firestoreProvider),
+    uid: ref.watch(currentUidProvider),
+    collectionName: 'trackedBlocks',
+    fromMap: TrackedBlock.fromMap,
+    toMap: (block) => block.toMap(),
+    idOf: (block) => block.id,
+  );
+});
 
-class TrackedBlocksNotifier extends StateNotifier<List<TrackedBlock>> {
-  TrackedBlocksNotifier() : super([...mockTrackedBlocks, ...dummyTrackedBlocks]);
+final allPlannedBlocksStreamProvider = StreamProvider<List<PlannedBlock>>((ref) {
+  return ref.watch(plannedBlocksRepositoryProvider).watchAll();
+});
 
-  void addBlock(TrackedBlock block) => state = [...state, block];
-}
+final allTrackedBlocksStreamProvider = StreamProvider<List<TrackedBlock>>((ref) {
+  return ref.watch(trackedBlocksRepositoryProvider).watchAll();
+});
 
 /// Every planned/tracked block across all days — the Day view filters these
 /// down to the selected day; Goals sums them across the current week.
-final allPlannedBlocksProvider =
-    StateNotifierProvider<PlannedBlocksNotifier, List<PlannedBlock>>(
-  (ref) => PlannedBlocksNotifier(),
-);
+final allPlannedBlocksProvider = Provider<List<PlannedBlock>>((ref) {
+  return ref.watch(allPlannedBlocksStreamProvider).valueOrNull ?? [];
+});
 
-final allTrackedBlocksProvider =
-    StateNotifierProvider<TrackedBlocksNotifier, List<TrackedBlock>>(
-  (ref) => TrackedBlocksNotifier(),
-);
+final allTrackedBlocksProvider = Provider<List<TrackedBlock>>((ref) {
+  return ref.watch(allTrackedBlocksStreamProvider).valueOrNull ?? [];
+});
 
 final plannedBlocksProvider = Provider<List<PlannedBlock>>((ref) {
   final selectedDate = ref.watch(selectedDateProvider);

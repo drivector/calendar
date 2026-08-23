@@ -7,7 +7,6 @@ class PlannedBlock {
     required this.categoryId,
     this.sourceCalendarId,
     this.goalId,
-    this.isGoalAutoPlaced = false,
   });
 
   final String id;
@@ -22,12 +21,24 @@ class PlannedBlock {
   /// for anything added via Log activity or tap-to-create in the Day view.
   final String? goalId;
 
-  /// True only for a goal-generated block that came from a plain-duration
-  /// entry with no fixed clock time — its position here is just wherever it
-  /// happened to fit that day, not a real commitment, unlike a
-  /// goal-generated block from a time-range entry (which has a genuine,
-  /// user-set time and reads the same as a manual one).
-  final bool isGoalAutoPlaced;
-
   Duration get duration => end.difference(start);
+
+  factory PlannedBlock.fromMap(String id, Map<String, dynamic> map) => PlannedBlock(
+        id: id,
+        start: DateTime.parse(map['start'] as String),
+        end: DateTime.parse(map['end'] as String),
+        title: map['title'] as String,
+        categoryId: map['categoryId'] as String,
+        sourceCalendarId: map['sourceCalendarId'] as String?,
+        goalId: map['goalId'] as String?,
+      );
+
+  Map<String, dynamic> toMap() => {
+        'start': start.toIso8601String(),
+        'end': end.toIso8601String(),
+        'title': title,
+        'categoryId': categoryId,
+        'sourceCalendarId': sourceCalendarId,
+        'goalId': goalId,
+      };
 }

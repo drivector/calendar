@@ -1,3 +1,4 @@
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -14,12 +15,12 @@ import '../../../theme/app_colors.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../utils/duration_format.dart';
+import '../../../utils/time_of_day_utils.dart';
 
 const _step = Duration(minutes: 5);
 const _minPerEntry = Duration(minutes: 5);
 const _maxPerEntry = Duration(hours: 8);
 const _defaultRangeStart = TimeOfDay(hour: 9, minute: 0);
-const _defaultRangeEnd = TimeOfDay(hour: 17, minute: 0);
 
 Map<int, List<DayScheduleEntry>> _defaultSchedule() => {
       for (var weekday = 1; weekday <= 7; weekday++)
@@ -33,10 +34,25 @@ Future<void> showGoalEditSheet(
   WidgetRef ref, {
   Goal? existing,
 }) {
+  // A new goal needs a category to default into — a brand-new account
+  // starts with none, so tell the user to create one first instead of
+  // opening a form with nothing to select.
+  if (existing == null && ref.read(categoriesProvider).isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Create a category first')),
+    );
+    return Future.value();
+  }
+
   return showModalBottomSheet<void>(
     context: context,
     backgroundColor: AppColors.bg,
     isScrollControlled: true,
+    // Dismissal only ever goes through the explicit "cancel" link below, so
+    // an in-progress edit can be guarded with an unsaved-changes prompt —
+    // a barrier tap or swipe-to-dismiss would otherwise bypass it.
+    isDismissible: false,
+    enableDrag: false,
     builder: (context) => GoalEditSheet(existing: existing, ref: ref),
   );
 }
@@ -80,6 +96,50 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
 
   bool get _isEditing => widget.existing != null;
 
+  // Captured once, right after the fields above are set up, so a later
+  // comparison can tell whether the user actually changed anything —
+  // reuses [Goal.toMap] rather than adding `==`/`hashCode` to the model
+  // just for this one dirty-check.
+  late final Map<String, dynamic> _initialSnapshot;
+
+  @override
+  void initState() {
+    super.initState();
+    _initialSnapshot = _snapshotMap();
+  }
+
+  Map<String, dynamic> _snapshotMap() => Goal(
+        id: '_',
+        name: _nameController.text.trim().isEmpty
+            ? 'Untitled goal'
+            : _nameController.text.trim(),
+        categoryId: _categoryId,
+        type: _type,
+        scheduleByWeekday: {
+          for (var weekday = 1; weekday <= 7; weekday++)
+            weekday: List.of(_schedule[weekday] ?? const []),
+        },
+        startDate: _startDate,
+        endDate: _endDate,
+      ).toMap();
+
+  bool get _hasUnsavedChanges =>
+      !const DeepCollectionEquality().equals(_snapshotMap(), _initialSnapshot);
+
+  Future<void> _handleCancel() async {
+    if (!_hasUnsavedChanges) {
+      Navigator.of(context).pop();
+      return;
+    }
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (context) => const _DiscardChangesDialog(),
+    );
+    if (discard == true && mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
   Duration _dayTotal(int weekday) => (_schedule[weekday] ?? const [])
       .fold(Duration.zero, (total, e) => total + e.effectiveDuration);
 
@@ -102,7 +162,10 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
   Future<void> _addTimeRangeEntry(int weekday) async {
     final start = await showTimePicker(context: context, initialTime: _defaultRangeStart);
     if (start == null || !mounted) return;
-    final end = await showTimePicker(context: context, initialTime: _defaultRangeEnd);
+    // Suggest half an hour after the start the user just picked, rather
+    // than a fixed clock time unrelated to it.
+    final suggestedEnd = addMinutes(start, 30);
+    final end = await showTimePicker(context: context, initialTime: suggestedEnd);
     if (end == null) return;
     setState(() {
       _schedule[weekday]!.add(DayScheduleEntry.timeRange(ClockRange(
@@ -198,16 +261,12 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
       startDate: _startDate,
       endDate: _endDate,
     );
-    if (_isEditing) {
-      widget.ref.read(goalsProvider.notifier).updateGoal(goal);
-    } else {
-      widget.ref.read(goalsProvider.notifier).addGoal(goal);
-    }
+    widget.ref.read(goalsRepositoryProvider).upsert(goal);
     Navigator.of(context).pop();
   }
 
   void _delete() {
-    widget.ref.read(goalsProvider.notifier).removeGoal(widget.existing!.id);
+    widget.ref.read(goalsRepositoryProvider).remove(widget.existing!.id);
     Navigator.of(context).pop();
   }
 
@@ -223,7 +282,15 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
     // date, not an abstract day-of-week.
     final weekStart = weekStartFor(widget.ref.read(selectedDateProvider));
 
-    return Padding(
+    return PopScope(
+      // Every dismissal path (the "cancel" link below, or any programmatic
+      // pop) routes through _handleCancel, which only lets the pop through
+      // once there's nothing unsaved to lose, or the user confirms discard.
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) _handleCancel();
+      },
+      child: Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: DecoratedBox(
         decoration: BoxDecoration(
@@ -250,7 +317,7 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
                         style: AppTextStyles.title(),
                       ),
                       GestureDetector(
-                        onTap: () => Navigator.of(context).pop(),
+                        onTap: _handleCancel,
                         behavior: HitTestBehavior.opaque,
                         child: Text('cancel', style: AppTextStyles.mono()),
                       ),
@@ -391,6 +458,65 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
                 ],
               ),
             ),
+          ),
+        ),
+      ),
+      ),
+    );
+  }
+}
+
+/// Confirms discarding unsaved changes before letting the goal edit sheet
+/// close — flat, bordered, no rounded corners, matching the sheet it sits
+/// over rather than Material's default dialog chrome.
+class _DiscardChangesDialog extends StatelessWidget {
+  const _DiscardChangesDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: AppColors.bg,
+      shape: const RoundedRectangleBorder(),
+      insetPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.s6),
+      child: DecoratedBox(
+        decoration: BoxDecoration(border: Border.all(color: AppColors.text, width: 2)),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.s3),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Discard changes?', style: AppTextStyles.title()),
+              const SizedBox(height: AppSpacing.s1),
+              Text(
+                'You have unsaved changes to this goal.',
+                style: AppTextStyles.mono(),
+              ),
+              const SizedBox(height: AppSpacing.s4),
+              GestureDetector(
+                onTap: () => Navigator.of(context).pop(true),
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  width: double.infinity,
+                  constraints: const BoxConstraints(minHeight: 44),
+                  alignment: Alignment.centerLeft,
+                  color: AppColors.accent,
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s3),
+                  child: Text('DISCARD', style: AppTextStyles.small(color: AppColors.bg)),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.s2),
+              GestureDetector(
+                onTap: () => Navigator.of(context).pop(false),
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  width: double.infinity,
+                  constraints: const BoxConstraints(minHeight: 44),
+                  alignment: Alignment.centerLeft,
+                  child: Text('KEEP EDITING', style: AppTextStyles.small(color: AppColors.text)),
+                ),
+              ),
+            ],
           ),
         ),
       ),

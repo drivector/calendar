@@ -31,6 +31,26 @@ class DayScheduleEntry {
   bool get isTimeRange => timeRange != null;
 
   Duration get effectiveDuration => timeRange?.duration ?? duration!;
+
+  factory DayScheduleEntry.fromMap(Map<String, dynamic> map) {
+    final durationMinutes = map['durationMinutes'] as int?;
+    if (durationMinutes != null) {
+      return DayScheduleEntry.duration(Duration(minutes: durationMinutes));
+    }
+    final startMinutes = map['startMinutes'] as int;
+    final endMinutes = map['endMinutes'] as int;
+    return DayScheduleEntry.timeRange(ClockRange(
+      ClockTime(startMinutes ~/ 60, startMinutes % 60),
+      ClockTime(endMinutes ~/ 60, endMinutes % 60),
+    ));
+  }
+
+  Map<String, dynamic> toMap() => isTimeRange
+      ? {
+          'startMinutes': timeRange!.start.minutesSinceMidnight,
+          'endMinutes': timeRange!.end.minutesSinceMidnight,
+        }
+      : {'durationMinutes': duration!.inMinutes};
 }
 
 class Goal {
@@ -86,4 +106,33 @@ class Goal {
   bool get isUniformAcrossWeek => <Duration>{
         for (var weekday = 1; weekday <= 7; weekday++) targetForWeekday(weekday),
       }.length <= 1;
+
+  factory Goal.fromMap(String id, Map<String, dynamic> map) => Goal(
+        id: id,
+        name: map['name'] as String,
+        categoryId: map['categoryId'] as String,
+        type: GoalType.values.byName(map['type'] as String),
+        scheduleByWeekday: {
+          for (final entry
+              in (map['scheduleByWeekday'] as Map<String, dynamic>).entries)
+            int.parse(entry.key): [
+              for (final e in entry.value as List<dynamic>)
+                DayScheduleEntry.fromMap(Map<String, dynamic>.from(e as Map)),
+            ],
+        },
+        startDate: DateTime.parse(map['startDate'] as String),
+        endDate: DateTime.parse(map['endDate'] as String),
+      );
+
+  Map<String, dynamic> toMap() => {
+        'name': name,
+        'categoryId': categoryId,
+        'type': type.name,
+        'scheduleByWeekday': {
+          for (final entry in scheduleByWeekday.entries)
+            '${entry.key}': [for (final e in entry.value) e.toMap()],
+        },
+        'startDate': startDate.toIso8601String(),
+        'endDate': endDate.toIso8601String(),
+      };
 }
