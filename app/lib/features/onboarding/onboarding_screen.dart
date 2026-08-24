@@ -61,7 +61,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Welcome to Calendar Tracker', style: AppTextStyles.title()),
+          Text('Welcome to Track My Day', style: AppTextStyles.title()),
           const SizedBox(height: AppSpacing.s1),
           Text(
             'Start by creating a goal for something you want to track.',

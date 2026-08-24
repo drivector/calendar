@@ -10,7 +10,7 @@ class CalendarTrackerApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Calendar Tracker',
+      title: 'Track My Day',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
       // A bare Scaffold, not Material — no appBar/FAB/drawer chrome, but a

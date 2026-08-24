@@ -171,7 +171,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Calendar Tracker', style: AppTextStyles.title()),
+          Text('Track My Day', style: AppTextStyles.title()),
           const SizedBox(height: AppSpacing.s1),
           Text(
             _isSignUp ? 'create an account' : 'sign in to continue',
