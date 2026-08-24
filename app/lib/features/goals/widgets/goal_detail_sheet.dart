@@ -126,10 +126,6 @@ class GoalDetailSheet extends ConsumerWidget {
                 ),
                 const SizedBox(height: AppSpacing.s2),
                 _StatRow(
-                  label: 'planned',
-                  value: '${progress.plannedHours.toStringAsFixed(1)} h',
-                ),
-                _StatRow(
                   label: 'actual',
                   value: '${progress.actualHours.toStringAsFixed(1)} h',
                 ),
@@ -143,15 +139,8 @@ class GoalDetailSheet extends ConsumerWidget {
                 const SizedBox(height: AppSpacing.s1),
                 _StatRow(
                   label: progress.goal.isDateBound ? 'runs' : 'active since',
-                  value: progress.goal.isDateBound
-                      ? '${DateFormat('d MMM y').format(progress.goal.startDate)} – '
-                          '${DateFormat('d MMM y').format(progress.goal.endDate)}'
-                      // An ongoing habit's own end date is just an
-                      // implementation detail (~1 year out, see
-                      // ongoingGoalSpan) — showing it as a real end would
-                      // misrepresent the goal, so only the real start date
-                      // is shown for one of these, not a full range.
-                      : DateFormat('d MMM y').format(progress.goal.startDate),
+                  value: '${DateFormat('d MMM y').format(progress.goal.startDate)} – '
+                      '${DateFormat('d MMM y').format(progress.goal.endDate)}',
                 ),
                 const SizedBox(height: AppSpacing.s2),
                 DecoratedBox(

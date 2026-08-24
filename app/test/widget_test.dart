@@ -417,7 +417,7 @@ void main() {
   });
 
   testWidgets(
-      "Goals: an ongoing goal's detail sheet shows its start date, not a fake end date",
+      "Goals: an ongoing goal's detail sheet shows its start and end date in one row",
       (WidgetTester tester) async {
     await tester.pumpWidget(
       ProviderScope(overrides: await _signedInOverrides(), child: const CalendarTrackerApp()),
@@ -432,8 +432,9 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('active since'), findsOneWidget);
     expect(find.text('runs'), findsNothing);
-    // mock_goals.dart's ongoing goals start 1 Jan 2020.
-    expect(find.text('1 Jan 2020'), findsOneWidget);
+    // mock_goals.dart's ongoing goals run 1 Jan 2020 – 31 Dec 2099, both in
+    // the one "active since" row.
+    expect(find.text('1 Jan 2020 – 31 Dec 2099'), findsOneWidget);
   });
 
   testWidgets(

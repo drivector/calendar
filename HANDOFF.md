@@ -157,29 +157,35 @@ Two more real gaps the user found by using the app, both in
    goals are *not* date-bound (the default end date is ~1 year out, read as
    "ongoing" per `Goal.isDateBound`/`ongoingGoalSpan`), so for the common
    case the date range was never shown at all, which the user flagged.
-   Fixed by always showing a row, labeled differently depending on which
-   kind of goal it is: date-bound goals still show `runs: start – end`;
-   ongoing goals now show `active since: start` — deliberately *not* a
-   full range, since an ongoing goal's own end date is just an
-   implementation detail, not a real constraint, and showing it as one
-   would misrepresent the goal (this was the actual reasoning the original
-   code's now-removed `if` was working around — the fix keeps that intent,
-   it just no longer throws away the start date too).
+   First fix: always show a row, but only the start date for an ongoing
+   goal (label `active since`), reasoning that the stored end date is just
+   an implementation detail (~1 year out) and showing it as a real range
+   would misrepresent an open-ended habit. The user then asked explicitly
+   for both dates in that one row anyway — so `active since` now shows
+   `start – end` too, same format as the date-bound `runs` row, just under
+   a different label. (The "don't show a fake end date" reasoning above is
+   now moot per the user's explicit ask — noted here so a future session
+   doesn't "fix" it back.)
 2. **Only today's target was shown, not the full week's breakdown.** The
    "target" stat row read like "3 h 30 this week · today 30 m" — accurate,
    but for a goal like "Walking / varies by day" there was no way to see
    *how* it varies without opening the edit sheet. Added a new
    `_TargetPerDayRow` — a compact 7-day strip (day label + that day's own
    target, or "off") — right under the existing target stat row.
+3. **The "planned" stat row was removed** (was `planned: X h`, right above
+   "actual") — the user asked for it gone; `progress.plannedHours` is still
+   computed and used elsewhere (the progress bar, the Goals list row's own
+   "planned X h" text, the Capacity page), only this one display row went
+   away.
 
-Two new widget tests cover both (`test/widget_test.dart`): one confirming
-`active since` (not `runs`) with the real start date for an ongoing goal,
-one confirming all 7 day labels and the correct per-day target values
-(Walking: 5× "1 h" for Mon–Fri, 2× "2 h 30" for Sat–Sun, per
-`mock_goals.dart`). Verified: `flutter analyze` clean, both new tests plus
-the full suite pass. Live tap-through wasn't achieved on the simulator this
-round either (documented flakiness, see **Known environment quirks**) —
-same fallback as before, relying on the widget tests' precise finders.
+Widget tests cover all three (`test/widget_test.dart`): one confirming
+`active since` (not `runs`) shows the full `start – end` range for an
+ongoing goal, one confirming all 7 day labels and the correct per-day
+target values (Walking: 5× "1 h" for Mon–Fri, 2× "2 h 30" for Sat–Sun, per
+`mock_goals.dart`). Verified: `flutter analyze` clean, the full suite (88
+tests) passes. Live tap-through wasn't achieved on the simulator this round
+either (documented flakiness, see **Known environment quirks**) — same
+fallback as before, relying on the widget tests' precise finders.
 
 ## Goal edit sheet: barrier-tap and Save/Discard/Keep (fifth session)
 
