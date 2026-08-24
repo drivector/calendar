@@ -1399,6 +1399,52 @@ void main() {
     expect(find.text('Reading'), findsOneWidget);
   });
 
+  testWidgets('Goals: a reminder lead time can be picked and is saved with the goal', (
+    WidgetTester tester,
+  ) async {
+    final container = ProviderContainer(overrides: await _signedInOverrides());
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const CalendarTrackerApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('GOALS'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('+ NEW GOAL'));
+    await tester.pumpAndSettle();
+
+    // Defaults to no reminder.
+    expect(find.text('None'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('15 min before'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('15 min before'));
+    await tester.pumpAndSettle();
+
+    final nameField = find.descendant(
+      of: find.byType(GoalEditSheet),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(nameField, 'Reminder test');
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('CREATE GOAL'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('CREATE GOAL'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    final created = container
+        .read(goalsProvider)
+        .firstWhere((g) => g.name == 'Reminder test');
+    expect(created.reminderMinutesBefore, 15);
+  });
+
   testWidgets(
     'Goals: the schedule entry buttons are bordered with a real tap target',
     (WidgetTester tester) async {

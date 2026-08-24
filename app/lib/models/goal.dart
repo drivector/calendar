@@ -61,6 +61,7 @@ class Goal {
     required this.scheduleByWeekday,
     required this.startDate,
     required this.endDate,
+    this.reminderMinutesBefore,
   });
 
   final String id;
@@ -74,6 +75,13 @@ class Goal {
 
   final DateTime startDate;
   final DateTime endDate;
+
+  /// How long before a scheduled occurrence to send a reminder — same idea
+  /// as a calendar meeting's reminder, `0` meaning "at the scheduled time"
+  /// and `null` meaning no reminder at all (the default for a new goal).
+  /// Only ever fires for time-range schedule entries — a plain-duration
+  /// entry ("piano, 15 min, any time") has no clock time to count down to.
+  final int? reminderMinutesBefore;
 
   /// True once a goal's window is short enough to read as a deliberate
   /// challenge rather than an open-ended habit — anything created via the
@@ -123,6 +131,7 @@ class Goal {
     },
     startDate: DateTime.parse(map['startDate'] as String),
     endDate: DateTime.parse(map['endDate'] as String),
+    reminderMinutesBefore: map['reminderMinutesBefore'] as int?,
   );
 
   Map<String, dynamic> toMap() => {
@@ -134,5 +143,6 @@ class Goal {
     },
     'startDate': startDate.toIso8601String(),
     'endDate': endDate.toIso8601String(),
+    'reminderMinutesBefore': reminderMinutesBefore,
   };
 }

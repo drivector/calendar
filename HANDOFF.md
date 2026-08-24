@@ -1,27 +1,42 @@
 # Calendar Tracker — session handoff
 
-Updated 2026-08-24 (fifth session, now committed as `5e69f6c` — not yet
-pushed, see **Git status**) — Firebase Auth + Firestore are built and
-live; the fourth session added five goal/logging UX fixes, CI, and iPhone
-install readiness. The fifth session was large — in rough order: fixed a
-real gap in the fourth session's own unsaved-changes work (barrier-tap
-did nothing instead of prompting), added a **Capacity** page off the Week
-view, fixed two real gaps in the goal detail sheet (hidden date range,
-today-only target), added **week-to-week navigation** to that same sheet,
-added a **"complete" button** to the Goals list (turns a goal's remaining
-planned blocks into tracked activity in one tap), renamed the **"+ Log"
-tab to Activities** (a day-by-day history list instead of a single-day
-form, with logging moved to a "+ LOG" action that lets you pick the day
-and validates missing fields instead of silently failing), built
+Updated 2026-08-24 (sixth session, uncommitted — see **Git status**) —
+Firebase Auth + Firestore are built and live; the fourth session added
+five goal/logging UX fixes, CI, and iPhone install readiness. The fifth
+session was large — in rough order: fixed a real gap in the fourth
+session's own unsaved-changes work (barrier-tap did nothing instead of
+prompting), added a **Capacity** page off the Week view, fixed two real
+gaps in the goal detail sheet (hidden date range, today-only target),
+added **week-to-week navigation** to that same sheet, added a
+**"complete" button** to the Goals list (turns a goal's remaining planned
+blocks into tracked activity in one tap), renamed the **"+ Log" tab to
+Activities** (a day-by-day history list instead of a single-day form,
+with logging moved to a "+ LOG" action that lets you pick the day and
+validates missing fields instead of silently failing), built
 **onboarding** for brand-new accounts (9 predefined categories, prompted
 to create a first goal before reaching the app), gave the **Day view's
 add-block sheet** a goal picker and independent start/end dates, and
-**removed the cap goal type entirely** (every goal is a target now).
-Each has its own dated section below with full detail — read this intro
-for the shape of things, then jump to whichever section is relevant.
-Read this first, then verify anything time-sensitive (git
-status, test count, Firebase console state) since it may have moved on
-since this was written.
+**removed the cap goal type entirely** (every goal is a target now). That
+whole session is pushed to `origin/main` as `cce730e`. The sixth session
+(this one) added **goal reminders** — a lead-time picker on each goal
+(same options a calendar meeting reminder offers) plus real, scheduled
+local notifications via `flutter_local_notifications` — see its own dated
+section below; **not yet committed**. This session also installed
+**CocoaPods** (was missing in this environment, blocking native
+iOS/macOS plugin builds — see **CocoaPods installed via Homebrew**),
+which unblocked live-verifying the reminders feature end-to-end on both
+platforms. It also found and **fully resolved** a real bug the user hit:
+**sign-up returned a generic error on the macOS build** — root-caused to
+a missing macOS code-signing Team, then a Development Team + provisioning
+profile were set up for real (with two nested problems solved along the
+way — a stray duplicate repo clone, and a hardcoded ad-hoc signing
+identity overriding the Team) — confirmed via a live sign-up that
+actually succeeds now (see **Bug: sign-up fails with "keychain-error" on
+macOS**). Each feature has its own dated section below
+with full detail — read this intro for the shape of things, then jump to
+whichever section is relevant. Read this first, then verify anything
+time-sensitive (git status, test count, Firebase console state) since it
+may have moved on since this was written.
 
 ## What this project is
 
@@ -114,7 +129,7 @@ and a Claim-untracked-time bottom sheet.
 
 ## Testing
 
-`flutter analyze` is clean; `flutter test` currently passes **123 tests**
+`flutter analyze` is clean; `flutter test` currently passes **132 tests**
 across `test/models/`, `test/state/`, `test/utils/`, `test/widget_test.dart`,
 and `test/features/auth/login_screen_test.dart`. Convention: after any
 change, run both and fix before moving on. Run from `app/`:
@@ -140,16 +155,39 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
 `AsyncLoading`. Widget tests don't need this explicitly since
 `pumpAndSettle()` flushes it.
 
-## Git status — fifth session is committed, not yet pushed
+## Git status — fifth session pushed, sixth session (reminders) uncommitted
 
-- The Firebase Auth/Firestore backend and the fourth session's UX
-  fixes/CI are committed and pushed to `drivector/calendar` main
-  (`55e84e7`, `0c6414a`, `78a0beb`, `52d922a`). The entire **fifth
-  session** — everything from the duration-format spacing fix through the
-  cap-removal and Day view goal-picker work described below — is now one
-  commit, **`5e69f6c`**, on top of those. **Not yet pushed** — ask before
-  pushing, per this repo's `CLAUDE.md` (a prior commit approval doesn't
-  carry forward to push, and vice versa; each needs its own go-ahead).
+- The Firebase Auth/Firestore backend, the fourth session's UX fixes/CI,
+  and the entire fifth session (week nav, Activities tab, onboarding, cap
+  removal, Day view goal-picker) are all committed **and pushed** to
+  `drivector/calendar` main — `55e84e7`, `0c6414a`, `78a0beb`, `52d922a`,
+  and `cce730e` (the fifth session's squashed commit, amended once to fold
+  in a HANDOFF touch-up before pushing). `git status` confirms `main` is
+  up to date with `origin/main` as of this write-up.
+- The **sixth session's work (goal reminders, see its own dated section
+  below) is uncommitted** — ask before committing, per this repo's
+  `CLAUDE.md` (a prior commit approval doesn't carry forward; each batch
+  needs its own go-ahead). Touches `pubspec.yaml`/`pubspec.lock` (new
+  `flutter_local_notifications`/`timezone` deps), `lib/models/goal.dart`,
+  `lib/models/goal_reminders.dart` (new), `lib/services/
+  goal_reminder_service.dart` (new), `lib/state/
+  goal_reminder_providers.dart` (new), `lib/features/auth/auth_gate.dart`,
+  `lib/features/goals/widgets/goal_edit_sheet.dart`,
+  `lib/features/auth/login_screen.dart`,
+  `macos/Runner.xcodeproj/project.pbxproj`,
+  `macos/Runner/DebugProfile.entitlements`,
+  `macos/Runner/Release.entitlements` (the sign-up "generic error" fix
+  and the macOS code-signing setup behind it — see **Bug: sign-up fails
+  with "keychain-error" on macOS**; note this last group ties macOS
+  builds to one specific personal Apple Developer Team, see that
+  section's final note),
+  `test/models/goal_reminders_test.dart` (new), `test/widget_test.dart`,
+  plus auto-generated platform scaffolding (`ios/Podfile`, `macos/Podfile`,
+  both new; `ios/Flutter/{Debug,Release}.xcconfig`, `macos/Flutter/
+  Flutter-{Debug,Release}.xcconfig`, `macos/Flutter/
+  GeneratedPluginRegistrant.swift` — all Flutter-tooling-generated in
+  response to the new plugin, legitimate and meant to be committed
+  alongside it, not manual edits).
 - Commit author identity on this repo was auto-detected from the local
   username/hostname (`Alexandros Panagiotidis
   <alexandrospanagiotidis@192.168.1.5>`) rather than a real email — flagged
@@ -164,6 +202,287 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
   `firebase`, or `flutterfire` (the latter two also need
   `$HOME/.npm-global/bin` and `$HOME/.pub-cache/bin` respectively, plus the
   Flutter SDK's `bin` on PATH since `flutterfire` shells out to `dart`).
+
+## Goal reminders: lead-time picker + real scheduled notifications (sixth session)
+
+Ask: reminders on goals, "similar to calendar meetings," and explicitly
+**actual reminders** — not just a UI setting that does nothing underneath.
+Two halves: a lead-time picker in the goal edit sheet, and real OS-level
+scheduled notifications via `flutter_local_notifications` that fire even
+if the app isn't in the foreground.
+
+- **`lib/models/goal.dart`** — new `Goal.reminderMinutesBefore` (`int?`,
+  optional, not `required`): `null` = no reminder (default for every
+  goal), `0` = "at the scheduled time," otherwise minutes of lead time.
+  Round-trips through `toMap`/`fromMap`; **no migration needed**, same
+  "old docs just don't have the key, `as int?` yields `null`" pattern as
+  every other additive field change this project has made.
+- **`lib/models/goal_reminders.dart`** (new, pure, unit-tested in
+  `test/models/goal_reminders_test.dart`, 9 tests) —
+  `computeReminderOccurrences({goals, now, windowDays = 14})` walks a
+  rolling 14-day window (not the goal's full lifetime — keeps this cheap
+  to recompute on every goals change) calling the existing
+  `generateGoalPlannedBlocksForDate` per day, and for every goal with
+  `reminderMinutesBefore` set, offsets each generated block's start time
+  back by the lead time into a `ReminderOccurrence` (`id` — a positive
+  32-bit int derived from `block.id.hashCode & 0x7fffffff`, since OS
+  notification ids must fit in a signed 32-bit int, and deriving it from
+  the block id rather than a timestamp keeps it **stable** across
+  resyncs, so a cancel-all-and-reschedule replaces the same notification
+  rather than piling up duplicates; `goalId`, `title` — the goal's name;
+  `body` — "Starts at HH:mm"; `scheduledTime`). Only ever fires for
+  time-range entries — same reasoning as `generateGoalPlannedBlocksForDate`
+  itself, a plain-duration entry ("piano, 15 min, any time") has no clock
+  time to count down to, so it's silently excluded, not an error.
+  Anything whose `scheduledTime` is already before `now` is dropped.
+- **`lib/services/goal_reminder_service.dart`** (new) —
+  `GoalReminderService` wraps `FlutterLocalNotificationsPlugin`: `init()`
+  (loads the `timezone` package's IANA database, sets the local zone —
+  see the timezone-detection note below — then initializes the plugin
+  with `DarwinInitializationSettings` for both iOS and macOS, the only
+  two platforms this app currently ships), `requestPermissions()` (asks
+  for alert/badge/sound on both platforms), `resync(goals)`
+  (`cancelAll()` then `zonedSchedule`s every current
+  `computeReminderOccurrences` result — simplest correct approach given
+  goals change infrequently; no attempt to diff old vs. new occurrences
+  by hand).
+  - **Timezone-detection workaround**: the `timezone` package has no way
+    to ask the platform for its actual IANA zone name — that needs a
+    separate native-channel plugin (`flutter_native_timezone` or
+    similar) this app doesn't depend on. Instead, `_deviceLocation()`
+    scans the package's own bundled zone database for a location whose
+    *current UTC offset* matches `DateTime.now().timeZoneOffset`, and
+    uses that — sufficient to schedule at the right wall-clock time
+    (all this app needs), even though the matched zone's *name* may not
+    be the device's real one. Falls back to UTC if nothing matches
+    (shouldn't happen in practice — the database's `Etc/GMT±n` entries
+    alone cover every whole-hour offset).
+- **`lib/state/goal_reminder_providers.dart`** (new) — one
+  `goalReminderServiceProvider` (`Provider<GoalReminderService>`),
+  effectively an app-lifetime singleton (has to be, since it owns the
+  underlying plugin's initialized-or-not state).
+- **`lib/features/auth/auth_gate.dart`** — `_SignedInGate` converted from
+  `ConsumerWidget` to `ConsumerStatefulWidget` so it can own this wiring:
+  `initState` inits the plugin + requests permissions once (deferred via
+  `WidgetsBinding.instance.addPostFrameCallback`, same pattern used
+  elsewhere in this app for "can't touch a provider during build"); a
+  `ref.listenManual` (not `ref.listen` in `build()` — `listenManual` is
+  the one that supports `fireImmediately`, needed so the very first goals
+  snapshot gets scheduled too, not just later changes) resyncs reminders
+  every time the live goals list changes. **Both the init/permission call
+  and the resync call are wrapped in `try`/`catch`, swallowing anything
+  that goes wrong** — deliberately: reminders are a nice-to-have layered
+  on top of the app, and this is a real, permanent condition, not a
+  hypothetical — the widget-test environment has no platform channel
+  registered at all, so every one of this repo's ~100+ existing
+  signed-in-flow tests would otherwise throw `MissingPluginException` the
+  moment `_SignedInGate` mounts. Confirmed this is the right call by
+  running the full suite both ways: unguarded, dozens of previously
+  passing tests failed; guarded, all 132 pass unchanged.
+- **`lib/features/goals/widgets/goal_edit_sheet.dart`** — new "Reminder"
+  section (between Dates and Daily targets) with 7 selectable
+  `_ReminderChip`s (visually `CategoryChip` minus the color swatch — no
+  color of its own to show), one per `_ReminderOption`: None, At time of
+  event, 5/15/30 min before, 1 hour before, 1 day before — the standard
+  set a calendar app offers, matching "similar to calendar meetings"
+  closely enough that this was implemented directly rather than raised as
+  an `AskUserQuestion`. Wired into the existing dirty-check snapshot,
+  save, and edit-prefill paths the same way every other field already is.
+- One new widget test (`test/widget_test.dart`): opens a fresh goal sheet,
+  confirms "None" is selected by default, taps "15 min before", saves,
+  and confirms the created `Goal.reminderMinutesBefore` is `15` via a
+  `ProviderContainer` read — same pattern several other save-flow tests
+  in this file already use.
+- Verified: `flutter analyze` clean, all 132 tests pass (122 + 9 unit + 1
+  widget). **CocoaPods is now installed in this environment** (see
+  **CocoaPods installed via Homebrew**, right below) — both `flutter
+  build macos --debug` and `flutter build ios --debug --simulator`
+  succeed end-to-end (`pod install` runs, native `flutter_local_
+  notifications` code links). **Live-verified on the iOS Simulator**: a
+  fresh build launched against the real signed-in account (existing
+  "Job" block visible, confirming this hit real Firestore data, not a
+  fixture), and iOS's own native permission dialog — `"Calendar Tracker"
+  Would Like to Send You Notifications` — appeared, proving
+  `GoalReminderService.init()`/`requestPermissions()` runs correctly
+  through the real platform channel, not just in isolation. Also
+  confirmed live on macOS: the built app launches and stays running past
+  the same init/permission code path with no crash. Dismissing the iOS
+  dialog itself hit this environment's pre-existing, unrelated tap
+  flakiness (see **Known environment quirks**) — didn't block on it,
+  since the dialog's mere appearance is what actually proves the
+  integration works. **Still not directly observed**: an actual
+  notification banner firing at its scheduled time (would need the app
+  running unattended past a real scheduled time, or the user confirming
+  on their own device) — but every step up to and including the OS
+  scheduling call itself is now exercised by a real platform channel,
+  not just unit/widget tests.
+
+## CocoaPods installed via Homebrew (sixth session)
+
+The "no CocoaPods in this environment" gap noted above (and originally in
+**Known environment quirks**) is now fixed, at the user's explicit
+request: `brew install cocoapods` (Homebrew 6.0.18, already present)
+pulled in its own bundled Ruby 4.0.6 alongside `libyaml`/
+`ca-certificates`/`openssl@3`, installing CocoaPods 1.17.0 to
+`/opt/homebrew/bin/pod` — sidesteps the system Ruby (2.6.10, too old for
+CocoaPods' own dependency chain) entirely, since Homebrew's formula
+doesn't touch it. No manual Ruby-version management needed.
+`/opt/homebrew/bin` still needs to be on `PATH` for `pod` to resolve, same
+as `gh`/`brew`/`firebase`/`flutterfire` already documented above. One
+cosmetic-only warning surfaces on every `pod` invocation ("CocoaPods
+requires your terminal to be using UTF-8 encoding") — harmless, fixable
+by adding `export LANG=en_US.UTF-8` to `~/.profile` per its own
+suggestion, not done automatically since it's a shell-profile edit
+outside this repo. This unblocks `flutter build ios`/`flutter build
+macos` for good — confirmed by the goal-reminders live verification
+directly above, the first feature in this project to actually need
+native plugin code.
+
+## Bug: sign-up fails with "keychain-error" on macOS (sixth session)
+
+User report: "Trying to create an account it returns generic error."
+Reproduced directly (not through flaky simulator taps — see below) by
+adding a temporary probe to `main.dart` that called
+`FirebaseAuth.instance.createUserWithEmailAndPassword` straight away on
+launch and printed the raw exception, run via `flutter run -d macos`.
+
+**Root cause**: the macOS build's `CODE_SIGN_IDENTITY` is `"-"` (ad-hoc,
+no `DEVELOPMENT_TEAM` in `macos/Runner.xcodeproj/project.pbxproj`) — this
+project has never had a Team assigned for the macOS target (only iOS has
+documented signing steps, see **Installing on a physical iPhone**).
+Firebase Auth persists the session to the Keychain on every sign-in/
+sign-up, and macOS's Keychain Services refuses that write for an
+ad-hoc-signed process with `OSStatus -34018`: *"Client has neither
+com.apple.application-identifier nor com.apple.security.application-groups
+nor keychain-access-groups entitlements."* Confirmed via the real macOS
+unified log (`/usr/bin/log stream --predicate 'eventMessage CONTAINS
+"keychain"'` — note **`log` is a zsh builtin in this environment**,
+shadowing `/usr/bin/log`; call the full path or it fails with a cryptic
+"too many arguments"), correlated to the exact `calendar_tracker` PID at
+the moment of the probe's sign-up call.
+
+Two things tried that **did not fix it** (both reverted, no trace left in
+the repo):
+- Adding a `keychain-access-groups` entitlement — the theoretically
+  "correct" fix, but Xcode refused to even build: *"Runner has
+  entitlements that require signing with a development certificate."*
+  Can't add this entitlement without first assigning a real Team.
+- Disabling `com.apple.security.app-sandbox` — same `-34018` error
+  either way. This isn't a sandbox restriction; it's that macOS now
+  requires a genuine signing identity (`com.apple.application-identifier`,
+  which only exists once a Team signs the binary) for **any** process,
+  sandboxed or not, to write an item to the Keychain.
+
+**iOS is not affected** — confirmed both by this session's own live
+iOS Simulator verification (see **Goal reminders**) and by the earlier
+"Live-verified — the user signed up and used the app for real" note
+under **Authentication + Firestore backend** — Simulator/device apps get
+a real entitlement-backed keychain group without needing a paid/personal
+Team the way a plain ad-hoc macOS build does.
+
+**What's actually fixed**: `login_screen.dart`'s error handling had two
+real gaps, both real bugs independent of the keychain issue itself,
+fixed now:
+1. `_messageFor` had no case for `keychain-error` — it fell through to
+   the generic "Something went wrong. Please try again," which reads as
+   transient/retry-worthy when it's actually a permanent, un-retriable
+   dev-environment problem. Added a specific message pointing at the
+   real cause (macOS + code signing) instead.
+2. `_submit()` only caught `FirebaseAuthException` — any other kind of
+   exception (a plain `PlatformException`, a network failure that
+   doesn't map to a Firebase Auth error code, etc.) fell through to
+   `finally` with `_error` still `null`: the "PLEASE WAIT" state clears
+   and the screen just silently sits there with no explanation at all.
+   Same class of bug as the "goal was empty" log-activity silent-failure
+   bug from the fifth session — added a catch-all that at least shows
+   the generic message rather than nothing.
+
+**Resolved.** The user assigned a Development Team in Xcode (their own
+Apple ID, `alex0ishere@gmail.com`, personal team `58T4ZJH9BV`) — the
+manual step above. Two follow-up problems on the way to actually
+confirming it worked, both diagnosed and fixed:
+
+1. **The Team was assigned in the wrong checkout.** The user had a
+   second, independent clone of this same repo at
+   `/Users/alexandrospanagiotidis/DriVector/Calendar/calendar/` (its own
+   `.git`, cloned fresh at `cce730e`, confirmed via `git reflog` showing
+   a single `clone:` entry) — Xcode's "package cannot be accessed"
+   error (`FlutterGeneratedPluginSwiftPackage doesn't exist`) was because
+   that clone never had `flutter pub get`/`pod install` run in it, so the
+   ephemeral Swift package Xcode expected was simply never generated
+   there. The Team assignment itself *did* take, in that clone's
+   `macos/Runner.xcodeproj/project.pbxproj` — confirmed by diffing it,
+   which is how the exact Team ID was recovered and carried over to the
+   real working copy (`/Users/alexandrospanagiotidis/DriVector/Calendar/`,
+   this repo) via a targeted edit rather than asking the user to redo the
+   Xcode step a third time. That duplicate clone is still sitting on
+   disk, untouched, in case the user wants to delete it themselves — not
+   removed automatically.
+2. **`DEVELOPMENT_TEAM` alone wasn't sufficient.** The project's shared,
+   project-level build settings hardcode `CODE_SIGN_IDENTITY = "-"`
+   (Flutter's own macOS project template does this by default, so a
+   fresh `flutter create` is buildable with zero signing setup) — an
+   explicit value like that overrides Xcode's automatic-signing
+   resolution even with a real Team present, confirmed directly via
+   `xcodebuild -showBuildSettings` showing `CODE_SIGN_IDENTITY = -`
+   despite `DEVELOPMENT_TEAM` correctly resolving. Fixed by also adding
+   `CODE_SIGN_IDENTITY = "Apple Development";` to the same three
+   target-level build configs (mirrors exactly what Xcode's own Signing
+   & Capabilities UI writes when you assign a Team through the GUI —
+   confirmed by checking that the iOS target, whose Team is normally
+   assigned by the user live in Xcode each session rather than committed,
+   never needed this because the GUI path sets it automatically). Once
+   both were in place, the very first CLI build still failed once more
+   with *"No signing certificate 'Mac Development' found"* / *"No
+   profiles ... found"* — expected: no local development certificate or
+   provisioning profile existed yet for this Team. Building once with
+   `xcodebuild ... -allowProvisioningUpdates` (a flag `flutter build`/
+   `flutter run` don't pass by default) let Xcode silently generate and
+   register both against the signed-in Apple ID; every build since
+   (including a plain `flutter run -d macos`, no special flags) has
+   picked them up from the local keychain/provisioning cache
+   automatically.
+
+With both a real Team and a working local certificate + profile, the
+`keychain-access-groups` entitlement (see the earlier failed attempt
+above) now builds cleanly and actually resolves the issue — re-added to
+**both** `macos/Runner/DebugProfile.entitlements` and
+`Release.entitlements`. **Confirmed end-to-end with the same
+temporary-probe technique from the initial diagnosis**: a fresh
+`createUserWithEmailAndPassword` call against the real Firebase project
+now returns `SUCCESS uid=I1jFlqVgN1Xmr61zLmRPdJrGVxr2` — sign-up
+genuinely works on macOS now, not just "builds without the entitlements
+error." The diagnostic probe was reverted from `main.dart` immediately
+after confirming this, same as the first diagnosis round — nothing
+diagnostic left in the repo.
+
+**One thing worth knowing for future sessions**: unlike iOS (whose
+`project.pbxproj` has no committed `DEVELOPMENT_TEAM` — the user assigns
+it live in Xcode each session, which is fine since iOS is meant to be
+run via Xcode's own Run button per **Installing on a physical iPhone**),
+the macOS **`DEVELOPMENT_TEAM` and `CODE_SIGN_IDENTITY` are now committed
+directly in `macos/Runner.xcodeproj/project.pbxproj`**, tied to this
+specific personal Apple ID/Team. Deliberate, not an oversight: macOS
+builds in this project are driven heavily through the CLI
+(`flutter run -d macos`/`flutter build macos`, used constantly for
+verification), which reads only the checked-in project file — an
+uncommitted, Xcode-GUI-only Team assignment (the iOS pattern) would
+silently revert to ad-hoc signing on every CLI build and bring this exact
+bug straight back. The tradeoff: anyone else cloning this repo (a second
+developer, a CI runner attempting a signed macOS build) would need to
+either replace the Team ID with their own or hit the same "no signing
+certificate" error this session worked through — a real cost, worth
+knowing about, but the right call for this single-developer, CLI-driven
+project as it stands today.
+
+Verified: `flutter analyze` clean, all 132 tests pass. Final diff for
+this whole investigation, beyond the `login_screen.dart` error-handling
+fix: `macos/Runner.xcodeproj/project.pbxproj` (`DEVELOPMENT_TEAM` +
+`CODE_SIGN_IDENTITY` added to the three Runner target configs) and both
+`.entitlements` files (`keychain-access-groups` added). `main.dart` is
+back to its exact pre-session state — the diagnostic probe was used
+twice (once to find the bug, once to confirm the fix) and reverted both
+times, no trace left in the repo.
 
 ## Goal detail sheet: week navigation (fifth session)
 
@@ -1329,3 +1648,8 @@ crash in the first place.
   this session.
 - A stray `JIRA_PERSONAL_TOKEN` exported in `~/.zshrc` — pre-existing,
   unrelated to this project, left untouched.
+- **CocoaPods is installed** (`/opt/homebrew/bin/pod`, via Homebrew — see
+  **CocoaPods installed via Homebrew**) — `flutter build ios`/`flutter
+  build macos` both work now, including plugins needing native code.
+  Remember `/opt/homebrew/bin` on `PATH` first, same as `gh`/`firebase`/
+  `flutterfire`.

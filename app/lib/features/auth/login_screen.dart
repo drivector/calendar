@@ -21,6 +21,10 @@ String _messageFor(String code) {
       return 'An account already exists for that email.';
     case 'weak-password':
       return 'Password must be at least 6 characters.';
+    case 'keychain-error':
+      return "Couldn't save your session to the keychain — this build "
+          "isn't code-signed with a development team yet (macOS only; "
+          'see HANDOFF.md).';
     default:
       return 'Something went wrong. Please try again.';
   }
@@ -75,6 +79,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       }
     } on FirebaseAuthException catch (e) {
       setState(() => _error = _messageFor(e.code));
+    } catch (e) {
+      setState(() => _error = 'Something went wrong. Please try again.');
     } finally {
       if (mounted) setState(() => _submitting = false);
     }

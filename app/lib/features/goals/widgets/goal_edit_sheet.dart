@@ -21,6 +21,24 @@ const _minPerEntry = Duration(minutes: 5);
 const _maxPerEntry = Duration(hours: 8);
 const _defaultRangeStart = TimeOfDay(hour: 9, minute: 0);
 
+/// Lead-time options for a goal's reminder — the same set a calendar app
+/// offers for a meeting reminder. `minutesBefore: null` is "no reminder,"
+/// the default for every goal until the user opts in.
+enum _ReminderOption {
+  none(null, 'None'),
+  atTime(0, 'At time of event'),
+  fiveMin(5, '5 min before'),
+  fifteenMin(15, '15 min before'),
+  thirtyMin(30, '30 min before'),
+  oneHour(60, '1 hour before'),
+  oneDay(1440, '1 day before');
+
+  const _ReminderOption(this.minutesBefore, this.label);
+
+  final int? minutesBefore;
+  final String label;
+}
+
 Map<int, List<DayScheduleEntry>> _defaultSchedule() => {
   for (var weekday = 1; weekday <= 7; weekday++)
     weekday: [const DayScheduleEntry.duration(Duration(minutes: 30))],
@@ -99,6 +117,7 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
       widget.existing?.startDate ?? widget.ref.read(selectedDateProvider);
   late DateTime _endDate =
       widget.existing?.endDate ?? _startDate.add(ongoingGoalSpan);
+  late int? _reminderMinutesBefore = widget.existing?.reminderMinutesBefore;
 
   // One unified per-day schedule — each day holds a list of entries, each
   // either a plain duration or a clock time range, summed for that day's
@@ -138,6 +157,7 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
     },
     startDate: _startDate,
     endDate: _endDate,
+    reminderMinutesBefore: _reminderMinutesBefore,
   ).toMap();
 
   bool get _hasUnsavedChanges =>
@@ -306,6 +326,7 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
       },
       startDate: _startDate,
       endDate: _endDate,
+      reminderMinutesBefore: _reminderMinutesBefore,
     );
     widget.ref.read(goalsRepositoryProvider).upsert(goal);
     Navigator.of(context).pop();
@@ -419,6 +440,29 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
                     const SizedBox(height: AppSpacing.s1),
                     Text(
                       'leave the default end date for an ongoing habit; shorten it for a dated challenge',
+                      style: AppTextStyles.mono(),
+                    ),
+                    const SizedBox(height: AppSpacing.s3),
+                    _Label('Reminder'),
+                    Wrap(
+                      spacing: AppSpacing.s2,
+                      runSpacing: AppSpacing.s2,
+                      children: [
+                        for (final option in _ReminderOption.values)
+                          _ReminderChip(
+                            label: option.label,
+                            selected: option.minutesBefore ==
+                                _reminderMinutesBefore,
+                            onTap: () => setState(
+                              () => _reminderMinutesBefore =
+                                  option.minutesBefore,
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.s1),
+                    Text(
+                      'only fires for daily targets with a clock time, not a plain duration',
                       style: AppTextStyles.mono(),
                     ),
                     const SizedBox(height: AppSpacing.s3),
@@ -614,6 +658,48 @@ class _Label extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 5),
       child: Text(text.toUpperCase(), style: AppTextStyles.kicker()),
+    );
+  }
+}
+
+/// A selectable reminder lead-time option — same visual language as
+/// [CategoryChip] minus the color swatch (a reminder option has no color of
+/// its own): unselected is a soft 30%-ink border with accent text, selected
+/// is a solid accent fill with bg-colored text.
+class _ReminderChip extends StatelessWidget {
+  const _ReminderChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 44),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.s2,
+          vertical: AppSpacing.s1,
+        ),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.accent : null,
+          border: selected ? null : Border.all(color: AppColors.ink(0.3)),
+        ),
+        child: Text(
+          label,
+          style: AppTextStyles.mono(
+            color: selected ? AppColors.bg : AppColors.accent,
+          ),
+        ),
+      ),
     );
   }
 }
