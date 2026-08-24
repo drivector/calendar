@@ -14,6 +14,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 import '../../utils/duration_format.dart';
+import 'capacity_screen.dart';
 import 'widgets/week_day_row.dart';
 
 enum _DayWeekTab { day, week }
@@ -115,10 +116,22 @@ class WeekViewScreen extends ConsumerWidget {
                       ),
                     ],
                   ),
-                  Text(
-                    'planned ${formatDuration(_hoursToDuration(plannedHours))} · '
-                    '${formatSignedDuration(_hoursToDuration(trackedHours - plannedHours))}',
-                    style: AppTextStyles.mono(),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'planned ${formatDuration(_hoursToDuration(plannedHours))} · '
+                        '${formatSignedDuration(_hoursToDuration(trackedHours - plannedHours))}',
+                        style: AppTextStyles.mono(),
+                      ),
+                      const SizedBox(height: AppSpacing.s1),
+                      GestureDetector(
+                        onTap: () => showCapacityScreen(context),
+                        behavior: HitTestBehavior.opaque,
+                        child: Text('capacity', style: AppTextStyles.mono(color: AppColors.accent)),
+                      ),
+                    ],
                   ),
                 ],
               ),

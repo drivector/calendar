@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../models/goal.dart';
 import '../../../models/goal_progress.dart';
 import '../../../models/planned_block.dart';
 import '../../../models/tracked_block.dart';
@@ -137,12 +138,21 @@ class GoalDetailSheet extends ConsumerWidget {
                   value: '${formatDuration(progress.goal.weeklyTarget)} this week '
                       '· today ${formatDuration(progress.goal.targetForWeekday(selectedDate.weekday))}',
                 ),
-                if (progress.goal.isDateBound)
-                  _StatRow(
-                    label: 'runs',
-                    value: '${DateFormat('d MMM y').format(progress.goal.startDate)} – '
-                        '${DateFormat('d MMM y').format(progress.goal.endDate)}',
-                  ),
+                const SizedBox(height: AppSpacing.s1),
+                _TargetPerDayRow(goal: progress.goal, weekStart: weekStart),
+                const SizedBox(height: AppSpacing.s1),
+                _StatRow(
+                  label: progress.goal.isDateBound ? 'runs' : 'active since',
+                  value: progress.goal.isDateBound
+                      ? '${DateFormat('d MMM y').format(progress.goal.startDate)} – '
+                          '${DateFormat('d MMM y').format(progress.goal.endDate)}'
+                      // An ongoing habit's own end date is just an
+                      // implementation detail (~1 year out, see
+                      // ongoingGoalSpan) — showing it as a real end would
+                      // misrepresent the goal, so only the real start date
+                      // is shown for one of these, not a full range.
+                      : DateFormat('d MMM y').format(progress.goal.startDate),
+                ),
                 const SizedBox(height: AppSpacing.s2),
                 DecoratedBox(
                   decoration: BoxDecoration(
@@ -186,6 +196,46 @@ class GoalDetailSheet extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// A compact 7-day strip of each weekday's own target — the "target" stat
+/// row above only ever shows the weekly total and today's figure, which
+/// hides exactly how a goal like "Walking / varies by day" actually
+/// varies; this spells out every day at a glance.
+class _TargetPerDayRow extends StatelessWidget {
+  const _TargetPerDayRow({required this.goal, required this.weekStart});
+
+  final Goal goal;
+  final DateTime weekStart;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        for (var weekday = 1; weekday <= 7; weekday++)
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 1),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    DateFormat('EEE').format(weekStart.add(Duration(days: weekday - 1))).toUpperCase(),
+                    style: AppTextStyles.mono(),
+                  ),
+                  Text(
+                    goal.targetForWeekday(weekday) == Duration.zero
+                        ? 'off'
+                        : formatDuration(goal.targetForWeekday(weekday)),
+                    style: AppTextStyles.mono(color: AppColors.text),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

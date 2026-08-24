@@ -1,13 +1,17 @@
 # Calendar Tracker — session handoff
 
-Updated 2026-08-24 (fourth session) — Firebase Auth + Firestore are built
-and live; this session was five independent goal/logging UX fixes (see
-**Goal & logging UX fixes** below), a GitHub Actions CI workflow, and
-getting the app ready to install on a physical iPhone (code-side is ready;
-signing needs the user's own Xcode session — see **Installing on a physical
-iPhone**). Read this first, then verify anything time-sensitive (git
-status, test count, Firebase console state) since it may have moved on
-since this was written.
+Updated 2026-08-24 (fifth session) — Firebase Auth + Firestore are built and
+live; the fourth session added five goal/logging UX fixes, CI, and iPhone
+install readiness; this session fixed a real gap in the fourth session's
+own unsaved-changes work (barrier-tap did nothing instead of prompting —
+see **Goal edit sheet: barrier-tap and Save/Discard/Keep** below), added a
+new **Capacity** page off the Week view (see **Capacity page**), and fixed
+two more real gaps the user found in the goal detail sheet — its date
+range was hidden for ongoing goals, and it only ever showed today's
+target, not the full per-day breakdown (see **Goal detail sheet: date
+range and per-day targets**). Read this first, then verify anything
+time-sensitive (git status, test count, Firebase console state) since it
+may have moved on since this was written.
 
 ## What this project is
 
@@ -94,7 +98,7 @@ and a Claim-untracked-time bottom sheet.
 
 ## Testing
 
-`flutter analyze` is clean; `flutter test` currently passes **77 tests**
+`flutter analyze` is clean; `flutter test` currently passes **88 tests**
 across `test/models/`, `test/state/`, `test/utils/`, `test/widget_test.dart`,
 and `test/features/auth/login_screen_test.dart`. Convention: after any
 change, run both and fix before moving on. Run from `app/`:
@@ -120,19 +124,20 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
 `AsyncLoading`. Widget tests don't need this explicitly since
 `pumpAndSettle()` flushes it.
 
-## Git status — committed locally, not pushed
+## Git status — fifth session's work is uncommitted
 
-- `main` was pushed and clean at the start of this whole stretch of work
-  (Firebase Auth/Firestore + the fourth session's UX fixes/CI). All of it
-  is now one local commit (`55e84e7`, "Add Firebase Auth + Firestore
-  backend, fix goal/logging UX, add CI") — **not yet pushed**; ask before
-  pushing, per this repo's `CLAUDE.md` (each push needs its own go-ahead,
-  a prior one doesn't carry forward).
-- That commit's author identity was auto-detected from the local
-  username/hostname (git printed its usual first-commit notice) — worth
-  double-checking `git config --global user.name`/`user.email` are what
-  the user actually wants attributed on `drivector/calendar`, since this
-  wasn't explicitly set.
+- The Firebase Auth/Firestore backend and the fourth session's UX
+  fixes/CI are committed and pushed to `drivector/calendar` main
+  (`55e84e7`, `0c6414a`). This **fifth session's** work (barrier-tap fix,
+  Save/Discard/Keep, the Capacity page) is **not yet committed** — ask
+  before committing/pushing, per this repo's `CLAUDE.md` (each one needs
+  its own go-ahead, a prior approval doesn't carry forward).
+- Commit author identity on this repo was auto-detected from the local
+  username/hostname (`Alexandros Panagiotidis
+  <alexandrospanagiotidis@192.168.1.5>`) rather than a real email — flagged
+  to the user once already, not fixed (never touch git config unasked).
+  Still worth checking `git config --global user.email` before the next
+  commit if GitHub attribution matters.
 - Pushing needs **GitHub CLI** (`gh`), installed via Homebrew at
   `/opt/homebrew/bin/gh` and authenticated as the `drivector` account
   (`repo` scope). **`/opt/homebrew/bin` may not be on PATH in a fresh
@@ -141,6 +146,118 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
   `firebase`, or `flutterfire` (the latter two also need
   `$HOME/.npm-global/bin` and `$HOME/.pub-cache/bin` respectively, plus the
   Flutter SDK's `bin` on PATH since `flutterfire` shells out to `dart`).
+
+## Goal detail sheet: date range and per-day targets (fifth session)
+
+Two more real gaps the user found by using the app, both in
+`goal_detail_sheet.dart`:
+
+1. **Date range was hidden for ongoing goals.** The "runs: start – end"
+   stat row only ever rendered `if (progress.goal.isDateBound)` — but most
+   goals are *not* date-bound (the default end date is ~1 year out, read as
+   "ongoing" per `Goal.isDateBound`/`ongoingGoalSpan`), so for the common
+   case the date range was never shown at all, which the user flagged.
+   Fixed by always showing a row, labeled differently depending on which
+   kind of goal it is: date-bound goals still show `runs: start – end`;
+   ongoing goals now show `active since: start` — deliberately *not* a
+   full range, since an ongoing goal's own end date is just an
+   implementation detail, not a real constraint, and showing it as one
+   would misrepresent the goal (this was the actual reasoning the original
+   code's now-removed `if` was working around — the fix keeps that intent,
+   it just no longer throws away the start date too).
+2. **Only today's target was shown, not the full week's breakdown.** The
+   "target" stat row read like "3 h 30 this week · today 30 m" — accurate,
+   but for a goal like "Walking / varies by day" there was no way to see
+   *how* it varies without opening the edit sheet. Added a new
+   `_TargetPerDayRow` — a compact 7-day strip (day label + that day's own
+   target, or "off") — right under the existing target stat row.
+
+Two new widget tests cover both (`test/widget_test.dart`): one confirming
+`active since` (not `runs`) with the real start date for an ongoing goal,
+one confirming all 7 day labels and the correct per-day target values
+(Walking: 5× "1 h" for Mon–Fri, 2× "2 h 30" for Sat–Sun, per
+`mock_goals.dart`). Verified: `flutter analyze` clean, both new tests plus
+the full suite pass. Live tap-through wasn't achieved on the simulator this
+round either (documented flakiness, see **Known environment quirks**) —
+same fallback as before, relying on the widget tests' precise finders.
+
+## Goal edit sheet: barrier-tap and Save/Discard/Keep (fifth session)
+
+The fourth session's unsaved-changes guard (see below) disabled the goal
+edit sheet's barrier tap entirely (`isDismissible: false`) so it could
+force every exit through a guarded "cancel" link — but that meant tapping
+outside the sheet just did nothing (a denied-tap system beep, no visible
+reaction), which the user flagged as a real bug. Also asked for a third
+option: save directly from the close prompt, not just discard/keep
+editing, and for "cancel" to read "close" instead.
+
+Fixed by actually reading how Flutter's bottom sheet barrier dismissal
+works (`ModalBarrier.onDismiss`, `packages/flutter/lib/src/widgets/
+modal_barrier.dart`) rather than guessing: a barrier tap with
+`isDismissible: true` (the default) calls `Navigator.maybePop`, which
+**does** respect `PopScope.canPop` — unlike a direct `Navigator.pop()`
+call, which bypasses it entirely (confirmed the same way while building
+the original guard). So `isDismissible: false` was never necessary for the
+barrier — only `enableDrag: false` still is, since a completed
+swipe-to-dismiss goes through `BottomSheet.onClosing`, which calls
+`Navigator.pop()` directly inside Flutter's own code, with no hook to
+intercept it. Now:
+- `isDismissible` is back to its default (`true`) — a barrier tap goes
+  through the same `PopScope` guard as everything else, so it now prompts
+  when there are unsaved changes, instead of doing nothing.
+- The close prompt (`_UnsavedChangesDialog`, was `_DiscardChangesDialog`)
+  has three options now: **SAVE** (calls the sheet's own `_save()`),
+  **DISCARD**, **KEEP EDITING** — via a new `_ExitAction` enum rather than
+  the old `bool`.
+- "cancel" renamed to "close" (the link text, and internally
+  `_handleCancel` → `_handleClose`).
+
+Five new/updated widget tests cover this — closing with no changes (no
+prompt), closing with changes → Keep editing, → Discard, → Save, and a new
+test specifically simulating a barrier tap (`tester.tapAt` near the top of
+the screen, above the sheet) to confirm that path prompts too.
+
+## Capacity page (fifth session)
+
+New page off the Week view, answering something the existing Week view
+never did: "how much is planned, and how much is still available." The
+existing Week view already covers plan vs actual (per-day stacked bars,
+weekly totals, drift, a goals-vs-actual footer) — this page adds the
+missing "available" dimension rather than duplicating any of that.
+
+- **`lib/models/day_capacity.dart`** — `DayCapacity` (pure value class) +
+  `computeDayCapacity`, unit-tested in
+  `test/models/day_capacity_test.dart`. "Available" is computed against an
+  11-hour window (07:00–18:00), reusing `dayWindowFor` from
+  `state/derived_providers.dart` — the same window the Day view already
+  uses to decide what counts as "untracked," so a day being "fully booked"
+  means the same thing in both places rather than introducing a second
+  definition. A day planned past the window reports `overplannedHours`
+  instead of `availableHours` going negative.
+- **`state/week_view_providers.dart`** — new `weekDayCapacityProvider`,
+  derived from the existing `weekDaySummariesProvider` (same planned/actual
+  totals already shown elsewhere in the Week view, just paired with the
+  capacity math). No change to what "planned" means — still whatever
+  `weekDaySummariesProvider` already counted before this page existed.
+- **`lib/features/week_view/capacity_screen.dart`** — `CapacityScreen`,
+  pushed via `showCapacityScreen`, linked from a new "capacity" link in the
+  Week view's stats row. Two sections: **free time per day** (a day
+  row per weekday — solid bar for planned, hatched for available, "over by
+  X h" instead of a negative number when overplanned) and **room toward
+  goals** (reuses `goalProgressListProvider` directly — each goal's
+  `plannedHours` vs `goal.weeklyTargetHours`, no new provider needed for
+  this half).
+- Two new widget tests: the full open → verify both sections → close flow,
+  and a dedicated overplanned-day scenario (12h manually planned into an
+  11h window) confirming "over by" appears instead of a nonsensical
+  negative "available" figure.
+- Verified: `flutter analyze` clean, this session's tests pass, and the
+  "capacity" link visually confirmed rendering correctly on the iOS
+  Simulator (styled, in the right place) — the screen's actual content
+  wasn't visually confirmed live past that, since tap coordinates have
+  been unreliable in this environment all project (see **Known environment
+  quirks**); relied on the passing widget tests instead, which do
+  precisely exercise open → both sections' content → close.
 
 ## Goal & logging UX fixes (fourth session)
 

@@ -14,6 +14,7 @@ import 'package:calendar_tracker/features/goals/goals_screen.dart';
 import 'package:calendar_tracker/features/goals/widgets/goal_detail_sheet.dart';
 import 'package:calendar_tracker/features/goals/widgets/goal_edit_sheet.dart';
 import 'package:calendar_tracker/features/log_activity/log_activity_screen.dart';
+import 'package:calendar_tracker/features/week_view/capacity_screen.dart';
 import 'package:calendar_tracker/features/week_view/week_view_screen.dart';
 import 'package:calendar_tracker/models/clock_time.dart';
 import 'package:calendar_tracker/models/goal.dart';
@@ -259,6 +260,74 @@ void main() {
     expect(find.text('Week 17 – 23 Aug'), findsOneWidget);
   });
 
+  testWidgets(
+      'Week: the capacity link opens per-day free time and per-goal room, and close returns to Week',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      ProviderScope(overrides: await _signedInOverrides(), child: const CalendarTrackerApp()),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('WEEK'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('capacity'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.byType(CapacityScreen), findsOneWidget);
+    expect(find.text('Capacity'), findsOneWidget);
+
+    // Free time per day — every day of the mock week shows up.
+    expect(find.text('FREE TIME PER DAY'), findsOneWidget);
+    expect(find.text('MON 17'), findsOneWidget);
+    expect(find.text('SUN 23'), findsOneWidget);
+
+    // Room toward goals — a target goal appears with its planned/target
+    // split, e.g. "Walking · planned X / Y h".
+    expect(find.text('ROOM TOWARD GOALS'), findsOneWidget);
+    expect(find.textContaining('Walking · planned'), findsOneWidget);
+
+    await tester.tap(find.text('close'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CapacityScreen), findsNothing);
+    expect(find.byType(WeekViewScreen), findsOneWidget);
+  });
+
+  testWidgets(
+      'Week: a day planned past its window reports overplanned instead of negative free time',
+      (WidgetTester tester) async {
+    final container = ProviderContainer(overrides: await _signedInOverrides());
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(container: container, child: const CalendarTrackerApp()),
+    );
+    await tester.pumpAndSettle();
+
+    // 12 hours of manually planned time on Monday — more than the 11h
+    // 07:00–18:00 window — on top of whatever the seed data already has.
+    await container.read(plannedBlocksRepositoryProvider).upsert(
+          PlannedBlock(
+            id: 'test-overplan-mon',
+            start: DateTime(2026, 8, 17, 6, 0),
+            end: DateTime(2026, 8, 17, 18, 0),
+            title: 'Everything',
+            categoryId: walkingCategoryId,
+          ),
+        );
+    await tester.pump();
+
+    await tester.tap(find.text('WEEK'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('capacity'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.textContaining('over by'), findsWidgets);
+  });
+
   testWidgets('Goals screen renders a block per mock goal',
       (WidgetTester tester) async {
     await tester.pumpWidget(
@@ -347,6 +416,48 @@ void main() {
     expect(find.text('EDIT'), findsOneWidget);
   });
 
+  testWidgets(
+      "Goals: an ongoing goal's detail sheet shows its start date, not a fake end date",
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      ProviderScope(overrides: await _signedInOverrides(), child: const CalendarTrackerApp()),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('GOALS'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Walking')); // ongoing, per mock_goals.dart
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('active since'), findsOneWidget);
+    expect(find.text('runs'), findsNothing);
+    // mock_goals.dart's ongoing goals start 1 Jan 2020.
+    expect(find.text('1 Jan 2020'), findsOneWidget);
+  });
+
+  testWidgets(
+      "Goals: a goal's detail sheet shows every weekday's own target, not just today's",
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      ProviderScope(overrides: await _signedInOverrides(), child: const CalendarTrackerApp()),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('GOALS'));
+    await tester.pumpAndSettle();
+    // Walking: 1h Mon-Fri, 2h30 Sat-Sun, per mock_goals.dart.
+    await tester.tap(find.text('Walking'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    for (final day in ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']) {
+      expect(find.text(day), findsOneWidget);
+    }
+    expect(find.text('1 h'), findsNWidgets(5)); // Mon-Fri
+    expect(find.text('2 h 30'), findsNWidgets(2)); // Sat-Sun
+  });
+
   testWidgets('Goals: editing from the detail sheet and deleting removes it',
       (WidgetTester tester) async {
     await tester.pumpWidget(
@@ -375,7 +486,7 @@ void main() {
   });
 
   testWidgets(
-      'Goals: canceling an edit with no changes closes immediately, no confirmation',
+      'Goals: closing an edit with no changes closes immediately, no confirmation',
       (WidgetTester tester) async {
     await tester.pumpWidget(
       ProviderScope(overrides: await _signedInOverrides(), child: const CalendarTrackerApp()),
@@ -391,16 +502,16 @@ void main() {
 
     expect(find.text('Edit goal'), findsOneWidget);
 
-    await tester.tap(find.text('cancel'));
+    await tester.tap(find.text('close'));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(find.text('Discard changes?'), findsNothing);
+    expect(find.text('Save changes?'), findsNothing);
     expect(find.text('Edit goal'), findsNothing);
   });
 
   testWidgets(
-      'Goals: canceling an edit with unsaved changes asks to confirm — Keep editing stays on the sheet',
+      'Goals: closing an edit with unsaved changes asks to save — Keep editing stays on the sheet',
       (WidgetTester tester) async {
     await tester.pumpWidget(
       ProviderScope(overrides: await _signedInOverrides(), child: const CalendarTrackerApp()),
@@ -421,16 +532,16 @@ void main() {
     await tester.enterText(nameField, 'Walking (evenings)');
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('cancel'));
+    await tester.tap(find.text('close'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Discard changes?'), findsOneWidget);
+    expect(find.text('Save changes?'), findsOneWidget);
 
     await tester.tap(find.text('KEEP EDITING'));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(find.text('Discard changes?'), findsNothing);
+    expect(find.text('Save changes?'), findsNothing);
     // Still on the edit sheet, with the typed change intact.
     expect(find.text('Edit goal'), findsOneWidget);
     expect(find.text('Walking (evenings)'), findsOneWidget);
@@ -458,7 +569,7 @@ void main() {
     await tester.enterText(nameField, 'Walking (evenings)');
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('cancel'));
+    await tester.tap(find.text('close'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('DISCARD'));
     await tester.pumpAndSettle();
@@ -468,6 +579,76 @@ void main() {
     // The original goal is untouched — the edited name was never saved.
     expect(find.text('Walking (evenings)'), findsNothing);
     expect(find.text('Walking'), findsOneWidget);
+  });
+
+  testWidgets(
+      'Goals: confirming Save from the close prompt saves the changes',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      ProviderScope(overrides: await _signedInOverrides(), child: const CalendarTrackerApp()),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('GOALS'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Walking'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('EDIT'));
+    await tester.pumpAndSettle();
+
+    final nameField = find.descendant(
+      of: find.byType(GoalEditSheet),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(nameField, 'Walking (evenings)');
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('close'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('SAVE'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Edit goal'), findsNothing);
+    // The edit was actually saved this time, not discarded.
+    expect(find.text('Walking (evenings)'), findsOneWidget);
+    expect(find.text('Walking'), findsNothing);
+  });
+
+  testWidgets(
+      'Goals: tapping outside the edit sheet with unsaved changes also asks to save',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      ProviderScope(overrides: await _signedInOverrides(), child: const CalendarTrackerApp()),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('GOALS'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('+ NEW GOAL'));
+    await tester.pumpAndSettle();
+
+    final nameField = find.descendant(
+      of: find.byType(GoalEditSheet),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(nameField, 'Piano');
+    await tester.pumpAndSettle();
+
+    // A tap near the very top of the screen lands on the modal barrier
+    // above the sheet, not on the sheet's own content.
+    await tester.tapAt(const Offset(200, 10));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Save changes?'), findsOneWidget);
+
+    await tester.tap(find.text('KEEP EDITING'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Edit goal'), findsNothing); // still "New goal"
+    expect(find.text('New goal'), findsOneWidget);
+    expect(find.text('Piano'), findsOneWidget);
   });
 
   testWidgets(

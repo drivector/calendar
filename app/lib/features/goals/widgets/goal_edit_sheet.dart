@@ -48,10 +48,14 @@ Future<void> showGoalEditSheet(
     context: context,
     backgroundColor: AppColors.bg,
     isScrollControlled: true,
-    // Dismissal only ever goes through the explicit "cancel" link below, so
-    // an in-progress edit can be guarded with an unsaved-changes prompt —
-    // a barrier tap or swipe-to-dismiss would otherwise bypass it.
-    isDismissible: false,
+    // isDismissible stays true (the default) — a barrier tap calls
+    // Navigator.maybePop, which does respect the PopScope guard below, so
+    // it correctly triggers the same unsaved-changes prompt as "close".
+    // enableDrag stays off: a completed swipe-to-dismiss calls
+    // Navigator.pop directly inside Flutter's own BottomSheet.onClosing,
+    // which bypasses PopScope entirely (confirmed by reading
+    // bottom_sheet.dart) — there's no hook to guard that path, so it's
+    // disabled rather than left as a silent bypass of the prompt.
     enableDrag: false,
     builder: (context) => GoalEditSheet(existing: existing, ref: ref),
   );
@@ -126,17 +130,24 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
   bool get _hasUnsavedChanges =>
       !const DeepCollectionEquality().equals(_snapshotMap(), _initialSnapshot);
 
-  Future<void> _handleCancel() async {
+  Future<void> _handleClose() async {
     if (!_hasUnsavedChanges) {
       Navigator.of(context).pop();
       return;
     }
-    final discard = await showDialog<bool>(
+    final action = await showDialog<_ExitAction>(
       context: context,
-      builder: (context) => const _DiscardChangesDialog(),
+      builder: (context) => const _UnsavedChangesDialog(),
     );
-    if (discard == true && mounted) {
-      Navigator.of(context).pop();
+    if (!mounted) return;
+    switch (action) {
+      case _ExitAction.save:
+        _save();
+      case _ExitAction.discard:
+        Navigator.of(context).pop();
+      case _ExitAction.keepEditing:
+      case null:
+        break; // Dialog dismissed (e.g. its own barrier) — stay put, don't lose anything.
     }
   }
 
@@ -283,12 +294,13 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
     final weekStart = weekStartFor(widget.ref.read(selectedDateProvider));
 
     return PopScope(
-      // Every dismissal path (the "cancel" link below, or any programmatic
-      // pop) routes through _handleCancel, which only lets the pop through
-      // once there's nothing unsaved to lose, or the user confirms discard.
+      // Every dismissal path (the "close" link below, a barrier tap, or any
+      // programmatic pop) routes through _handleClose, which only lets the
+      // pop through once there's nothing unsaved to lose, or the user
+      // chooses save/discard from the prompt.
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
-        if (!didPop) _handleCancel();
+        if (!didPop) _handleClose();
       },
       child: Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
@@ -317,9 +329,9 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
                         style: AppTextStyles.title(),
                       ),
                       GestureDetector(
-                        onTap: _handleCancel,
+                        onTap: _handleClose,
                         behavior: HitTestBehavior.opaque,
-                        child: Text('cancel', style: AppTextStyles.mono()),
+                        child: Text('close', style: AppTextStyles.mono()),
                       ),
                     ],
                   ),
@@ -466,11 +478,14 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
   }
 }
 
-/// Confirms discarding unsaved changes before letting the goal edit sheet
-/// close — flat, bordered, no rounded corners, matching the sheet it sits
-/// over rather than Material's default dialog chrome.
-class _DiscardChangesDialog extends StatelessWidget {
-  const _DiscardChangesDialog();
+enum _ExitAction { save, discard, keepEditing }
+
+/// Offers save/discard/keep-editing before letting the goal edit sheet
+/// close with unsaved changes — flat, bordered, no rounded corners,
+/// matching the sheet it sits over rather than Material's default dialog
+/// chrome.
+class _UnsavedChangesDialog extends StatelessWidget {
+  const _UnsavedChangesDialog();
 
   @override
   Widget build(BuildContext context) {
@@ -486,7 +501,7 @@ class _DiscardChangesDialog extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Discard changes?', style: AppTextStyles.title()),
+              Text('Save changes?', style: AppTextStyles.title()),
               const SizedBox(height: AppSpacing.s1),
               Text(
                 'You have unsaved changes to this goal.',
@@ -494,7 +509,7 @@ class _DiscardChangesDialog extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.s4),
               GestureDetector(
-                onTap: () => Navigator.of(context).pop(true),
+                onTap: () => Navigator.of(context).pop(_ExitAction.save),
                 behavior: HitTestBehavior.opaque,
                 child: Container(
                   width: double.infinity,
@@ -502,12 +517,25 @@ class _DiscardChangesDialog extends StatelessWidget {
                   alignment: Alignment.centerLeft,
                   color: AppColors.accent,
                   padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s3),
-                  child: Text('DISCARD', style: AppTextStyles.small(color: AppColors.bg)),
+                  child: Text('SAVE', style: AppTextStyles.small(color: AppColors.bg)),
                 ),
               ),
               const SizedBox(height: AppSpacing.s2),
               GestureDetector(
-                onTap: () => Navigator.of(context).pop(false),
+                onTap: () => Navigator.of(context).pop(_ExitAction.discard),
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  width: double.infinity,
+                  constraints: const BoxConstraints(minHeight: 44),
+                  alignment: Alignment.centerLeft,
+                  decoration: BoxDecoration(border: Border.all(color: AppColors.text)),
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s3),
+                  child: Text('DISCARD', style: AppTextStyles.small(color: AppColors.accent)),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.s2),
+              GestureDetector(
+                onTap: () => Navigator.of(context).pop(_ExitAction.keepEditing),
                 behavior: HitTestBehavior.opaque,
                 child: Container(
                   width: double.infinity,

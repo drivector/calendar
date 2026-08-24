@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/day_capacity.dart';
 import '../models/goal_progress.dart';
 import '../models/untracked_gap.dart';
 import '../models/week_day_summary.dart';
@@ -56,4 +57,19 @@ final weekTotalsProvider = Provider<(double planned, double tracked)>((ref) {
   final planned = days.fold<double>(0, (t, d) => t + d.totalPlannedHours);
   final tracked = days.fold<double>(0, (t, d) => t + d.totalActualHours);
   return (planned, tracked);
+});
+
+/// Each day of the week, reduced to planned-vs-available against a fixed
+/// capacity window — the same per-day planned/actual totals the rest of the
+/// Week view already shows, just paired with how much open room is left.
+final weekDayCapacityProvider = Provider<List<DayCapacity>>((ref) {
+  final days = ref.watch(weekDaySummariesProvider);
+  return [
+    for (final day in days)
+      computeDayCapacity(
+        date: day.date,
+        plannedHours: day.totalPlannedHours,
+        actualHours: day.totalActualHours,
+      ),
+  ];
 });
