@@ -122,6 +122,7 @@ class _LogActivitySheetState extends ConsumerState<LogActivitySheet> {
             title: title,
             categoryId: goal.categoryId,
             sourceId: 'manual',
+            note: draft.note.trim().isEmpty ? null : draft.note.trim(),
           ),
         );
 

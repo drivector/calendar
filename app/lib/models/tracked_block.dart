@@ -8,6 +8,7 @@ class TrackedBlock {
     required this.sourceId,
     this.confidence = 1.0,
     this.plannedBlockId,
+    this.note,
   });
 
   final String id;
@@ -23,6 +24,10 @@ class TrackedBlock {
   /// The [PlannedBlock.id] this resolves against, if any.
   final String? plannedBlockId;
 
+  /// Free-text detail from the Log activity sheet's Note field — null when
+  /// left blank, never an empty string.
+  final String? note;
+
   Duration get duration => end.difference(start);
 
   factory TrackedBlock.fromMap(String id, Map<String, dynamic> map) =>
@@ -35,6 +40,7 @@ class TrackedBlock {
         sourceId: map['sourceId'] as String,
         confidence: (map['confidence'] as num?)?.toDouble() ?? 1.0,
         plannedBlockId: map['plannedBlockId'] as String?,
+        note: map['note'] as String?,
       );
 
   Map<String, dynamic> toMap() => {
@@ -45,5 +51,6 @@ class TrackedBlock {
     'sourceId': sourceId,
     'confidence': confidence,
     'plannedBlockId': plannedBlockId,
+    'note': note,
   };
 }

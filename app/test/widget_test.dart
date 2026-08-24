@@ -2021,6 +2021,89 @@ void main() {
   });
 
   testWidgets(
+    "Log activity: a note is saved with the entry and shown in the Activities list",
+    (WidgetTester tester) async {
+      final container = ProviderContainer(
+        overrides: await _signedInOverrides(),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('ACTIVITIES'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('+ LOG'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField).first, 'Evening walk');
+      container.read(draftLogEntryProvider.notifier)
+        ..setStart(const TimeOfDay(hour: 20, minute: 0))
+        ..setEnd(const TimeOfDay(hour: 20, minute: 30))
+        ..setGoal('goal-walking')
+        ..setNote('felt great, new personal best pace');
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('SAVE ENTRY'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('SAVE ENTRY'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      final tracked = container
+          .read(allTrackedBlocksProvider)
+          .firstWhere((b) => b.title == 'Evening walk');
+      expect(tracked.note, 'felt great, new personal best pace');
+      expect(find.text('felt great, new personal best pace'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Log activity: leaving the note blank saves no note, and nothing extra renders',
+    (WidgetTester tester) async {
+      final container = ProviderContainer(
+        overrides: await _signedInOverrides(),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('ACTIVITIES'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('+ LOG'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField).first, 'Quiet walk');
+      container.read(draftLogEntryProvider.notifier)
+        ..setStart(const TimeOfDay(hour: 20, minute: 0))
+        ..setEnd(const TimeOfDay(hour: 20, minute: 30))
+        ..setGoal('goal-walking');
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('SAVE ENTRY'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('SAVE ENTRY'));
+      await tester.pumpAndSettle();
+
+      final tracked = container
+          .read(allTrackedBlocksProvider)
+          .firstWhere((b) => b.title == 'Quiet walk');
+      expect(tracked.note, isNull);
+    },
+  );
+
+  testWidgets(
     'Log activity: picking a different day logs the entry there, not the '
     'app\'s currently selected day',
     (WidgetTester tester) async {

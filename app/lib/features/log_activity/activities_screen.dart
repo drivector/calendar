@@ -206,6 +206,10 @@ class _ActivityRow extends StatelessWidget {
                     '${_clock(block.start)}–${_clock(block.end)} · ${block.sourceId}',
                     style: AppTextStyles.mono(),
                   ),
+                  if (block.note != null && block.note!.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(block.note!, style: AppTextStyles.mono()),
+                  ],
                 ],
               ),
             ),

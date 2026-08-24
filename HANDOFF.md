@@ -1,38 +1,40 @@
 # Calendar Tracker — session handoff
 
-Updated 2026-08-24 (sixth session, uncommitted — see **Git status**) —
-Firebase Auth + Firestore are built and live; the fourth session added
-five goal/logging UX fixes, CI, and iPhone install readiness. The fifth
-session was large — in rough order: fixed a real gap in the fourth
-session's own unsaved-changes work (barrier-tap did nothing instead of
-prompting), added a **Capacity** page off the Week view, fixed two real
-gaps in the goal detail sheet (hidden date range, today-only target),
-added **week-to-week navigation** to that same sheet, added a
-**"complete" button** to the Goals list (turns a goal's remaining planned
-blocks into tracked activity in one tap), renamed the **"+ Log" tab to
-Activities** (a day-by-day history list instead of a single-day form,
-with logging moved to a "+ LOG" action that lets you pick the day and
-validates missing fields instead of silently failing), built
-**onboarding** for brand-new accounts (9 predefined categories, prompted
-to create a first goal before reaching the app), gave the **Day view's
-add-block sheet** a goal picker and independent start/end dates, and
-**removed the cap goal type entirely** (every goal is a target now). That
-whole session is pushed to `origin/main` as `cce730e`. The sixth session
-(this one) added **goal reminders** — a lead-time picker on each goal
-(same options a calendar meeting reminder offers) plus real, scheduled
-local notifications via `flutter_local_notifications` — see its own dated
-section below; **not yet committed**. This session also installed
-**CocoaPods** (was missing in this environment, blocking native
-iOS/macOS plugin builds — see **CocoaPods installed via Homebrew**),
-which unblocked live-verifying the reminders feature end-to-end on both
-platforms. It also found and **fully resolved** a real bug the user hit:
-**sign-up returned a generic error on the macOS build** — root-caused to
-a missing macOS code-signing Team, then a Development Team + provisioning
-profile were set up for real (with two nested problems solved along the
-way — a stray duplicate repo clone, and a hardcoded ad-hoc signing
-identity overriding the Team) — confirmed via a live sign-up that
-actually succeeds now (see **Bug: sign-up fails with "keychain-error" on
-macOS**). Each feature has its own dated section below
+Updated 2026-08-24 (sixth session — first batch pushed as `3a2efe6`, a
+second batch uncommitted, see **Git status**) — Firebase Auth + Firestore
+are built and live; the fourth session added five goal/logging UX fixes,
+CI, and iPhone install readiness. The fifth session was large — in rough
+order: fixed a real gap in the fourth session's own unsaved-changes work
+(barrier-tap did nothing instead of prompting), added a **Capacity** page
+off the Week view, fixed two real gaps in the goal detail sheet (hidden
+date range, today-only target), added **week-to-week navigation** to
+that same sheet, added a **"complete" button** to the Goals list (turns a
+goal's remaining planned blocks into tracked activity in one tap),
+renamed the **"+ Log" tab to Activities** (a day-by-day history list
+instead of a single-day form, with logging moved to a "+ LOG" action that
+lets you pick the day and validates missing fields instead of silently
+failing), built **onboarding** for brand-new accounts (9 predefined
+categories, prompted to create a first goal before reaching the app),
+gave the **Day view's add-block sheet** a goal picker and independent
+start/end dates, and **removed the cap goal type entirely** (every goal
+is a target now). That whole session is pushed as `cce730e`.
+
+The sixth session (this one, in two pushes): first added **goal
+reminders** (a lead-time picker per goal plus real scheduled local
+notifications via `flutter_local_notifications`), installed **CocoaPods**
+in this environment (was missing, blocking any native iOS/macOS plugin
+build), and used that to find and **fully resolve** a real bug — sign-up
+returning a generic error on the macOS build, root-caused to a missing
+code-signing Team, fixed for real and confirmed with a live sign-up that
+actually succeeds (see **Bug: sign-up fails with "keychain-error" on
+macOS**) — all pushed as `3a2efe6`. A second, smaller round then **fixed
+the Note field** in Log activity (captured but silently dropped before —
+a known gap flagged, not fixed, back in the fifth session) and
+**live-verified per-user Firestore data isolation** with two real
+throwaway accounts against the actual security rules (not assumed —
+confirmed cross-account reads are genuinely rejected). See **Note field:
+actually saved and shown now** and **Verified: per-user Firestore
+isolation** for both. Each feature/fix has its own dated section below
 with full detail — read this intro for the shape of things, then jump to
 whichever section is relevant. Read this first, then verify anything
 time-sensitive (git status, test count, Firebase console state) since it
@@ -129,7 +131,7 @@ and a Claim-untracked-time bottom sheet.
 
 ## Testing
 
-`flutter analyze` is clean; `flutter test` currently passes **132 tests**
+`flutter analyze` is clean; `flutter test` currently passes **134 tests**
 across `test/models/`, `test/state/`, `test/utils/`, `test/widget_test.dart`,
 and `test/features/auth/login_screen_test.dart`. Convention: after any
 change, run both and fix before moving on. Run from `app/`:
@@ -155,19 +157,16 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
 `AsyncLoading`. Widget tests don't need this explicitly since
 `pumpAndSettle()` flushes it.
 
-## Git status — fifth session pushed, sixth session (reminders) uncommitted
+## Git status — sixth session's first batch pushed, second batch uncommitted
 
 - The Firebase Auth/Firestore backend, the fourth session's UX fixes/CI,
-  and the entire fifth session (week nav, Activities tab, onboarding, cap
-  removal, Day view goal-picker) are all committed **and pushed** to
-  `drivector/calendar` main — `55e84e7`, `0c6414a`, `78a0beb`, `52d922a`,
-  and `cce730e` (the fifth session's squashed commit, amended once to fold
-  in a HANDOFF touch-up before pushing). `git status` confirms `main` is
-  up to date with `origin/main` as of this write-up.
-- The **sixth session's work (goal reminders, see its own dated section
-  below) is uncommitted** — ask before committing, per this repo's
-  `CLAUDE.md` (a prior commit approval doesn't carry forward; each batch
-  needs its own go-ahead). Touches `pubspec.yaml`/`pubspec.lock` (new
+  the entire fifth session (week nav, Activities tab, onboarding, cap
+  removal, Day view goal-picker), and the sixth session's **first
+  batch** (goal reminders, CocoaPods install, the macOS sign-up fix) are
+  all committed **and pushed** to `drivector/calendar` main — `55e84e7`,
+  `0c6414a`, `78a0beb`, `52d922a`, `cce730e`, and `3a2efe6`. `git status`
+  confirms `main` is up to date with `origin/main` as of this write-up.
+  `3a2efe6` touched: `pubspec.yaml`/`pubspec.lock` (new
   `flutter_local_notifications`/`timezone` deps), `lib/models/goal.dart`,
   `lib/models/goal_reminders.dart` (new), `lib/services/
   goal_reminder_service.dart` (new), `lib/state/
@@ -176,11 +175,10 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
   `lib/features/auth/login_screen.dart`,
   `macos/Runner.xcodeproj/project.pbxproj`,
   `macos/Runner/DebugProfile.entitlements`,
-  `macos/Runner/Release.entitlements` (the sign-up "generic error" fix
-  and the macOS code-signing setup behind it — see **Bug: sign-up fails
-  with "keychain-error" on macOS**; note this last group ties macOS
-  builds to one specific personal Apple Developer Team, see that
-  section's final note),
+  `macos/Runner/Release.entitlements` (the sign-up fix and the macOS
+  code-signing setup behind it — see **Bug: sign-up fails with
+  "keychain-error" on macOS**; that last group ties macOS builds to one
+  specific personal Apple Developer Team, see that section's final note),
   `test/models/goal_reminders_test.dart` (new), `test/widget_test.dart`,
   plus auto-generated platform scaffolding (`ios/Podfile`, `macos/Podfile`,
   both new; `ios/Flutter/{Debug,Release}.xcconfig`, `macos/Flutter/
@@ -188,6 +186,19 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
   GeneratedPluginRegistrant.swift` — all Flutter-tooling-generated in
   response to the new plugin, legitimate and meant to be committed
   alongside it, not manual edits).
+- The sixth session's **second batch — uncommitted**: the Note field fix
+  (`lib/models/tracked_block.dart`, `lib/features/log_activity/widgets/
+  log_activity_sheet.dart`, `lib/features/log_activity/
+  activities_screen.dart`, `test/widget_test.dart`) and the Firestore
+  isolation verification (no code changes — see **Verified: per-user
+  Firestore isolation**, a live check only). Ask before committing, per
+  this repo's `CLAUDE.md` — a prior commit/push approval doesn't carry
+  forward to a new batch.
+- A stray duplicate clone of this repo that existed briefly at
+  `/Users/alexandrospanagiotidis/DriVector/Calendar/calendar/` (see the
+  sign-up bug section for how it got there) has been **deleted** — it had
+  nothing beyond a signing edit already captured in the real working
+  copy, confirmed before removing it.
 - Commit author identity on this repo was auto-detected from the local
   username/hostname (`Alexandros Panagiotidis
   <alexandrospanagiotidis@192.168.1.5>`) rather than a real email — flagged
@@ -483,6 +494,73 @@ fix: `macos/Runner.xcodeproj/project.pbxproj` (`DEVELOPMENT_TEAM` +
 back to its exact pre-session state — the diagnostic probe was used
 twice (once to find the bug, once to confirm the fix) and reverted both
 times, no trace left in the repo.
+
+## Note field: actually saved and shown now (sixth session)
+
+Follow-up on a gap flagged (not fixed) back in the fifth session: the Log
+activity sheet's **Note** field let you type freely, but `TrackedBlock`
+had no `note` field at all — whatever was typed was silently discarded
+on save, with no error and no indication anything was lost.
+
+- **`lib/models/tracked_block.dart`** — added `note` (`String?`, optional,
+  defaults to `null`), round-tripped through `toMap`/`fromMap`. Every
+  other `TrackedBlock(...)` construction site in the app (goal
+  completion's auto-generated blocks, the Day view's add-block sheet,
+  mock/dummy seed data) leaves it unset — `null` is the correct default
+  everywhere except the one place that actually collects a note.
+- **`log_activity_sheet.dart`**'s `_save()` — now passes
+  `note: draft.note.trim().isEmpty ? null : draft.note.trim()`, matching
+  the same "empty means absent, not an empty string" convention the rest
+  of this model already uses (e.g. `Goal.reminderMinutesBefore`).
+- **`activities_screen.dart`**'s `_ActivityRow` — renders the note as a
+  small line under the time/source line when present, same plain mono
+  style as that line, nothing shown when there isn't one.
+- Two new widget tests (`test/widget_test.dart`): a note typed and saved
+  round-trips onto the resulting `TrackedBlock` and actually renders in
+  the Activities list; leaving the note field untouched saves `null`, not
+  an empty string.
+
+Verified: `flutter analyze` clean, all 134 tests pass (132 + 2 new).
+
+## Verified: per-user Firestore isolation (sixth session)
+
+Last open item from the **Authentication + Firestore backend** section's
+own "not yet done" list — the security rules (`firestore.rules`, every
+collection scoped to `request.auth.uid == uid` in the path) always
+*looked* correct, but had never actually been exercised with two real
+accounts against the live project. `fake_cloud_firestore` (what this
+project's whole test suite runs against) doesn't enforce security rules
+at all, so no amount of the existing 134 tests could have caught a rule
+misconfiguration — this genuinely needed a live check.
+
+Method: a temporary probe in `main.dart` (same technique as the
+keychain-error diagnosis above — used once, then fully reverted, no
+trace left), run via `flutter run -d macos` against the real
+`trackmyday-6380a` project:
+1. Create throwaway account A, write a doc under `users/{uidA}/
+   categories/probe`.
+2. Sign out, create throwaway account B, attempt to **read** A's doc —
+   confirms it's rejected, not just "would be inconvenient to guess."
+3. Account B writes its own `users/{uidB}/categories/probe` — confirms
+   a user can still write their own data (the rule isn't accidentally
+   blocking everyone).
+4. Sign out, sign back in as A, attempt to **read** B's doc — confirms
+   the block works in both directions, not just one.
+5. Each account deletes its own doc and its own account
+   (`FirebaseAuth.currentUser!.delete()`) before the probe exits — no
+   leftover test accounts or documents in the real project.
+
+Result — **all three checks passed**, confirmed against the live
+project, not assumed from reading the rules file:
+```
+PASS — B blocked from reading A's doc: [cloud_firestore/permission-denied] ...
+PASS — B can write its own doc
+PASS — A blocked from reading B's doc: [cloud_firestore/permission-denied] ...
+```
+Both throwaway accounts and their test documents were fully cleaned up
+by the probe itself before it exited. No code changes — this section
+exists purely as a record that the isolation guarantee has now been
+checked for real, closing out that line item.
 
 ## Goal detail sheet: week navigation (fifth session)
 
@@ -1622,9 +1700,9 @@ Two new widget tests cover this (`test/widget_test.dart`, the two
 crash in the first place.
 
 ### Not yet done — pick up here
-1. Test a **second account** to confirm per-user Firestore data isolation
-   (one user can't see another's categories/goals/blocks) — not yet done,
-   only single-account testing so far.
+1. ~~Test a second account to confirm per-user Firestore data
+   isolation~~ — **done, sixth session**, see **Verified: per-user
+   Firestore isolation**.
 2. No password-reset flow, no email verification requirement, no
    Google/Apple sign-in — email/password only, matching what was asked for.
    Worth asking the user if any of those are wanted before considering auth
