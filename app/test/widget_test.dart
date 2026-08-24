@@ -129,6 +129,16 @@ Future<List<Override>> _signedInOnboardedNoActivityOverrides() async {
   ];
 }
 
+/// GoalEditSheet is a 4-step wizard (Category → Name & dates → Schedule →
+/// Reminders) — steps are strictly linear, reached only via "NEXT", so any
+/// test that needs a field past step 1 has to walk there first.
+Future<void> _goalSheetNext(WidgetTester tester, [int times = 1]) async {
+  for (var i = 0; i < times; i++) {
+    await tester.tap(find.text('NEXT'));
+    await tester.pumpAndSettle();
+  }
+}
+
 void main() {
   testWidgets('Day view renders the mock day without layout errors', (
     WidgetTester tester,
@@ -1126,6 +1136,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('EDIT'));
       await tester.pumpAndSettle();
+      await _goalSheetNext(tester); // step 1 (Category) -> step 2 (Name & dates)
 
       final nameField = find.descendant(
         of: find.byType(GoalEditSheet),
@@ -1167,6 +1178,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('EDIT'));
       await tester.pumpAndSettle();
+      await _goalSheetNext(tester); // step 1 (Category) -> step 2 (Name & dates)
 
       final nameField = find.descendant(
         of: find.byType(GoalEditSheet),
@@ -1205,6 +1217,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('EDIT'));
       await tester.pumpAndSettle();
+      await _goalSheetNext(tester); // step 1 (Category) -> step 2 (Name & dates)
 
       final nameField = find.descendant(
         of: find.byType(GoalEditSheet),
@@ -1241,6 +1254,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('+ NEW GOAL'));
       await tester.pumpAndSettle();
+      await _goalSheetNext(tester); // step 1 (Category) -> step 2 (Name & dates)
 
       final nameField = find.descendant(
         of: find.byType(GoalEditSheet),
@@ -1312,6 +1326,8 @@ void main() {
 
       await tester.tap(find.text('EDIT'));
       await tester.pumpAndSettle();
+      // Schedule is step 3 (Category -> Name & dates -> Schedule).
+      await _goalSheetNext(tester, 2);
 
       expect(tester.takeException(), isNull);
       // Mon-Fri should show the real 09:00-18:00 range chips; Sat/Sun have no
@@ -1348,16 +1364,32 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('New goal'), findsOneWidget);
-    // Every day defaults to one 30-min entry — both the day's own total and
-    // its single entry's stepper read "30 m", so 7 days × 2 = 14.
+    // Step 1: Category — nothing to do, a default is already selected.
+    await _goalSheetNext(tester);
+
+    // Step 2: Name & dates.
+    final nameField = find.descendant(
+      of: find.byType(GoalEditSheet),
+      matching: find.byType(TextField),
+    );
+    expect(
+      nameField,
+      findsOneWidget,
+      reason: 'exactly one Name field in the goal sheet',
+    );
+    await tester.enterText(nameField, 'Reading');
+    await tester.pumpAndSettle();
+    await _goalSheetNext(tester);
+
+    // Step 3: Schedule. Every day defaults to one 30-min entry — both the
+    // day's own total and its single entry's stepper read "30 m", so 7
+    // days × 2 = 14.
     expect(find.text('30m'), findsNWidgets(14));
 
     // Bump Monday's target by 3 steps of 5 minutes (30m -> 45m). Scrolling
-    // happens before text entry — a drag gesture landing on the Name field
-    // afterwards can disturb its content, so do all scrolling first. "Mon"
-    // and its entry's "+" sit in different rows now (header row vs. entry
-    // row), sharing the day section's Column as their nearest common
-    // ancestor.
+    // happens before tapping — "Mon" and its entry's "+" sit in different
+    // rows now (header row vs. entry row), sharing the day section's
+    // Column as their nearest common ancestor.
     final mondaySection = find
         .ancestor(
           of: find.textContaining('Mon'), // now "Mon d MMM", e.g. "Mon 17 Aug"
@@ -1378,18 +1410,11 @@ void main() {
     // Monday's total and its one entry both now read "45m".
     expect(find.text('45m'), findsNWidgets(2));
 
-    final nameField = find.descendant(
-      of: find.byType(GoalEditSheet),
-      matching: find.byType(TextField),
-    );
-    expect(
-      nameField,
-      findsOneWidget,
-      reason: 'exactly one Name field in the goal sheet',
-    );
-    await tester.enterText(nameField, 'Reading');
+    await tester.ensureVisible(find.text('NEXT'));
     await tester.pumpAndSettle();
+    await _goalSheetNext(tester);
 
+    // Step 4: Reminders — submit without touching it.
     await tester.ensureVisible(find.text('CREATE GOAL'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('CREATE GOAL'));
@@ -1418,19 +1443,24 @@ void main() {
     await tester.tap(find.text('+ NEW GOAL'));
     await tester.pumpAndSettle();
 
+    // Step 1: Category -> Step 2: Name & dates.
+    await _goalSheetNext(tester);
+    final nameField = find.descendant(
+      of: find.byType(GoalEditSheet),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(nameField, 'Reminder test');
+    await tester.pumpAndSettle();
+
+    // Step 3: Schedule -> Step 4: Reminders.
+    await _goalSheetNext(tester, 2);
+
     // Defaults to no reminder.
     expect(find.text('None'), findsOneWidget);
 
     await tester.ensureVisible(find.text('15 min before'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('15 min before'));
-    await tester.pumpAndSettle();
-
-    final nameField = find.descendant(
-      of: find.byType(GoalEditSheet),
-      matching: find.byType(TextField),
-    );
-    await tester.enterText(nameField, 'Reminder test');
     await tester.pumpAndSettle();
 
     await tester.ensureVisible(find.text('CREATE GOAL'));
@@ -1461,6 +1491,8 @@ void main() {
 
       await tester.tap(find.text('+ NEW GOAL'));
       await tester.pumpAndSettle();
+      // Schedule is step 3 (Category -> Name & dates -> Schedule).
+      await _goalSheetNext(tester, 2);
 
       // The "×" remove control: a real 32x32 bordered square, not a bare
       // glyph — same footprint family as the +/- steppers next to it.
@@ -1524,6 +1556,8 @@ void main() {
 
       await tester.tap(find.text('+ NEW GOAL'));
       await tester.pumpAndSettle();
+      // Schedule is step 3 (Category -> Name & dates -> Schedule).
+      await _goalSheetNext(tester, 2);
 
       final mondaySection = find
           .ancestor(
@@ -1595,6 +1629,7 @@ void main() {
 
       await tester.tap(find.text('+ NEW GOAL'));
       await tester.pumpAndSettle();
+      await _goalSheetNext(tester); // step 1 (Category) -> step 2 (Name & dates)
 
       final nameField = find.descendant(
         of: find.byType(GoalEditSheet),
@@ -1602,6 +1637,7 @@ void main() {
       );
       await tester.enterText(nameField, 'Piano');
       await tester.pumpAndSettle();
+      await _goalSheetNext(tester, 2); // -> step 3 (Schedule) -> step 4 (Reminders)
 
       await tester.ensureVisible(find.text('CREATE GOAL'));
       await tester.pumpAndSettle();
@@ -1645,6 +1681,7 @@ void main() {
 
       await tester.tap(find.text('+ NEW GOAL'));
       await tester.pumpAndSettle();
+      await _goalSheetNext(tester); // step 1 (Category) -> step 2 (Name & dates)
 
       final nameField = find.descendant(
         of: find.byType(GoalEditSheet),
@@ -1652,6 +1689,7 @@ void main() {
       );
       await tester.enterText(nameField, 'Piano');
       await tester.pumpAndSettle();
+      await _goalSheetNext(tester, 2); // -> step 3 (Schedule) -> step 4 (Reminders)
 
       await tester.ensureVisible(find.text('CREATE GOAL'));
       await tester.pumpAndSettle();
@@ -1699,6 +1737,8 @@ void main() {
 
     await tester.tap(find.text('+ NEW GOAL'));
     await tester.pumpAndSettle();
+    // Schedule is step 3 (Category -> Name & dates -> Schedule).
+    await _goalSheetNext(tester, 2);
 
     final mondaySection = find
         .ancestor(
@@ -2266,13 +2306,7 @@ void main() {
       await tester.tap(find.text('+ NEW GOAL'));
       await tester.pumpAndSettle();
 
-      final nameField = find.descendant(
-        of: find.byType(GoalEditSheet),
-        matching: find.byType(TextField),
-      );
-      await tester.enterText(nameField, 'Reading');
-      await tester.pumpAndSettle();
-
+      // Step 1: Category.
       final readingCategoryChip = find.descendant(
         of: find.byType(GoalEditSheet),
         matching: find.text('reading'),
@@ -2281,6 +2315,16 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(readingCategoryChip);
       await tester.pumpAndSettle();
+      await _goalSheetNext(tester);
+
+      // Step 2: Name & dates.
+      final nameField = find.descendant(
+        of: find.byType(GoalEditSheet),
+        matching: find.byType(TextField),
+      );
+      await tester.enterText(nameField, 'Reading');
+      await tester.pumpAndSettle();
+      await _goalSheetNext(tester, 2); // -> step 3 (Schedule) -> step 4 (Reminders)
 
       await tester.ensureVisible(find.text('CREATE GOAL'));
       await tester.pumpAndSettle();
@@ -2549,6 +2593,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('EDIT'));
       await tester.pumpAndSettle();
+      // Reminders is step 4 (Category -> Name & dates -> Schedule -> Reminders).
+      await _goalSheetNext(tester, 3);
 
       // Selected chips are a solid accent fill; unselected ones are only
       // bordered — so the fill is what proves it prefilled.

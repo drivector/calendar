@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../models/category.dart';
 import '../../../models/clock_time.dart';
 import '../../../models/goal.dart';
 import '../../../models/goal_progress.dart';
@@ -43,6 +44,13 @@ Map<int, List<DayScheduleEntry>> _defaultSchedule() => {
   for (var weekday = 1; weekday <= 7; weekday++)
     weekday: [const DayScheduleEntry.duration(Duration(minutes: 30))],
 };
+
+/// The sheet is a 4-step wizard, not one long scroll — steps 1–3 build the
+/// goal itself and can't be skipped ahead of; step 4 (reminders) is the
+/// last stop but never blocks saving, since "no reminder" is already a
+/// valid, default choice.
+const _stepLabels = ['Category', 'Name & dates', 'Schedule', 'Reminders'];
+const _stepCount = 4;
 
 /// Create or edit a goal. Pass [existing] to edit it in place (with a
 /// delete option); omit it to create a new one. [initialCategoryId] only
@@ -118,6 +126,11 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
   late DateTime _endDate =
       widget.existing?.endDate ?? _startDate.add(ongoingGoalSpan);
   late int? _reminderMinutesBefore = widget.existing?.reminderMinutesBefore;
+
+  // 1-indexed, matches _stepLabels. Always starts at the first step —
+  // editing an existing goal re-walks the wizard too, rather than
+  // special-casing a jump straight to some overview.
+  int _step = 1;
 
   // One unified per-day schedule — each day holds a list of entries, each
   // either a plain duration or a clock time range, summed for that day's
@@ -311,6 +324,12 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
     });
   }
 
+  void _goToStep(int step) => setState(() => _step = step);
+
+  void _next() => setState(() => _step = (_step + 1).clamp(1, _stepCount));
+
+  void _back() => setState(() => _step = (_step - 1).clamp(1, _stepCount));
+
   void _save() {
     final goal = Goal(
       id:
@@ -335,6 +354,207 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
   void _delete() {
     widget.ref.read(goalsRepositoryProvider).remove(widget.existing!.id);
     Navigator.of(context).pop();
+  }
+
+  Widget _buildCategoryStep(List<Category> categories) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _Label('Category'),
+        Wrap(
+          spacing: AppSpacing.s2,
+          runSpacing: AppSpacing.s2,
+          children: [
+            for (final category in categories)
+              CategoryChip(
+                label: category.name.toLowerCase(),
+                color: category.color,
+                selected: _categoryId == category.id,
+                onTap: () => setState(() => _categoryId = category.id),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNameAndDatesStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _Label('Name'),
+        TextField(
+          controller: _nameController,
+          style: AppTextStyles.label(),
+          decoration: const InputDecoration(isDense: true),
+        ),
+        const SizedBox(height: AppSpacing.s3),
+        _Label('Dates'),
+        Row(
+          children: [
+            Expanded(
+              child: _DateField(
+                label: 'Start date',
+                value: _startDate,
+                onTap: () => _pickDate(isStart: true),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.s2),
+            Expanded(
+              child: _DateField(
+                label: 'End date',
+                value: _endDate,
+                onTap: () => _pickDate(isStart: false),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.s1),
+        Text(
+          'leave the default end date for an ongoing habit; shorten it for a dated challenge',
+          style: AppTextStyles.mono(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildScheduleStep(DateTime weekStart) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            _Label('Daily targets'),
+            _SmallActionButton(
+              label: 'same every day',
+              onTap: _applySameEveryDay,
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.s1),
+        Text(
+          'each day can mix any number of plain durations and time '
+          'ranges — a time range\'s duration is derived from its clock '
+          'times automatically',
+          style: AppTextStyles.mono(),
+        ),
+        const SizedBox(height: AppSpacing.s2),
+        for (var weekday = 1; weekday <= 7; weekday++)
+          _DayScheduleSection(
+            label: DateFormat(
+              'EEE d MMM',
+            ).format(weekStart.add(Duration(days: weekday - 1))),
+            entries: _schedule[weekday] ?? const [],
+            total: _dayTotal(weekday),
+            onAddDuration: () => _addDurationEntry(weekday),
+            onAddTimeRange: () => _addTimeRangeEntry(weekday),
+            onRemove: (index) => _removeEntry(weekday, index),
+            onStepDuration: (index, delta) =>
+                _stepDurationEntry(weekday, index, delta),
+            onEditRangeStart: (index) => _editRangeStart(weekday, index),
+            onEditRangeEnd: (index) => _editRangeEnd(weekday, index),
+          ),
+        const SizedBox(height: AppSpacing.s1),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('WEEKLY TOTAL', style: AppTextStyles.kicker()),
+            Text(
+              formatDuration(_weeklyTotal),
+              style: AppTextStyles.mono(color: AppColors.text),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRemindersStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _Label('Reminder'),
+        Wrap(
+          spacing: AppSpacing.s2,
+          runSpacing: AppSpacing.s2,
+          children: [
+            for (final option in _ReminderOption.values)
+              _ReminderChip(
+                label: option.label,
+                selected: option.minutesBefore == _reminderMinutesBefore,
+                onTap: () =>
+                    setState(() => _reminderMinutesBefore = option.minutesBefore),
+              ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.s1),
+        Text(
+          'only fires for daily targets with a clock time, not a plain duration',
+          style: AppTextStyles.mono(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFooter() {
+    final isLastStep = _step == _stepCount;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        GestureDetector(
+          onTap: isLastStep ? _save : _next,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            width: double.infinity,
+            constraints: const BoxConstraints(minHeight: 44),
+            alignment: Alignment.centerLeft,
+            color: AppColors.accent,
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s3),
+            child: Text(
+              isLastStep
+                  ? (_isEditing ? 'SAVE CHANGES' : 'CREATE GOAL')
+                  : 'NEXT',
+              style: AppTextStyles.small(color: AppColors.bg),
+            ),
+          ),
+        ),
+        if (_step > 1) ...[
+          const SizedBox(height: AppSpacing.s2),
+          GestureDetector(
+            onTap: _back,
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              width: double.infinity,
+              constraints: const BoxConstraints(minHeight: 44),
+              alignment: Alignment.centerLeft,
+              child: Text('BACK', style: AppTextStyles.small(color: AppColors.text)),
+            ),
+          ),
+        ],
+        if (_isEditing) ...[
+          const SizedBox(height: AppSpacing.s2),
+          GestureDetector(
+            onTap: _delete,
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              width: double.infinity,
+              constraints: const BoxConstraints(minHeight: 44),
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'DELETE GOAL',
+                style: AppTextStyles.small(color: AppColors.accent),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
   }
 
   @override
@@ -373,13 +593,18 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
               constraints: BoxConstraints(
                 maxHeight: MediaQuery.of(context).size.height * 0.85,
               ),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(AppSpacing.s3),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.s3,
+                      AppSpacing.s3,
+                      AppSpacing.s3,
+                      0,
+                    ),
+                    child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
@@ -393,161 +618,32 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: AppSpacing.s3),
-                    _Label('Name'),
-                    TextField(
-                      controller: _nameController,
-                      style: AppTextStyles.label(),
-                      decoration: const InputDecoration(isDense: true),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.s3,
+                      AppSpacing.s3,
+                      AppSpacing.s3,
+                      0,
                     ),
-                    const SizedBox(height: AppSpacing.s3),
-                    _Label('Category'),
-                    Wrap(
-                      spacing: AppSpacing.s2,
-                      runSpacing: AppSpacing.s2,
-                      children: [
-                        for (final category in categories)
-                          CategoryChip(
-                            label: category.name.toLowerCase(),
-                            color: category.color,
-                            selected: _categoryId == category.id,
-                            onTap: () =>
-                                setState(() => _categoryId = category.id),
-                          ),
-                      ],
+                    child: _StepIndicator(step: _step, onStepTap: _goToStep),
+                  ),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(AppSpacing.s3),
+                      child: switch (_step) {
+                        1 => _buildCategoryStep(categories),
+                        2 => _buildNameAndDatesStep(),
+                        3 => _buildScheduleStep(weekStart),
+                        _ => _buildRemindersStep(),
+                      },
                     ),
-                    const SizedBox(height: AppSpacing.s3),
-                    _Label('Dates'),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _DateField(
-                            label: 'Start date',
-                            value: _startDate,
-                            onTap: () => _pickDate(isStart: true),
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.s2),
-                        Expanded(
-                          child: _DateField(
-                            label: 'End date',
-                            value: _endDate,
-                            onTap: () => _pickDate(isStart: false),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.s1),
-                    Text(
-                      'leave the default end date for an ongoing habit; shorten it for a dated challenge',
-                      style: AppTextStyles.mono(),
-                    ),
-                    const SizedBox(height: AppSpacing.s3),
-                    _Label('Reminder'),
-                    Wrap(
-                      spacing: AppSpacing.s2,
-                      runSpacing: AppSpacing.s2,
-                      children: [
-                        for (final option in _ReminderOption.values)
-                          _ReminderChip(
-                            label: option.label,
-                            selected: option.minutesBefore ==
-                                _reminderMinutesBefore,
-                            onTap: () => setState(
-                              () => _reminderMinutesBefore =
-                                  option.minutesBefore,
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.s1),
-                    Text(
-                      'only fires for daily targets with a clock time, not a plain duration',
-                      style: AppTextStyles.mono(),
-                    ),
-                    const SizedBox(height: AppSpacing.s3),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        _Label('Daily targets'),
-                        _SmallActionButton(
-                          label: 'same every day',
-                          onTap: _applySameEveryDay,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.s1),
-                    Text(
-                      'each day can mix any number of plain durations and time '
-                      'ranges — a time range\'s duration is derived from its clock '
-                      'times automatically',
-                      style: AppTextStyles.mono(),
-                    ),
-                    const SizedBox(height: AppSpacing.s2),
-                    for (var weekday = 1; weekday <= 7; weekday++)
-                      _DayScheduleSection(
-                        label: DateFormat('EEE d MMM')
-                            .format(weekStart.add(Duration(days: weekday - 1))),
-                        entries: _schedule[weekday] ?? const [],
-                        total: _dayTotal(weekday),
-                        onAddDuration: () => _addDurationEntry(weekday),
-                        onAddTimeRange: () => _addTimeRangeEntry(weekday),
-                        onRemove: (index) => _removeEntry(weekday, index),
-                        onStepDuration: (index, delta) =>
-                            _stepDurationEntry(weekday, index, delta),
-                        onEditRangeStart: (index) =>
-                            _editRangeStart(weekday, index),
-                        onEditRangeEnd: (index) =>
-                            _editRangeEnd(weekday, index),
-                      ),
-                    const SizedBox(height: AppSpacing.s1),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('WEEKLY TOTAL', style: AppTextStyles.kicker()),
-                        Text(
-                          formatDuration(_weeklyTotal),
-                          style: AppTextStyles.mono(color: AppColors.text),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.s4),
-                    GestureDetector(
-                      onTap: _save,
-                      behavior: HitTestBehavior.opaque,
-                      child: Container(
-                        width: double.infinity,
-                        constraints: const BoxConstraints(minHeight: 44),
-                        alignment: Alignment.centerLeft,
-                        color: AppColors.accent,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.s3,
-                        ),
-                        child: Text(
-                          _isEditing ? 'SAVE CHANGES' : 'CREATE GOAL',
-                          style: AppTextStyles.small(color: AppColors.bg),
-                        ),
-                      ),
-                    ),
-                    if (_isEditing) ...[
-                      const SizedBox(height: AppSpacing.s2),
-                      GestureDetector(
-                        onTap: _delete,
-                        behavior: HitTestBehavior.opaque,
-                        child: Container(
-                          width: double.infinity,
-                          constraints: const BoxConstraints(minHeight: 44),
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            'DELETE GOAL',
-                            style: AppTextStyles.small(color: AppColors.accent),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(AppSpacing.s3),
+                    child: _buildFooter(),
+                  ),
+                ],
               ),
             ),
           ),
@@ -644,6 +740,51 @@ class _UnsavedChangesDialog extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// "STEP X OF 4 · LABEL" plus a 4-segment progress bar — segments up to and
+/// including the current step are filled in accent, the rest are a plain
+/// divider line. A segment for a step already passed through is tappable
+/// (jump back without re-walking Next/Back); a segment for a step not
+/// reached yet is inert — steps 1–3 build the goal in order and aren't
+/// skippable ahead of, matching why "NEXT" is the only forward control.
+class _StepIndicator extends StatelessWidget {
+  const _StepIndicator({required this.step, required this.onStepTap});
+
+  final int step;
+  final ValueChanged<int> onStepTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'STEP $step OF $_stepCount · ${_stepLabels[step - 1].toUpperCase()}',
+          style: AppTextStyles.kicker(),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            for (var i = 1; i <= _stepCount; i++) ...[
+              if (i > 1) const SizedBox(width: 4),
+              Expanded(
+                child: GestureDetector(
+                  onTap: i <= step ? () => onStepTap(i) : null,
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    height: 3,
+                    color: i <= step ? AppColors.accent : AppColors.divider,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
     );
   }
 }
