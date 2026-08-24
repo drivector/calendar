@@ -72,7 +72,9 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
     ];
     final earliestMinute = starts.isEmpty
         ? 7 * 60
-        : starts.map((d) => d.hour * 60 + d.minute).reduce((a, b) => a < b ? a : b);
+        : starts
+              .map((d) => d.hour * 60 + d.minute)
+              .reduce((a, b) => a < b ? a : b);
     return ((earliestMinute - 60).clamp(0, 24 * 60 - 1)) * _pxPerMinute;
   }
 
@@ -111,13 +113,15 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
     return DateSwipeNav(
       onPrevious: () {
         final current = ref.read(selectedDateProvider);
-        ref.read(selectedDateProvider.notifier).state =
-            current.subtract(const Duration(days: 1));
+        ref.read(selectedDateProvider.notifier).state = current.subtract(
+          const Duration(days: 1),
+        );
       },
       onNext: () {
         final current = ref.read(selectedDateProvider);
-        ref.read(selectedDateProvider.notifier).state =
-            current.add(const Duration(days: 1));
+        ref.read(selectedDateProvider.notifier).state = current.add(
+          const Duration(days: 1),
+        );
       },
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -152,7 +156,8 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
                       height: _dayHeight,
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
-                        onTapUp: (details) => _handleLaneTap(details, isPlan: true),
+                        onTapUp: (details) =>
+                            _handleLaneTap(details, isPlan: true),
                         child: const SizedBox.expand(),
                       ),
                     ),
@@ -163,7 +168,8 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
                     height: _dayHeight,
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
-                      onTapUp: (details) => _handleLaneTap(details, isPlan: false),
+                      onTapUp: (details) =>
+                          _handleLaneTap(details, isPlan: false),
                       child: const SizedBox.expand(),
                     ),
                   ),
@@ -176,7 +182,10 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
                         width: laneWidth,
                         child: PlanBlockWidget(
                           block: block,
-                          category: resolveCategory(categories, block.categoryId),
+                          category: resolveCategory(
+                            categories,
+                            block.categoryId,
+                          ),
                         ),
                       ),
                   for (final block in tracked)

@@ -16,41 +16,46 @@ DateTime _today() {
 
 final selectedDateProvider = StateProvider<DateTime>((ref) => _today());
 
-final dayLayerProvider =
-    StateProvider<DayLayer>((ref) => DayLayer.planAndActual);
+final dayLayerProvider = StateProvider<DayLayer>(
+  (ref) => DayLayer.planAndActual,
+);
 
 bool isSameDay(DateTime a, DateTime b) =>
     a.year == b.year && a.month == b.month && a.day == b.day;
 
 final plannedBlocksRepositoryProvider =
     Provider<FirestoreListRepository<PlannedBlock>>((ref) {
-  return FirestoreListRepository<PlannedBlock>(
-    firestore: ref.watch(firestoreProvider),
-    uid: ref.watch(currentUidProvider),
-    collectionName: 'plannedBlocks',
-    fromMap: PlannedBlock.fromMap,
-    toMap: (block) => block.toMap(),
-    idOf: (block) => block.id,
-  );
-});
+      return FirestoreListRepository<PlannedBlock>(
+        firestore: ref.watch(firestoreProvider),
+        uid: ref.watch(currentUidProvider),
+        collectionName: 'plannedBlocks',
+        fromMap: PlannedBlock.fromMap,
+        toMap: (block) => block.toMap(),
+        idOf: (block) => block.id,
+      );
+    });
 
 final trackedBlocksRepositoryProvider =
     Provider<FirestoreListRepository<TrackedBlock>>((ref) {
-  return FirestoreListRepository<TrackedBlock>(
-    firestore: ref.watch(firestoreProvider),
-    uid: ref.watch(currentUidProvider),
-    collectionName: 'trackedBlocks',
-    fromMap: TrackedBlock.fromMap,
-    toMap: (block) => block.toMap(),
-    idOf: (block) => block.id,
-  );
-});
+      return FirestoreListRepository<TrackedBlock>(
+        firestore: ref.watch(firestoreProvider),
+        uid: ref.watch(currentUidProvider),
+        collectionName: 'trackedBlocks',
+        fromMap: TrackedBlock.fromMap,
+        toMap: (block) => block.toMap(),
+        idOf: (block) => block.id,
+      );
+    });
 
-final allPlannedBlocksStreamProvider = StreamProvider<List<PlannedBlock>>((ref) {
+final allPlannedBlocksStreamProvider = StreamProvider<List<PlannedBlock>>((
+  ref,
+) {
   return ref.watch(plannedBlocksRepositoryProvider).watchAll();
 });
 
-final allTrackedBlocksStreamProvider = StreamProvider<List<TrackedBlock>>((ref) {
+final allTrackedBlocksStreamProvider = StreamProvider<List<TrackedBlock>>((
+  ref,
+) {
   return ref.watch(trackedBlocksRepositoryProvider).watchAll();
 });
 

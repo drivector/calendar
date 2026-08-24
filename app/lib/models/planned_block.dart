@@ -23,7 +23,8 @@ class PlannedBlock {
 
   Duration get duration => end.difference(start);
 
-  factory PlannedBlock.fromMap(String id, Map<String, dynamic> map) => PlannedBlock(
+  factory PlannedBlock.fromMap(String id, Map<String, dynamic> map) =>
+      PlannedBlock(
         id: id,
         start: DateTime.parse(map['start'] as String),
         end: DateTime.parse(map['end'] as String),
@@ -34,11 +35,11 @@ class PlannedBlock {
       );
 
   Map<String, dynamic> toMap() => {
-        'start': start.toIso8601String(),
-        'end': end.toIso8601String(),
-        'title': title,
-        'categoryId': categoryId,
-        'sourceCalendarId': sourceCalendarId,
-        'goalId': goalId,
-      };
+    'start': start.toIso8601String(),
+    'end': end.toIso8601String(),
+    'title': title,
+    'categoryId': categoryId,
+    'sourceCalendarId': sourceCalendarId,
+    'goalId': goalId,
+  };
 }

@@ -52,8 +52,12 @@ class _DashedRectPainter extends CustomPainter {
       ..strokeWidth = strokeWidth
       ..style = PaintingStyle.stroke;
 
-    final rect =
-        Rect.fromLTWH(0, 0, size.width, size.height).deflate(strokeWidth / 2);
+    final rect = Rect.fromLTWH(
+      0,
+      0,
+      size.width,
+      size.height,
+    ).deflate(strokeWidth / 2);
     final path = Path()..addRect(rect);
 
     for (final metric in path.computeMetrics()) {

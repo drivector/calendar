@@ -7,7 +7,6 @@ import '../../../models/clock_time.dart';
 import '../../../models/goal.dart';
 import '../../../models/goal_progress.dart';
 import '../../../shared/widgets/category_chip.dart';
-import '../../../shared/widgets/segmented_control.dart';
 import '../../../state/categories_providers.dart';
 import '../../../state/day_view_providers.dart';
 import '../../../state/goals_providers.dart';
@@ -23,24 +22,27 @@ const _maxPerEntry = Duration(hours: 8);
 const _defaultRangeStart = TimeOfDay(hour: 9, minute: 0);
 
 Map<int, List<DayScheduleEntry>> _defaultSchedule() => {
-      for (var weekday = 1; weekday <= 7; weekday++)
-        weekday: [const DayScheduleEntry.duration(Duration(minutes: 30))],
-    };
+  for (var weekday = 1; weekday <= 7; weekday++)
+    weekday: [const DayScheduleEntry.duration(Duration(minutes: 30))],
+};
 
 /// Create or edit a goal. Pass [existing] to edit it in place (with a
-/// delete option); omit it to create a new one.
+/// delete option); omit it to create a new one. [initialCategoryId] only
+/// applies when creating (e.g. tapping a specific category's chip during
+/// onboarding) — ignored when [existing] is set, since an edit always
+/// starts from that goal's own category.
 Future<void> showGoalEditSheet(
   BuildContext context,
   WidgetRef ref, {
   Goal? existing,
+  String? initialCategoryId,
 }) {
   // A new goal needs a category to default into — a brand-new account
   // starts with none, so tell the user to create one first instead of
   // opening a form with nothing to select.
   if (existing == null && ref.read(categoriesProvider).isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Create a category first')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Create a category first')));
     return Future.value();
   }
 
@@ -57,14 +59,24 @@ Future<void> showGoalEditSheet(
     // bottom_sheet.dart) — there's no hook to guard that path, so it's
     // disabled rather than left as a silent bypass of the prompt.
     enableDrag: false,
-    builder: (context) => GoalEditSheet(existing: existing, ref: ref),
+    builder: (context) => GoalEditSheet(
+      existing: existing,
+      initialCategoryId: initialCategoryId,
+      ref: ref,
+    ),
   );
 }
 
 class GoalEditSheet extends StatefulWidget {
-  const GoalEditSheet({super.key, this.existing, required this.ref});
+  const GoalEditSheet({
+    super.key,
+    this.existing,
+    this.initialCategoryId,
+    required this.ref,
+  });
 
   final Goal? existing;
+  final String? initialCategoryId;
   final WidgetRef ref;
 
   @override
@@ -72,11 +84,13 @@ class GoalEditSheet extends StatefulWidget {
 }
 
 class _GoalEditSheetState extends State<GoalEditSheet> {
-  late final _nameController =
-      TextEditingController(text: widget.existing?.name ?? '');
+  late final _nameController = TextEditingController(
+    text: widget.existing?.name ?? '',
+  );
   late String _categoryId =
-      widget.existing?.categoryId ?? widget.ref.read(categoriesProvider).first.id;
-  late GoalType _type = widget.existing?.type ?? GoalType.target;
+      widget.existing?.categoryId ??
+      widget.initialCategoryId ??
+      widget.ref.read(categoriesProvider).first.id;
   // Defaults to the day the app is currently showing, not the device's real
   // clock — the app's own "today" (`selectedDateProvider`) is what decides
   // whether a goal is active, so a brand-new goal should start there, or it
@@ -113,19 +127,18 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
   }
 
   Map<String, dynamic> _snapshotMap() => Goal(
-        id: '_',
-        name: _nameController.text.trim().isEmpty
-            ? 'Untitled goal'
-            : _nameController.text.trim(),
-        categoryId: _categoryId,
-        type: _type,
-        scheduleByWeekday: {
-          for (var weekday = 1; weekday <= 7; weekday++)
-            weekday: List.of(_schedule[weekday] ?? const []),
-        },
-        startDate: _startDate,
-        endDate: _endDate,
-      ).toMap();
+    id: '_',
+    name: _nameController.text.trim().isEmpty
+        ? 'Untitled goal'
+        : _nameController.text.trim(),
+    categoryId: _categoryId,
+    scheduleByWeekday: {
+      for (var weekday = 1; weekday <= 7; weekday++)
+        weekday: List.of(_schedule[weekday] ?? const []),
+    },
+    startDate: _startDate,
+    endDate: _endDate,
+  ).toMap();
 
   bool get _hasUnsavedChanges =>
       !const DeepCollectionEquality().equals(_snapshotMap(), _initialSnapshot);
@@ -151,12 +164,14 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
     }
   }
 
-  Duration _dayTotal(int weekday) => (_schedule[weekday] ?? const [])
-      .fold(Duration.zero, (total, e) => total + e.effectiveDuration);
+  Duration _dayTotal(int weekday) => (_schedule[weekday] ?? const []).fold(
+    Duration.zero,
+    (total, e) => total + e.effectiveDuration,
+  );
 
-  Duration get _weeklyTotal => [
-        for (var weekday = 1; weekday <= 7; weekday++) _dayTotal(weekday),
-      ].fold(Duration.zero, (a, b) => a + b);
+  Duration get _weeklyTotal =>
+      [for (var weekday = 1; weekday <= 7; weekday++) _dayTotal(weekday)]
+          .fold(Duration.zero, (a, b) => a + b);
 
   @override
   void dispose() {
@@ -166,23 +181,35 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
 
   void _addDurationEntry(int weekday) {
     setState(() {
-      _schedule[weekday]!.add(const DayScheduleEntry.duration(Duration(minutes: 30)));
+      _schedule[weekday]!.add(
+        const DayScheduleEntry.duration(Duration(minutes: 30)),
+      );
     });
   }
 
   Future<void> _addTimeRangeEntry(int weekday) async {
-    final start = await showTimePicker(context: context, initialTime: _defaultRangeStart);
+    final start = await showTimePicker(
+      context: context,
+      initialTime: _defaultRangeStart,
+    );
     if (start == null || !mounted) return;
     // Suggest half an hour after the start the user just picked, rather
     // than a fixed clock time unrelated to it.
     final suggestedEnd = addMinutes(start, 30);
-    final end = await showTimePicker(context: context, initialTime: suggestedEnd);
+    final end = await showTimePicker(
+      context: context,
+      initialTime: suggestedEnd,
+    );
     if (end == null) return;
     setState(() {
-      _schedule[weekday]!.add(DayScheduleEntry.timeRange(ClockRange(
-        ClockTime(start.hour, start.minute),
-        ClockTime(end.hour, end.minute),
-      )));
+      _schedule[weekday]!.add(
+        DayScheduleEntry.timeRange(
+          ClockRange(
+            ClockTime(start.hour, start.minute),
+            ClockTime(end.hour, end.minute),
+          ),
+        ),
+      );
     });
   }
 
@@ -206,7 +233,10 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
     final current = _schedule[weekday]![index].timeRange!;
     final picked = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay(hour: current.start.hour, minute: current.start.minute),
+      initialTime: TimeOfDay(
+        hour: current.start.hour,
+        minute: current.start.minute,
+      ),
     );
     if (picked == null) return;
     setState(() {
@@ -220,7 +250,10 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
     final current = _schedule[weekday]![index].timeRange!;
     final picked = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay(hour: current.end.hour, minute: current.end.minute),
+      initialTime: TimeOfDay(
+        hour: current.end.hour,
+        minute: current.end.minute,
+      ),
     );
     if (picked == null) return;
     setState(() {
@@ -232,8 +265,9 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
 
   void _applySameEveryDay() {
     setState(() {
-      final mondayEntries =
-          List.of(_schedule[DateTime.monday] ?? const <DayScheduleEntry>[]);
+      final mondayEntries = List.of(
+        _schedule[DateTime.monday] ?? const <DayScheduleEntry>[],
+      );
       for (var weekday = 1; weekday <= 7; weekday++) {
         _schedule[weekday] = List.of(mondayEntries);
       }
@@ -259,12 +293,13 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
 
   void _save() {
     final goal = Goal(
-      id: widget.existing?.id ?? 'goal-${DateTime.now().microsecondsSinceEpoch}',
+      id:
+          widget.existing?.id ??
+          'goal-${DateTime.now().microsecondsSinceEpoch}',
       name: _nameController.text.trim().isEmpty
           ? 'Untitled goal'
           : _nameController.text.trim(),
       categoryId: _categoryId,
-      type: _type,
       scheduleByWeekday: {
         for (var weekday = 1; weekday <= 7; weekday++)
           weekday: List.of(_schedule[weekday] ?? const []),
@@ -303,176 +338,176 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
         if (!didPop) _handleClose();
       },
       child: Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: AppColors.bg,
-          border: Border(top: BorderSide(color: AppColors.text, width: 2)),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
         ),
-        child: SafeArea(
-          top: false,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.85,
-            ),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(AppSpacing.s3),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        _isEditing ? 'Edit goal' : 'New goal',
-                        style: AppTextStyles.title(),
-                      ),
-                      GestureDetector(
-                        onTap: _handleClose,
-                        behavior: HitTestBehavior.opaque,
-                        child: Text('close', style: AppTextStyles.mono()),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.s3),
-                  _Label('Name'),
-                  TextField(
-                    controller: _nameController,
-                    style: AppTextStyles.label(),
-                    decoration: const InputDecoration(isDense: true),
-                  ),
-                  const SizedBox(height: AppSpacing.s3),
-                  _Label('Category'),
-                  Wrap(
-                    spacing: AppSpacing.s2,
-                    runSpacing: AppSpacing.s2,
-                    children: [
-                      for (final category in categories)
-                        CategoryChip(
-                          label: category.name.toLowerCase(),
-                          color: category.color,
-                          selected: _categoryId == category.id,
-                          onTap: () => setState(() => _categoryId = category.id),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: AppColors.bg,
+            border: Border(top: BorderSide(color: AppColors.text, width: 2)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.85,
+              ),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(AppSpacing.s3),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          _isEditing ? 'Edit goal' : 'New goal',
+                          style: AppTextStyles.title(),
                         ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.s3),
-                  _Label('Type'),
-                  SegmentedControl<GoalType>(
-                    selected: _type,
-                    onChanged: (value) => setState(() => _type = value),
-                    options: const [
-                      SegmentedOption(value: GoalType.target, label: 'Target'),
-                      SegmentedOption(value: GoalType.cap, label: 'Cap'),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.s3),
-                  _Label('Dates'),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _DateField(
-                          label: 'Start date',
-                          value: _startDate,
-                          onTap: () => _pickDate(isStart: true),
+                        GestureDetector(
+                          onTap: _handleClose,
+                          behavior: HitTestBehavior.opaque,
+                          child: Text('close', style: AppTextStyles.mono()),
                         ),
-                      ),
-                      const SizedBox(width: AppSpacing.s2),
-                      Expanded(
-                        child: _DateField(
-                          label: 'End date',
-                          value: _endDate,
-                          onTap: () => _pickDate(isStart: false),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.s1),
-                  Text(
-                    'leave the default end date for an ongoing habit; shorten it for a dated challenge',
-                    style: AppTextStyles.mono(),
-                  ),
-                  const SizedBox(height: AppSpacing.s3),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      _Label('Daily targets'),
-                      _SmallActionButton(label: 'same every day', onTap: _applySameEveryDay),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.s1),
-                  Text(
-                    'each day can mix any number of plain durations and time '
-                    'ranges — a time range\'s duration is derived from its clock '
-                    'times automatically',
-                    style: AppTextStyles.mono(),
-                  ),
-                  const SizedBox(height: AppSpacing.s2),
-                  for (var weekday = 1; weekday <= 7; weekday++)
-                    _DayScheduleSection(
-                      label: DateFormat('EEE d MMM')
-                          .format(weekStart.add(Duration(days: weekday - 1))),
-                      entries: _schedule[weekday] ?? const [],
-                      total: _dayTotal(weekday),
-                      onAddDuration: () => _addDurationEntry(weekday),
-                      onAddTimeRange: () => _addTimeRangeEntry(weekday),
-                      onRemove: (index) => _removeEntry(weekday, index),
-                      onStepDuration: (index, delta) =>
-                          _stepDurationEntry(weekday, index, delta),
-                      onEditRangeStart: (index) => _editRangeStart(weekday, index),
-                      onEditRangeEnd: (index) => _editRangeEnd(weekday, index),
+                      ],
                     ),
-                  const SizedBox(height: AppSpacing.s1),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('WEEKLY TOTAL', style: AppTextStyles.kicker()),
-                      Text(
-                        formatDuration(_weeklyTotal),
-                        style: AppTextStyles.mono(color: AppColors.text),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.s4),
-                  GestureDetector(
-                    onTap: _save,
-                    behavior: HitTestBehavior.opaque,
-                    child: Container(
-                      width: double.infinity,
-                      constraints: const BoxConstraints(minHeight: 44),
-                      alignment: Alignment.centerLeft,
-                      color: AppColors.accent,
-                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s3),
-                      child: Text(
-                        _isEditing ? 'SAVE CHANGES' : 'CREATE GOAL',
-                        style: AppTextStyles.small(color: AppColors.bg),
-                      ),
+                    const SizedBox(height: AppSpacing.s3),
+                    _Label('Name'),
+                    TextField(
+                      controller: _nameController,
+                      style: AppTextStyles.label(),
+                      decoration: const InputDecoration(isDense: true),
                     ),
-                  ),
-                  if (_isEditing) ...[
+                    const SizedBox(height: AppSpacing.s3),
+                    _Label('Category'),
+                    Wrap(
+                      spacing: AppSpacing.s2,
+                      runSpacing: AppSpacing.s2,
+                      children: [
+                        for (final category in categories)
+                          CategoryChip(
+                            label: category.name.toLowerCase(),
+                            color: category.color,
+                            selected: _categoryId == category.id,
+                            onTap: () =>
+                                setState(() => _categoryId = category.id),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.s3),
+                    _Label('Dates'),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _DateField(
+                            label: 'Start date',
+                            value: _startDate,
+                            onTap: () => _pickDate(isStart: true),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.s2),
+                        Expanded(
+                          child: _DateField(
+                            label: 'End date',
+                            value: _endDate,
+                            onTap: () => _pickDate(isStart: false),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.s1),
+                    Text(
+                      'leave the default end date for an ongoing habit; shorten it for a dated challenge',
+                      style: AppTextStyles.mono(),
+                    ),
+                    const SizedBox(height: AppSpacing.s3),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        _Label('Daily targets'),
+                        _SmallActionButton(
+                          label: 'same every day',
+                          onTap: _applySameEveryDay,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.s1),
+                    Text(
+                      'each day can mix any number of plain durations and time '
+                      'ranges — a time range\'s duration is derived from its clock '
+                      'times automatically',
+                      style: AppTextStyles.mono(),
+                    ),
                     const SizedBox(height: AppSpacing.s2),
+                    for (var weekday = 1; weekday <= 7; weekday++)
+                      _DayScheduleSection(
+                        label: DateFormat('EEE d MMM')
+                            .format(weekStart.add(Duration(days: weekday - 1))),
+                        entries: _schedule[weekday] ?? const [],
+                        total: _dayTotal(weekday),
+                        onAddDuration: () => _addDurationEntry(weekday),
+                        onAddTimeRange: () => _addTimeRangeEntry(weekday),
+                        onRemove: (index) => _removeEntry(weekday, index),
+                        onStepDuration: (index, delta) =>
+                            _stepDurationEntry(weekday, index, delta),
+                        onEditRangeStart: (index) =>
+                            _editRangeStart(weekday, index),
+                        onEditRangeEnd: (index) =>
+                            _editRangeEnd(weekday, index),
+                      ),
+                    const SizedBox(height: AppSpacing.s1),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('WEEKLY TOTAL', style: AppTextStyles.kicker()),
+                        Text(
+                          formatDuration(_weeklyTotal),
+                          style: AppTextStyles.mono(color: AppColors.text),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.s4),
                     GestureDetector(
-                      onTap: _delete,
+                      onTap: _save,
                       behavior: HitTestBehavior.opaque,
                       child: Container(
                         width: double.infinity,
                         constraints: const BoxConstraints(minHeight: 44),
                         alignment: Alignment.centerLeft,
+                        color: AppColors.accent,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.s3,
+                        ),
                         child: Text(
-                          'DELETE GOAL',
-                          style: AppTextStyles.small(color: AppColors.accent),
+                          _isEditing ? 'SAVE CHANGES' : 'CREATE GOAL',
+                          style: AppTextStyles.small(color: AppColors.bg),
                         ),
                       ),
                     ),
+                    if (_isEditing) ...[
+                      const SizedBox(height: AppSpacing.s2),
+                      GestureDetector(
+                        onTap: _delete,
+                        behavior: HitTestBehavior.opaque,
+                        child: Container(
+                          width: double.infinity,
+                          constraints: const BoxConstraints(minHeight: 44),
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'DELETE GOAL',
+                            style: AppTextStyles.small(color: AppColors.accent),
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),
         ),
-      ),
       ),
     );
   }
@@ -494,7 +529,9 @@ class _UnsavedChangesDialog extends StatelessWidget {
       shape: const RoundedRectangleBorder(),
       insetPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.s6),
       child: DecoratedBox(
-        decoration: BoxDecoration(border: Border.all(color: AppColors.text, width: 2)),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.text, width: 2),
+        ),
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.s3),
           child: Column(
@@ -516,8 +553,13 @@ class _UnsavedChangesDialog extends StatelessWidget {
                   constraints: const BoxConstraints(minHeight: 44),
                   alignment: Alignment.centerLeft,
                   color: AppColors.accent,
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s3),
-                  child: Text('SAVE', style: AppTextStyles.small(color: AppColors.bg)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.s3,
+                  ),
+                  child: Text(
+                    'SAVE',
+                    style: AppTextStyles.small(color: AppColors.bg),
+                  ),
                 ),
               ),
               const SizedBox(height: AppSpacing.s2),
@@ -528,9 +570,16 @@ class _UnsavedChangesDialog extends StatelessWidget {
                   width: double.infinity,
                   constraints: const BoxConstraints(minHeight: 44),
                   alignment: Alignment.centerLeft,
-                  decoration: BoxDecoration(border: Border.all(color: AppColors.text)),
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s3),
-                  child: Text('DISCARD', style: AppTextStyles.small(color: AppColors.accent)),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: AppColors.text),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.s3,
+                  ),
+                  child: Text(
+                    'DISCARD',
+                    style: AppTextStyles.small(color: AppColors.accent),
+                  ),
                 ),
               ),
               const SizedBox(height: AppSpacing.s2),
@@ -541,7 +590,10 @@ class _UnsavedChangesDialog extends StatelessWidget {
                   width: double.infinity,
                   constraints: const BoxConstraints(minHeight: 44),
                   alignment: Alignment.centerLeft,
-                  child: Text('KEEP EDITING', style: AppTextStyles.small(color: AppColors.text)),
+                  child: Text(
+                    'KEEP EDITING',
+                    style: AppTextStyles.small(color: AppColors.text),
+                  ),
                 ),
               ),
             ],
@@ -567,7 +619,11 @@ class _Label extends StatelessWidget {
 }
 
 class _DateField extends StatelessWidget {
-  const _DateField({required this.label, required this.value, required this.onTap});
+  const _DateField({
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
 
   final String label;
   final DateTime value;
@@ -587,8 +643,13 @@ class _DateField extends StatelessWidget {
             constraints: const BoxConstraints(minHeight: 44),
             alignment: Alignment.centerLeft,
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s2),
-            decoration: BoxDecoration(border: Border.all(color: AppColors.divider)),
-            child: Text(DateFormat('d MMM y').format(value), style: AppTextStyles.label()),
+            decoration: BoxDecoration(
+              border: Border.all(color: AppColors.divider),
+            ),
+            child: Text(
+              DateFormat('d MMM y').format(value),
+              style: AppTextStyles.label(),
+            ),
           ),
         ),
       ],
@@ -664,7 +725,10 @@ class _DayScheduleSection extends StatelessWidget {
               children: [
                 _SmallActionButton(label: '+ duration', onTap: onAddDuration),
                 const SizedBox(width: AppSpacing.s2),
-                _SmallActionButton(label: '+ time range', onTap: onAddTimeRange),
+                _SmallActionButton(
+                  label: '+ time range',
+                  onTap: onAddTimeRange,
+                ),
               ],
             ),
           ),
@@ -729,12 +793,16 @@ class _EntryTimeRangeRow extends StatelessWidget {
     return Row(
       children: [
         // The time range itself, on the left — the thing you actually set.
-        Expanded(child: _ClockChip(label: range.start.format(), onTap: onTapStart)),
+        Expanded(
+          child: _ClockChip(label: range.start.format(), onTap: onTapStart),
+        ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),
           child: Text('–', style: AppTextStyles.mono()),
         ),
-        Expanded(child: _ClockChip(label: range.end.format(), onTap: onTapEnd)),
+        Expanded(
+          child: _ClockChip(label: range.end.format(), onTap: onTapEnd),
+        ),
         // What that range comes out to, on the right — derived, not editable
         // here; change the times to change it.
         SizedBox(
@@ -817,7 +885,9 @@ class _SmallActionButton extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: 32),
         alignment: Alignment.center,
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s2),
-        decoration: BoxDecoration(border: Border.all(color: AppColors.ink(0.3))),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.ink(0.3)),
+        ),
         child: Text(label, style: AppTextStyles.mono(color: AppColors.accent)),
       ),
     );
@@ -841,7 +911,9 @@ class _RemoveButton extends StatelessWidget {
         width: 32,
         height: 32,
         alignment: Alignment.center,
-        decoration: BoxDecoration(border: Border.all(color: AppColors.ink(0.3))),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.ink(0.3)),
+        ),
         child: Text('×', style: AppTextStyles.mono(color: AppColors.accent)),
       ),
     );

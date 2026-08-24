@@ -12,7 +12,10 @@ class FirestoreListRepository<T> {
     required this.fromMap,
     required this.toMap,
     required this.idOf,
-  }) : _collection = firestore.collection('users').doc(uid).collection(collectionName);
+  }) : _collection = firestore
+           .collection('users')
+           .doc(uid)
+           .collection(collectionName);
 
   final CollectionReference<Map<String, dynamic>> _collection;
   final T Function(String id, Map<String, dynamic> data) fromMap;
@@ -20,8 +23,10 @@ class FirestoreListRepository<T> {
   final String Function(T item) idOf;
 
   Stream<List<T>> watchAll() => _collection.snapshots().map(
-        (snapshot) => [for (final doc in snapshot.docs) fromMap(doc.id, doc.data())],
-      );
+    (snapshot) => [
+      for (final doc in snapshot.docs) fromMap(doc.id, doc.data()),
+    ],
+  );
 
   Future<void> upsert(T item) => _collection.doc(idOf(item)).set(toMap(item));
 

@@ -39,7 +39,8 @@ List<CategoryDrift> computeDrift({
     for (final categoryId in categoryIds)
       CategoryDrift(
         categoryId: categoryId,
-        delta: (trackedTotals[categoryId] ?? Duration.zero) -
+        delta:
+            (trackedTotals[categoryId] ?? Duration.zero) -
             (plannedTotals[categoryId] ?? Duration.zero),
       ),
   ];

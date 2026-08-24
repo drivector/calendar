@@ -5,9 +5,9 @@ import 'package:calendar_tracker/models/goal.dart';
 import 'package:calendar_tracker/models/goal_progress.dart';
 
 Map<int, List<DayScheduleEntry>> _uniform(Duration perDay) => {
-      for (var weekday = 1; weekday <= 7; weekday++)
-        weekday: [DayScheduleEntry.duration(perDay)],
-    };
+  for (var weekday = 1; weekday <= 7; weekday++)
+    weekday: [DayScheduleEntry.duration(perDay)],
+};
 
 final _ongoingStart = DateTime(2020, 1, 1);
 final _ongoingEnd = DateTime(2099, 12, 31);
@@ -19,9 +19,10 @@ void main() {
         id: 'g',
         name: 'Walking',
         categoryId: 'walking',
-        type: GoalType.target,
         scheduleByWeekday: {
-          DateTime.monday: [const DayScheduleEntry.duration(Duration(hours: 1))],
+          DateTime.monday: [
+            const DayScheduleEntry.duration(Duration(hours: 1)),
+          ],
           DateTime.saturday: [
             const DayScheduleEntry.duration(Duration(hours: 2, minutes: 30)),
           ],
@@ -41,7 +42,6 @@ void main() {
         id: 'g',
         name: 'Reading',
         categoryId: 'reading',
-        type: GoalType.target,
         scheduleByWeekday: _uniform(const Duration(minutes: 30)),
         startDate: _ongoingStart,
         endDate: _ongoingEnd,
@@ -54,7 +54,6 @@ void main() {
         id: 'g',
         name: 'Walking',
         categoryId: 'walking',
-        type: GoalType.target,
         scheduleByWeekday: _uniform(const Duration(minutes: 30)),
         startDate: _ongoingStart,
         endDate: _ongoingEnd,
@@ -69,7 +68,6 @@ void main() {
         id: 'g',
         name: 'August challenge',
         categoryId: 'walking',
-        type: GoalType.target,
         scheduleByWeekday: _uniform(const Duration(minutes: 30)),
         startDate: DateTime(2026, 8, 1),
         endDate: DateTime(2026, 8, 31),
@@ -87,7 +85,6 @@ void main() {
         id: 'g',
         name: 'Work',
         categoryId: 'work',
-        type: GoalType.target,
         // 09:00-18:00 = 9h, Mon-Fri only.
         scheduleByWeekday: {
           for (var weekday = 1; weekday <= 5; weekday++)
@@ -111,7 +108,6 @@ void main() {
         id: 'g',
         name: 'Split shift',
         categoryId: 'work',
-        type: GoalType.target,
         // A morning shift, an afternoon shift, plus 30 min of untimed
         // admin on top — three entries, one day.
         scheduleByWeekday: {
@@ -129,7 +125,10 @@ void main() {
         endDate: _ongoingEnd,
       );
       // 3h + 4h + 30m = 7h30
-      expect(goal.targetForWeekday(DateTime.monday), const Duration(hours: 7, minutes: 30));
+      expect(
+        goal.targetForWeekday(DateTime.monday),
+        const Duration(hours: 7, minutes: 30),
+      );
     });
   });
 
@@ -139,12 +138,15 @@ void main() {
       id: 'g',
       name: 'Deep work',
       categoryId: 'deep_work',
-      type: GoalType.target,
       scheduleByWeekday: {
         DateTime.monday: [const DayScheduleEntry.duration(Duration(hours: 4))],
         DateTime.tuesday: [const DayScheduleEntry.duration(Duration(hours: 4))],
-        DateTime.wednesday: [const DayScheduleEntry.duration(Duration(hours: 4))],
-        DateTime.thursday: [const DayScheduleEntry.duration(Duration(hours: 4))],
+        DateTime.wednesday: [
+          const DayScheduleEntry.duration(Duration(hours: 4)),
+        ],
+        DateTime.thursday: [
+          const DayScheduleEntry.duration(Duration(hours: 4)),
+        ],
         DateTime.friday: [const DayScheduleEntry.duration(Duration(hours: 4))],
         DateTime.saturday: const [],
         DateTime.sunday: const [],
@@ -163,10 +165,16 @@ void main() {
       expect(hours, closeTo(10.0, 0.001));
     });
 
-    test('Saturday expects the full Mon-Fri total, since Saturday asks for 0', () {
-      final hours = expectedByNowHours(deepWork, DateTime(2026, 8, 22, 12, 0));
-      expect(hours, closeTo(20.0, 0.001));
-    });
+    test(
+      'Saturday expects the full Mon-Fri total, since Saturday asks for 0',
+      () {
+        final hours = expectedByNowHours(
+          deepWork,
+          DateTime(2026, 8, 22, 12, 0),
+        );
+        expect(hours, closeTo(20.0, 0.001));
+      },
+    );
   });
 
   group('computeGoalProgress', () {
@@ -174,8 +182,9 @@ void main() {
       id: 'g1',
       name: 'Walking',
       categoryId: 'walking',
-      type: GoalType.target,
-      scheduleByWeekday: _uniform(const Duration(hours: 1, minutes: 26)), // ~10h/wk
+      scheduleByWeekday: _uniform(
+        const Duration(hours: 1, minutes: 26),
+      ), // ~10h/wk
       startDate: _ongoingStart,
       endDate: _ongoingEnd,
     );
@@ -198,37 +207,6 @@ void main() {
         date: DateTime(2026, 8, 20, 12, 0),
       );
       expect(progress.status, GoalStatus.behindPace);
-    });
-
-    final cap = Goal(
-      id: 'g2',
-      name: 'Meetings',
-      categoryId: 'meetings',
-      type: GoalType.cap,
-      scheduleByWeekday: _uniform(const Duration(hours: 1, minutes: 9)), // ~8h/wk
-      startDate: _ongoingStart,
-      endDate: _ongoingEnd,
-    );
-
-    test('cap goals report overCap once actual exceeds the weekly target', () {
-      final progress = computeGoalProgress(
-        goal: cap,
-        actualHours: 11,
-        plannedHours: 0,
-        date: DateTime(2026, 8, 23, 12, 0),
-      );
-      expect(progress.status, GoalStatus.overCap);
-      expect(formatGoalStatus(progress), startsWith('over cap by'));
-    });
-
-    test('cap goals stay on pace under the weekly target', () {
-      final progress = computeGoalProgress(
-        goal: cap,
-        actualHours: 2,
-        plannedHours: 0,
-        date: DateTime(2026, 8, 23, 12, 0),
-      );
-      expect(progress.status, GoalStatus.onPace);
     });
   });
 }

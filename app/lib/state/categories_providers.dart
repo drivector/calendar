@@ -6,16 +6,17 @@ import '../models/category.dart';
 import '../theme/app_colors.dart';
 import 'firestore_providers.dart';
 
-final categoriesRepositoryProvider = Provider<FirestoreListRepository<Category>>((ref) {
-  return FirestoreListRepository<Category>(
-    firestore: ref.watch(firestoreProvider),
-    uid: ref.watch(currentUidProvider),
-    collectionName: 'categories',
-    fromMap: Category.fromMap,
-    toMap: (category) => category.toMap(),
-    idOf: (category) => category.id,
-  );
-});
+final categoriesRepositoryProvider =
+    Provider<FirestoreListRepository<Category>>((ref) {
+      return FirestoreListRepository<Category>(
+        firestore: ref.watch(firestoreProvider),
+        uid: ref.watch(currentUidProvider),
+        collectionName: 'categories',
+        fromMap: Category.fromMap,
+        toMap: (category) => category.toMap(),
+        idOf: (category) => category.id,
+      );
+    });
 
 final categoriesStreamProvider = StreamProvider<List<Category>>((ref) {
   return ref.watch(categoriesRepositoryProvider).watchAll();

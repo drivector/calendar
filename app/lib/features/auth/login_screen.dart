@@ -66,7 +66,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final auth = ref.read(firebaseAuthProvider);
     try {
       if (_isSignUp) {
-        await auth.createUserWithEmailAndPassword(email: email, password: password);
+        await auth.createUserWithEmailAndPassword(
+          email: email,
+          password: password,
+        );
       } else {
         await auth.signInWithEmailAndPassword(email: email, password: password);
       }
@@ -136,9 +139,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             onTap: _submitting
                 ? null
                 : () => setState(() {
-                      _isSignUp = !_isSignUp;
-                      _error = null;
-                    }),
+                    _isSignUp = !_isSignUp;
+                    _error = null;
+                  }),
             behavior: HitTestBehavior.opaque,
             child: Container(
               constraints: const BoxConstraints(minHeight: 44),

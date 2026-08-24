@@ -40,8 +40,7 @@ class AppTabBar extends StatelessWidget {
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     border: i < items.length - 1
-                        ? Border(
-                            right: BorderSide(color: AppColors.divider))
+                        ? Border(right: BorderSide(color: AppColors.divider))
                         : null,
                   ),
                   child: GestureDetector(
@@ -50,8 +49,10 @@ class AppTabBar extends StatelessWidget {
                     child: Container(
                       constraints: const BoxConstraints(minHeight: 44),
                       alignment: Alignment.center,
-                      padding:
-                          const EdgeInsets.symmetric(vertical: 9, horizontal: 8),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 9,
+                        horizontal: 8,
+                      ),
                       child: Text(
                         items[i].label.toUpperCase(),
                         style: AppTextStyles.tabLabel(

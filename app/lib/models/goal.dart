@@ -1,7 +1,5 @@
 import 'clock_time.dart';
 
-enum GoalType { target, cap }
-
 /// A goal always has a start and end date — there's no separate "ongoing"
 /// flag. An open-ended goal is just one whose end date is far out; a
 /// time-bound challenge is one whose end date is close to its start.
@@ -15,12 +13,12 @@ const ongoingGoalSpan = Duration(days: 365);
 /// duration on top) — the day's target is the sum of all its entries.
 class DayScheduleEntry {
   const DayScheduleEntry.duration(Duration amount)
-      : duration = amount,
-        timeRange = null;
+    : duration = amount,
+      timeRange = null;
 
   const DayScheduleEntry.timeRange(ClockRange range)
-      : timeRange = range,
-        duration = null;
+    : timeRange = range,
+      duration = null;
 
   /// Set only for a plain-duration entry.
   final Duration? duration;
@@ -39,10 +37,12 @@ class DayScheduleEntry {
     }
     final startMinutes = map['startMinutes'] as int;
     final endMinutes = map['endMinutes'] as int;
-    return DayScheduleEntry.timeRange(ClockRange(
-      ClockTime(startMinutes ~/ 60, startMinutes % 60),
-      ClockTime(endMinutes ~/ 60, endMinutes % 60),
-    ));
+    return DayScheduleEntry.timeRange(
+      ClockRange(
+        ClockTime(startMinutes ~/ 60, startMinutes % 60),
+        ClockTime(endMinutes ~/ 60, endMinutes % 60),
+      ),
+    );
   }
 
   Map<String, dynamic> toMap() => isTimeRange
@@ -58,7 +58,6 @@ class Goal {
     required this.id,
     required this.name,
     required this.categoryId,
-    required this.type,
     required this.scheduleByWeekday,
     required this.startDate,
     required this.endDate,
@@ -67,7 +66,6 @@ class Goal {
   final String id;
   final String name;
   final String categoryId;
-  final GoalType type;
 
   /// Each day's schedule, keyed by [DateTime.weekday] (Monday = 1 ..
   /// Sunday = 7) — a list of [DayScheduleEntry], possibly empty (day off).
@@ -93,46 +91,48 @@ class Goal {
   List<DayScheduleEntry> entriesForWeekday(int weekday) =>
       scheduleByWeekday[weekday] ?? const <DayScheduleEntry>[];
 
-  Duration targetForWeekday(int weekday) => entriesForWeekday(weekday)
-      .fold(Duration.zero, (total, e) => total + e.effectiveDuration);
+  Duration targetForWeekday(int weekday) =>
+      entriesForWeekday(weekday)
+          .fold(Duration.zero, (total, e) => total + e.effectiveDuration);
 
-  Duration get weeklyTarget => [
-        for (var weekday = 1; weekday <= 7; weekday++) targetForWeekday(weekday),
-      ].fold(Duration.zero, (a, b) => a + b);
+  Duration get weeklyTarget =>
+      [for (var weekday = 1; weekday <= 7; weekday++) targetForWeekday(weekday)]
+          .fold(Duration.zero, (a, b) => a + b);
 
   double get weeklyTargetHours => weeklyTarget.inMinutes / 60;
 
   /// True if every day asks for the same total amount.
-  bool get isUniformAcrossWeek => <Duration>{
-        for (var weekday = 1; weekday <= 7; weekday++) targetForWeekday(weekday),
-      }.length <= 1;
+  bool get isUniformAcrossWeek =>
+      <Duration>{
+        for (var weekday = 1; weekday <= 7; weekday++)
+          targetForWeekday(weekday),
+      }.length <=
+      1;
 
   factory Goal.fromMap(String id, Map<String, dynamic> map) => Goal(
-        id: id,
-        name: map['name'] as String,
-        categoryId: map['categoryId'] as String,
-        type: GoalType.values.byName(map['type'] as String),
-        scheduleByWeekday: {
-          for (final entry
-              in (map['scheduleByWeekday'] as Map<String, dynamic>).entries)
-            int.parse(entry.key): [
-              for (final e in entry.value as List<dynamic>)
-                DayScheduleEntry.fromMap(Map<String, dynamic>.from(e as Map)),
-            ],
-        },
-        startDate: DateTime.parse(map['startDate'] as String),
-        endDate: DateTime.parse(map['endDate'] as String),
-      );
+    id: id,
+    name: map['name'] as String,
+    categoryId: map['categoryId'] as String,
+    scheduleByWeekday: {
+      for (final entry
+          in (map['scheduleByWeekday'] as Map<String, dynamic>).entries)
+        int.parse(entry.key): [
+          for (final e in entry.value as List<dynamic>)
+            DayScheduleEntry.fromMap(Map<String, dynamic>.from(e as Map)),
+        ],
+    },
+    startDate: DateTime.parse(map['startDate'] as String),
+    endDate: DateTime.parse(map['endDate'] as String),
+  );
 
   Map<String, dynamic> toMap() => {
-        'name': name,
-        'categoryId': categoryId,
-        'type': type.name,
-        'scheduleByWeekday': {
-          for (final entry in scheduleByWeekday.entries)
-            '${entry.key}': [for (final e in entry.value) e.toMap()],
-        },
-        'startDate': startDate.toIso8601String(),
-        'endDate': endDate.toIso8601String(),
-      };
+    'name': name,
+    'categoryId': categoryId,
+    'scheduleByWeekday': {
+      for (final entry in scheduleByWeekday.entries)
+        '${entry.key}': [for (final e in entry.value) e.toMap()],
+    },
+    'startDate': startDate.toIso8601String(),
+    'endDate': endDate.toIso8601String(),
+  };
 }

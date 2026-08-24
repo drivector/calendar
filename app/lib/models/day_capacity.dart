@@ -24,11 +24,13 @@ class DayCapacity {
 
   /// Hours in the window not yet claimed by any planned block — clamped at
   /// zero once planning fills or exceeds the window.
-  double get availableHours => (windowHours - plannedHours).clamp(0, windowHours);
+  double get availableHours =>
+      (windowHours - plannedHours).clamp(0, windowHours);
 
   /// Planned time beyond the window itself, if any — a day can be
   /// scheduled past the window that "available" caps out at.
-  double get overplannedHours => plannedHours > windowHours ? plannedHours - windowHours : 0;
+  double get overplannedHours =>
+      plannedHours > windowHours ? plannedHours - windowHours : 0;
 }
 
 DayCapacity computeDayCapacity({

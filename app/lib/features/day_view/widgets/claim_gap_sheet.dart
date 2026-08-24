@@ -30,7 +30,14 @@ class ClaimGapSheet extends StatefulWidget {
 /// Labels for screen 6's claim options — a superset of the four tracked
 /// categories (Errands/Other have no [Category] of their own; they map to a
 /// neutral swatch here).
-const _claimOptions = ['Walking', 'Deep work', 'Meeting', 'Errands', 'Admin', 'Other'];
+const _claimOptions = [
+  'Walking',
+  'Deep work',
+  'Meeting',
+  'Errands',
+  'Admin',
+  'Other',
+];
 
 const _claimOptionCategoryIds = {
   'Walking': walkingCategoryId,
@@ -47,7 +54,9 @@ class _ClaimGapSheetState extends State<ClaimGapSheet> {
 
   Color _colorFor(String option) {
     final categoryId = _claimOptionCategoryIds[option];
-    return categoryId == null ? AppColors.ink(0.4) : categoryById(categoryId).color;
+    return categoryId == null
+        ? AppColors.ink(0.4)
+        : categoryById(categoryId).color;
   }
 
   @override
@@ -92,7 +101,9 @@ class _ClaimGapSheetState extends State<ClaimGapSheet> {
                     }),
                   ),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.s4,
+                    ),
                     child: Text(
                       formatDuration(_duration),
                       style: AppTextStyles.title().copyWith(fontSize: 28),
@@ -145,8 +156,13 @@ class _ClaimGapSheetState extends State<ClaimGapSheet> {
                   constraints: const BoxConstraints(minHeight: 44),
                   alignment: Alignment.centerLeft,
                   color: AppColors.accent,
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s3),
-                  child: Text('SAVE', style: AppTextStyles.small(color: AppColors.bg)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.s3,
+                  ),
+                  child: Text(
+                    'SAVE',
+                    style: AppTextStyles.small(color: AppColors.bg),
+                  ),
                 ),
               ),
             ],
@@ -201,7 +217,10 @@ class _ClaimOptionButton extends StatelessWidget {
         alignment: Alignment.centerLeft,
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s2),
         decoration: BoxDecoration(
-          border: Border.all(color: selected ? color : AppColors.ink(0.3), width: selected ? 2 : 1),
+          border: Border.all(
+            color: selected ? color : AppColors.ink(0.3),
+            width: selected ? 2 : 1,
+          ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,

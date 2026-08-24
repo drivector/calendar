@@ -25,7 +25,8 @@ class TrackedBlock {
 
   Duration get duration => end.difference(start);
 
-  factory TrackedBlock.fromMap(String id, Map<String, dynamic> map) => TrackedBlock(
+  factory TrackedBlock.fromMap(String id, Map<String, dynamic> map) =>
+      TrackedBlock(
         id: id,
         start: DateTime.parse(map['start'] as String),
         end: DateTime.parse(map['end'] as String),
@@ -37,12 +38,12 @@ class TrackedBlock {
       );
 
   Map<String, dynamic> toMap() => {
-        'start': start.toIso8601String(),
-        'end': end.toIso8601String(),
-        'title': title,
-        'categoryId': categoryId,
-        'sourceId': sourceId,
-        'confidence': confidence,
-        'plannedBlockId': plannedBlockId,
-      };
+    'start': start.toIso8601String(),
+    'end': end.toIso8601String(),
+    'title': title,
+    'categoryId': categoryId,
+    'sourceId': sourceId,
+    'confidence': confidence,
+    'plannedBlockId': plannedBlockId,
+  };
 }

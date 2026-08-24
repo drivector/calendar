@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// `draftLogEntry`.
 class DraftLogEntry {
   const DraftLogEntry({
+    this.date,
     this.activity = '',
     this.start,
     this.end,
@@ -12,6 +13,12 @@ class DraftLogEntry {
     this.note = '',
   });
 
+  /// Which day this entry is logged against — defaults to whatever day the
+  /// app is currently showing when the sheet opens, but is the first thing
+  /// the form asks about, so logging something for yesterday (or any other
+  /// day) doesn't require leaving the sheet first to change the app's
+  /// selected date.
+  final DateTime? date;
   final String activity;
   final TimeOfDay? start;
   final TimeOfDay? end;
@@ -32,6 +39,7 @@ class DraftLogEntry {
   }
 
   DraftLogEntry copyWith({
+    DateTime? date,
     String? activity,
     TimeOfDay? start,
     TimeOfDay? end,
@@ -39,6 +47,7 @@ class DraftLogEntry {
     String? note,
   }) {
     return DraftLogEntry(
+      date: date ?? this.date,
       activity: activity ?? this.activity,
       start: start ?? this.start,
       end: end ?? this.end,
@@ -51,6 +60,7 @@ class DraftLogEntry {
 class DraftLogEntryNotifier extends StateNotifier<DraftLogEntry> {
   DraftLogEntryNotifier() : super(const DraftLogEntry());
 
+  void setDate(DateTime value) => state = state.copyWith(date: value);
   void setActivity(String value) => state = state.copyWith(activity: value);
   void setStart(TimeOfDay value) => state = state.copyWith(start: value);
   void setEnd(TimeOfDay value) => state = state.copyWith(end: value);
@@ -61,5 +71,5 @@ class DraftLogEntryNotifier extends StateNotifier<DraftLogEntry> {
 
 final draftLogEntryProvider =
     StateNotifierProvider<DraftLogEntryNotifier, DraftLogEntry>(
-  (ref) => DraftLogEntryNotifier(),
-);
+      (ref) => DraftLogEntryNotifier(),
+    );

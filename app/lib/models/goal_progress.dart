@@ -1,6 +1,6 @@
 import 'goal.dart';
 
-enum GoalStatus { onPace, behindPace, overCap }
+enum GoalStatus { onPace, behindPace }
 
 /// Derived per goal — matches the README's `goalProgress` state entry.
 class GoalProgress {
@@ -53,16 +53,9 @@ GoalProgress computeGoalProgress({
   required DateTime date,
 }) {
   final expectedByNow = expectedByNowHours(goal, date);
-
-  final GoalStatus status;
-  if (goal.type == GoalType.cap) {
-    status = actualHours > goal.weeklyTargetHours
-        ? GoalStatus.overCap
-        : GoalStatus.onPace;
-  } else {
-    status =
-        actualHours >= expectedByNow ? GoalStatus.onPace : GoalStatus.behindPace;
-  }
+  final status = actualHours >= expectedByNow
+      ? GoalStatus.onPace
+      : GoalStatus.behindPace;
 
   return GoalProgress(
     goal: goal,
@@ -85,17 +78,5 @@ String formatGoalStatus(GoalProgress progress) {
       return 'on pace';
     case GoalStatus.behindPace:
       return 'behind pace';
-    case GoalStatus.overCap:
-      final over = progress.actualHours - progress.goal.weeklyTargetHours;
-      return 'over cap by ${_formatHours(over)}';
   }
-}
-
-String _formatHours(double hours) {
-  final totalMinutes = (hours * 60).round();
-  final h = totalMinutes ~/ 60;
-  final m = totalMinutes % 60;
-  if (h == 0) return '$m m';
-  if (m == 0) return '$h h';
-  return '$h h $m';
 }

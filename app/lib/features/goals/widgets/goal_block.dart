@@ -21,7 +21,7 @@ class GoalBlock extends ConsumerWidget {
     final category = resolveCategory(categories, progress.goal.categoryId);
     final goal = progress.goal;
     final targetLabel =
-        '${progress.actualHours.toStringAsFixed(1)} h / ${formatDuration(goal.weeklyTarget)}';
+        '${formatHours(progress.actualHours)} / ${formatDuration(goal.weeklyTarget)}';
     final perDayCaption = goal.isUniformAcrossWeek
         ? '/ ${formatDuration(goal.targetForWeekday(DateTime.monday))} per day'
         : '/ varies by day';
@@ -49,7 +49,10 @@ class GoalBlock extends ConsumerWidget {
                   Text(perDayCaption, style: AppTextStyles.mono()),
                 ],
               ),
-              Text(targetLabel, style: AppTextStyles.mono(color: AppColors.text)),
+              Text(
+                targetLabel,
+                style: AppTextStyles.mono(color: AppColors.text),
+              ),
             ],
           ),
           if (goal.isDateBound)
@@ -64,17 +67,10 @@ class GoalBlock extends ConsumerWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                formatGoalStatus(progress),
-                style: AppTextStyles.mono(
-                  color: progress.status == GoalStatus.overCap
-                      ? AppColors.accent700
-                      : null,
-                ),
-              ),
+              Text(formatGoalStatus(progress), style: AppTextStyles.mono()),
               if (progress.plannedHours > 0)
                 Text(
-                  'planned ${progress.plannedHours.toStringAsFixed(1)} h',
+                  'planned ${formatHours(progress.plannedHours)}',
                   style: AppTextStyles.mono(),
                 ),
             ],
@@ -85,8 +81,48 @@ class GoalBlock extends ConsumerWidget {
   }
 }
 
+/// Next to each goal in the list — turns this week's remaining planned
+/// blocks into real tracked activity in one tap (see
+/// `models/goal_completion.dart`). Same bordered/accent-glyph language as
+/// [StepArrowButton], so it reads as part of the same control family
+/// rather than a one-off.
+class CompleteGoalButton extends StatelessWidget {
+  const CompleteGoalButton({super.key, required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        width: 32,
+        height: 32,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.text, width: 1.5),
+        ),
+        child: Text(
+          '✓',
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            height: 1,
+            color: AppColors.accent,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class GoalProgressBar extends StatelessWidget {
-  const GoalProgressBar({super.key, required this.progress, required this.category});
+  const GoalProgressBar({
+    super.key,
+    required this.progress,
+    required this.category,
+  });
 
   final GoalProgress progress;
   final Color category;

@@ -19,8 +19,9 @@ class DayHeaderBar extends ConsumerWidget {
 
     void step(int deltaDays) {
       final current = ref.read(selectedDateProvider);
-      ref.read(selectedDateProvider.notifier).state =
-          current.add(Duration(days: deltaDays));
+      ref.read(selectedDateProvider.notifier).state = current.add(
+        Duration(days: deltaDays),
+      );
     }
 
     return DecoratedBox(

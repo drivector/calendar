@@ -10,7 +10,11 @@ import '../../../theme/app_colors.dart';
 /// Stacked plan (dashed, 8px) + actual (solid + hatch, 11px) bars, segment
 /// widths proportional to each category's hours.
 class WeekDayBar extends StatelessWidget {
-  const WeekDayBar({super.key, required this.summary, required this.categories});
+  const WeekDayBar({
+    super.key,
+    required this.summary,
+    required this.categories,
+  });
 
   final WeekDaySummary summary;
   final List<Category> categories;
@@ -21,7 +25,10 @@ class WeekDayBar extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        SizedBox(height: 8, child: _segments(summary.plannedHoursByCategory, dashed: true)),
+        SizedBox(
+          height: 8,
+          child: _segments(summary.plannedHoursByCategory, dashed: true),
+        ),
         const SizedBox(height: 2),
         SizedBox(
           height: 11,
@@ -58,7 +65,9 @@ class WeekDayBar extends StatelessWidget {
                       child: const SizedBox.expand(),
                     )
                   : SizedBox.expand(
-                      child: ColoredBox(color: resolveCategory(categories, entry.key).color),
+                      child: ColoredBox(
+                        color: resolveCategory(categories, entry.key).color,
+                      ),
                     ),
             ),
           ),

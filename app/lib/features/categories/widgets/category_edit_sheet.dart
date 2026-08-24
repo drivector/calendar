@@ -33,7 +33,9 @@ class _CategoryEditSheet extends StatefulWidget {
 }
 
 class _CategoryEditSheetState extends State<_CategoryEditSheet> {
-  late final _nameController = TextEditingController(text: widget.existing?.name ?? '');
+  late final _nameController = TextEditingController(
+    text: widget.existing?.name ?? '',
+  );
   late Color _color = widget.existing?.color ?? categoryColorPalette.first;
 
   bool get _isEditing => widget.existing != null;
@@ -46,8 +48,12 @@ class _CategoryEditSheetState extends State<_CategoryEditSheet> {
 
   void _save() {
     final category = Category(
-      id: widget.existing?.id ?? 'category-${DateTime.now().microsecondsSinceEpoch}',
-      name: _nameController.text.trim().isEmpty ? 'Untitled category' : _nameController.text.trim(),
+      id:
+          widget.existing?.id ??
+          'category-${DateTime.now().microsecondsSinceEpoch}',
+      name: _nameController.text.trim().isEmpty
+          ? 'Untitled category'
+          : _nameController.text.trim(),
       color: _color,
     );
     widget.ref.read(categoriesRepositoryProvider).upsert(category);
@@ -62,7 +68,9 @@ class _CategoryEditSheetState extends State<_CategoryEditSheet> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: AppColors.bg,
@@ -112,9 +120,7 @@ class _CategoryEditSheetState extends State<_CategoryEditSheet> {
                           height: 36,
                           alignment: Alignment.center,
                           color: color,
-                          child: _color == color
-                              ? const _CheckMark()
-                              : null,
+                          child: _color == color ? const _CheckMark() : null,
                         ),
                       ),
                   ],
@@ -128,7 +134,9 @@ class _CategoryEditSheetState extends State<_CategoryEditSheet> {
                     constraints: const BoxConstraints(minHeight: 44),
                     alignment: Alignment.centerLeft,
                     color: AppColors.accent,
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.s3,
+                    ),
                     child: Text(
                       _isEditing ? 'SAVE CHANGES' : 'CREATE CATEGORY',
                       style: AppTextStyles.small(color: AppColors.bg),

@@ -11,7 +11,12 @@ import '../../../theme/app_text_styles.dart';
 /// its label. When [onConfirm] is set (nothing was tracked against this
 /// plan), an inline "Confirm" affordance accepts the plan as actual.
 class PlanBlockWidget extends StatelessWidget {
-  const PlanBlockWidget({super.key, required this.block, required this.category, this.onConfirm});
+  const PlanBlockWidget({
+    super.key,
+    required this.block,
+    required this.category,
+    this.onConfirm,
+  });
 
   final PlannedBlock block;
   final Category category;

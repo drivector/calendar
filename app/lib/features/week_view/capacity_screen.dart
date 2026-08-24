@@ -12,12 +12,12 @@ import '../../state/week_view_providers.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
+import '../../utils/duration_format.dart';
 
 /// Pushes [CapacityScreen] — called from the Week view's "capacity" link.
 Future<void> showCapacityScreen(BuildContext context) {
-  return Navigator.of(context).push(
-    MaterialPageRoute(builder: (_) => const CapacityScreen()),
-  );
+  return Navigator.of(context)
+      .push(MaterialPageRoute(builder: (_) => const CapacityScreen()));
 }
 
 /// "How much is planned, and how much is still available" — the one thing
@@ -46,7 +46,9 @@ class CapacityScreen extends ConsumerWidget {
           children: [
             DecoratedBox(
               decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: AppColors.text, width: 2)),
+                border: Border(
+                  bottom: BorderSide(color: AppColors.text, width: 2),
+                ),
               ),
               child: Padding(
                 padding: const EdgeInsets.symmetric(
@@ -84,12 +86,12 @@ class CapacityScreen extends ConsumerWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          '${totalPlanned.toStringAsFixed(1)} h',
+                          formatHours(totalPlanned),
                           style: AppTextStyles.title().copyWith(fontSize: 24),
                         ),
                         Text(
-                          '${totalAvailable.toStringAsFixed(1)} h of '
-                          '${totalWindow.toStringAsFixed(0)} h this week',
+                          '${formatHours(totalAvailable)} of '
+                          '${formatHours(totalWindow)} this week',
                           style: AppTextStyles.mono(),
                         ),
                       ],
@@ -114,14 +116,22 @@ class CapacityScreen extends ConsumerWidget {
                     const SizedBox(height: AppSpacing.s2),
                     if (goalProgressList.isEmpty)
                       Padding(
-                        padding: const EdgeInsets.symmetric(vertical: AppSpacing.s2),
-                        child: Text('No active goals this week.', style: AppTextStyles.mono()),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: AppSpacing.s2,
+                        ),
+                        child: Text(
+                          'No active goals this week.',
+                          style: AppTextStyles.mono(),
+                        ),
                       )
                     else
                       for (final progress in goalProgressList)
                         _GoalRoomRow(
                           progress: progress,
-                          color: resolveCategory(categories, progress.goal.categoryId).color,
+                          color: resolveCategory(
+                            categories,
+                            progress.goal.categoryId,
+                          ).color,
                         ),
                   ],
                 ),
@@ -168,7 +178,8 @@ class _DayCapacityRow extends StatelessWidget {
                             flex: plannedFlex,
                             child: ColoredBox(color: AppColors.text),
                           ),
-                        if (plannedFlex > 0 && availableFlex > 0) const SizedBox(width: 2),
+                        if (plannedFlex > 0 && availableFlex > 0)
+                          const SizedBox(width: 2),
                         if (availableFlex > 0)
                           Expanded(
                             flex: availableFlex,
@@ -183,8 +194,8 @@ class _DayCapacityRow extends StatelessWidget {
             width: 96,
             child: Text(
               day.overplannedHours > 0
-                  ? 'over by ${day.overplannedHours.toStringAsFixed(1)} h'
-                  : '${day.availableHours.toStringAsFixed(1)} h free',
+                  ? 'over by ${formatHours(day.overplannedHours)}'
+                  : '${formatHours(day.availableHours)} free',
               textAlign: TextAlign.right,
               style: AppTextStyles.mono(
                 color: day.overplannedHours > 0 ? AppColors.accent : null,
@@ -206,8 +217,13 @@ class _GoalRoomRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final target = progress.goal.weeklyTargetHours;
-    final available = (target - progress.plannedHours).clamp(0, target == 0 ? 0.0 : double.infinity);
-    final over = progress.plannedHours > target ? progress.plannedHours - target : 0.0;
+    final available = (target - progress.plannedHours).clamp(
+      0.0,
+      target == 0 ? 0.0 : double.infinity,
+    );
+    final over = progress.plannedHours > target
+        ? progress.plannedHours - target
+        : 0.0;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.s1),
@@ -217,14 +233,18 @@ class _GoalRoomRow extends StatelessWidget {
           const SizedBox(width: AppSpacing.s2),
           Expanded(
             child: Text(
-              '${progress.goal.name} · planned ${progress.plannedHours.toStringAsFixed(1)} '
-              '/ ${target.toStringAsFixed(1)} h',
+              '${progress.goal.name} · planned ${formatHours(progress.plannedHours)} '
+              '/ ${formatHours(target)}',
               style: AppTextStyles.label(),
             ),
           ),
           Text(
-            over > 0 ? 'over by ${over.toStringAsFixed(1)} h' : '${available.toStringAsFixed(1)} h room',
-            style: AppTextStyles.mono(color: over > 0 ? AppColors.accent : AppColors.text),
+            over > 0
+                ? 'over by ${formatHours(over)}'
+                : '${formatHours(available)} room',
+            style: AppTextStyles.mono(
+              color: over > 0 ? AppColors.accent : AppColors.text,
+            ),
           ),
         ],
       ),

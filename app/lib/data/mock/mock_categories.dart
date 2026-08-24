@@ -23,11 +23,7 @@ const mockCategories = [
     name: 'Meetings',
     color: AppCategoryColors.meetings,
   ),
-  Category(
-    id: adminCategoryId,
-    name: 'Admin',
-    color: AppCategoryColors.admin,
-  ),
+  Category(id: adminCategoryId, name: 'Admin', color: AppCategoryColors.admin),
   Category(
     id: screenTimeCategoryId,
     name: 'Screen time',

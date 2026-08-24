@@ -39,7 +39,10 @@ class DriftFooter extends ConsumerWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        resolveCategory(categories, entry.categoryId).name.toLowerCase(),
+                        resolveCategory(
+                          categories,
+                          entry.categoryId,
+                        ).name.toLowerCase(),
                         style: AppTextStyles.mono(color: AppColors.text),
                       ),
                       Text(

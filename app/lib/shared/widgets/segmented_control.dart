@@ -34,8 +34,7 @@ class SegmentedControl<T> extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           for (var i = 0; i < options.length; i++) ...[
-            if (i > 0)
-              Container(width: 1, height: 24, color: AppColors.text),
+            if (i > 0) Container(width: 1, height: 24, color: AppColors.text),
             _SegmentedOptionButton(
               option: options[i],
               active: options[i].value == selected,

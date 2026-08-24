@@ -24,7 +24,9 @@ class CategoriesScreen extends ConsumerWidget {
           children: [
             DecoratedBox(
               decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: AppColors.text, width: 2)),
+                border: Border(
+                  bottom: BorderSide(color: AppColors.text, width: 2),
+                ),
               ),
               child: Padding(
                 padding: const EdgeInsets.symmetric(
@@ -52,20 +54,35 @@ class CategoriesScreen extends ConsumerWidget {
                   children: [
                     for (final category in categories)
                       GestureDetector(
-                        onTap: () => showCategoryEditSheet(context, ref, existing: category),
+                        onTap: () => showCategoryEditSheet(
+                          context,
+                          ref,
+                          existing: category,
+                        ),
                         behavior: HitTestBehavior.opaque,
                         child: DecoratedBox(
                           decoration: BoxDecoration(
-                            border: Border(bottom: BorderSide(color: AppColors.divider)),
+                            border: Border(
+                              bottom: BorderSide(color: AppColors.divider),
+                            ),
                           ),
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: AppSpacing.s2),
+                            padding: const EdgeInsets.symmetric(
+                              vertical: AppSpacing.s2,
+                            ),
                             child: Row(
                               children: [
-                                Container(width: 12, height: 12, color: category.color),
+                                Container(
+                                  width: 12,
+                                  height: 12,
+                                  color: category.color,
+                                ),
                                 const SizedBox(width: AppSpacing.s2),
                                 Expanded(
-                                  child: Text(category.name, style: AppTextStyles.label()),
+                                  child: Text(
+                                    category.name,
+                                    style: AppTextStyles.label(),
+                                  ),
                                 ),
                                 Text('edit', style: AppTextStyles.mono()),
                               ],
@@ -84,7 +101,9 @@ class CategoriesScreen extends ConsumerWidget {
                         decoration: BoxDecoration(
                           border: Border.all(color: AppColors.text, width: 2),
                         ),
-                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s3),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.s3,
+                        ),
                         child: Text(
                           '+ NEW CATEGORY',
                           style: AppTextStyles.small(color: AppColors.text),

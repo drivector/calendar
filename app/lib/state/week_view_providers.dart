@@ -19,11 +19,16 @@ final weekDaySummariesProvider = Provider<List<WeekDaySummary>>((ref) {
 
   double hoursOf(Duration d) => d.inMinutes / 60;
 
-  Map<String, double> groupByCategory(Iterable<({String categoryId, Duration duration})> blocks) {
+  Map<String, double> groupByCategory(
+    Iterable<({String categoryId, Duration duration})> blocks,
+  ) {
     final totals = <String, double>{};
     for (final b in blocks) {
-      totals.update(b.categoryId, (h) => h + hoursOf(b.duration),
-          ifAbsent: () => hoursOf(b.duration));
+      totals.update(
+        b.categoryId,
+        (h) => h + hoursOf(b.duration),
+        ifAbsent: () => hoursOf(b.duration),
+      );
     }
     return totals;
   }
@@ -31,8 +36,12 @@ final weekDaySummariesProvider = Provider<List<WeekDaySummary>>((ref) {
   return List<WeekDaySummary>.generate(7, (i) {
     final date = weekStart.add(Duration(days: i));
 
-    final dayPlanned = allPlanned.where((b) => isSameDay(b.start, date)).toList();
-    final dayTracked = allTracked.where((b) => isSameDay(b.start, date)).toList();
+    final dayPlanned = allPlanned
+        .where((b) => isSameDay(b.start, date))
+        .toList();
+    final dayTracked = allTracked
+        .where((b) => isSameDay(b.start, date))
+        .toList();
 
     final (windowStart, windowEnd) = dayWindowFor(date);
     final gaps = computeUntrackedGaps(
@@ -44,9 +53,11 @@ final weekDaySummariesProvider = Provider<List<WeekDaySummary>>((ref) {
     return WeekDaySummary(
       date: date,
       plannedHoursByCategory: groupByCategory(
-          dayPlanned.map((b) => (categoryId: b.categoryId, duration: b.duration))),
+        dayPlanned.map((b) => (categoryId: b.categoryId, duration: b.duration)),
+      ),
       actualHoursByCategory: groupByCategory(
-          dayTracked.map((b) => (categoryId: b.categoryId, duration: b.duration))),
+        dayTracked.map((b) => (categoryId: b.categoryId, duration: b.duration)),
+      ),
       untrackedHours: gaps.fold<double>(0, (t, g) => t + hoursOf(g.duration)),
     );
   });

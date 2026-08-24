@@ -11,7 +11,11 @@ import '../../../theme/app_text_styles.dart';
 /// A tracked block: 15%-tint fill, 3px solid left border in the category
 /// color, title plus a monospace source line. Tapping opens a detail sheet.
 class ActualBlockWidget extends StatelessWidget {
-  const ActualBlockWidget({super.key, required this.block, required this.category});
+  const ActualBlockWidget({
+    super.key,
+    required this.block,
+    required this.category,
+  });
 
   final TrackedBlock block;
   final Category category;

@@ -8,7 +8,10 @@ class HatchPatternBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(painter: _HatchPainter(), child: const SizedBox.expand());
+    return CustomPaint(
+      painter: _HatchPainter(),
+      child: const SizedBox.expand(),
+    );
   }
 }
 

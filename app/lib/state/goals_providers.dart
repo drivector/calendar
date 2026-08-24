@@ -30,6 +30,18 @@ final goalsProvider = Provider<List<Goal>>((ref) {
   return ref.watch(goalsStreamProvider).valueOrNull ?? [];
 });
 
+/// The goal a category counts toward, if any — a [TrackedBlock] only ever
+/// stores its category, not which goal it was logged against, so anything
+/// that wants to show "which goal is this" (the Activities list) has to
+/// work backwards from the category. A category can in principle back more
+/// than one goal, but nothing in the app's own UI (Log activity's goal
+/// chips, category creation) ever sets that up, so the first match is it.
+Goal? goalForCategory(List<Goal> goals, String categoryId) {
+  for (final goal in goals) {
+    if (goal.categoryId == categoryId) return goal;
+  }
+  return null;
+}
 
 /// Actual hours this week = tracked blocks in the goal's category that fall
 /// within the current week.
@@ -41,10 +53,12 @@ double _actualHoursForGoal(
   final weekStart = weekStartFor(selectedDate);
   final weekEnd = weekStart.add(const Duration(days: 7));
   return allTracked
-      .where((b) =>
-          b.categoryId == goal.categoryId &&
-          !b.start.isBefore(weekStart) &&
-          b.start.isBefore(weekEnd))
+      .where(
+        (b) =>
+            b.categoryId == goal.categoryId &&
+            !b.start.isBefore(weekStart) &&
+            b.start.isBefore(weekEnd),
+      )
       .fold(0.0, (total, b) => total + b.duration.inMinutes / 60);
 }
 
@@ -61,10 +75,12 @@ double _plannedHoursForGoal(
   final weekStart = weekStartFor(selectedDate);
   final weekEnd = weekStart.add(const Duration(days: 7));
   final manualHours = allPlanned
-      .where((b) =>
-          b.categoryId == goal.categoryId &&
-          !b.start.isBefore(weekStart) &&
-          b.start.isBefore(weekEnd))
+      .where(
+        (b) =>
+            b.categoryId == goal.categoryId &&
+            !b.start.isBefore(weekStart) &&
+            b.start.isBefore(weekEnd),
+      )
       .fold(0.0, (total, b) => total + b.duration.inMinutes / 60);
   final generatedHours = generatedThisWeek
       .where((b) => b.goalId == goal.id)
@@ -97,10 +113,7 @@ final goalGeneratedBlocksThisWeekProvider = Provider<List<PlannedBlock>>((ref) {
   final generated = <PlannedBlock>[];
   for (var i = 0; i < 7; i++) {
     final day = weekStart.add(Duration(days: i));
-    generated.addAll(generateGoalPlannedBlocksForDate(
-      goals: goals,
-      date: day,
-    ));
+    generated.addAll(generateGoalPlannedBlocksForDate(goals: goals, date: day));
   }
   return generated;
 });
@@ -129,7 +142,12 @@ final goalProgressListProvider = Provider<List<GoalProgress>>((ref) {
       computeGoalProgress(
         goal: goal,
         actualHours: _actualHoursForGoal(goal, allTracked, selectedDate),
-        plannedHours: _plannedHoursForGoal(goal, allPlanned, generatedThisWeek, selectedDate),
+        plannedHours: _plannedHoursForGoal(
+          goal,
+          allPlanned,
+          generatedThisWeek,
+          selectedDate,
+        ),
         date: selectedDate,
       ),
   ];

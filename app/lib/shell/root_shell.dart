@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/day_view/day_view_screen.dart';
 import '../features/goals/goals_screen.dart';
-import '../features/log_activity/log_activity_screen.dart';
+import '../features/log_activity/activities_screen.dart';
 import '../features/week_view/week_view_screen.dart';
 import '../shared/widgets/app_tab_bar.dart';
 import '../state/root_shell_providers.dart';
@@ -12,14 +12,14 @@ const _tabs = [
   AppTabBarItem('Day'),
   AppTabBarItem('Week'),
   AppTabBarItem('Goals'),
-  AppTabBarItem('+ Log'),
+  AppTabBarItem('Activities'),
 ];
 
 const _screens = [
   DayViewScreen(),
   WeekViewScreen(),
   GoalsScreen(),
-  LogActivityScreen(),
+  ActivitiesScreen(),
 ];
 
 /// Hosts the 4 tabs behind an [IndexedStack] (not route push) so each

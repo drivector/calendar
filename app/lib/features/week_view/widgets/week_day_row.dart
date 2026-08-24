@@ -54,7 +54,9 @@ class WeekDayRow extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: AppSpacing.s2),
-              Expanded(child: WeekDayBar(summary: summary, categories: categories)),
+              Expanded(
+                child: WeekDayBar(summary: summary, categories: categories),
+              ),
               const SizedBox(width: AppSpacing.s2),
               SizedBox(
                 width: 32,
