@@ -92,6 +92,14 @@ class _UnverifiedEmailGateState extends ConsumerState<_UnverifiedEmailGate> {
     try {
       await widget.user.reload();
       final refreshed = ref.read(firebaseAuthProvider).currentUser;
+      // reload() updates the local User's profile fields (emailVerified
+      // included) but NOT the cached ID token's claims — Firestore's
+      // security rules check the token's own `email_verified` claim, not
+      // this profile flag. Without forcing a fresh token here, a user who
+      // just verified would pass this local check and reach RootShell,
+      // then immediately hit permission-denied on its first Firestore read
+      // until the SDK happened to refresh the token on its own.
+      await refreshed?.getIdToken(true);
       if (mounted) {
         setState(() {
           _verified = refreshed?.emailVerified ?? false;

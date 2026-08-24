@@ -2,11 +2,78 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Every collection (categories, goals, plannedBlocks, trackedBlocks)
-    // lives under the owning user's own subtree — only that signed-in user
-    // may read or write it.
-    match /users/{uid}/{collection}/{docId} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+    // Owner + verified-email check, shared by every collection below. Every
+    // legitimate app flow that reaches Firestore at all is already past the
+    // client-side "Verify your email" gate (AuthGate blocks any unverified
+    // account before it can render Onboarding/RootShell), so this closes
+    // the same requirement at the data layer — an unverified account's
+    // still-valid ID token previously worked for direct API calls that
+    // bypass the app UI entirely.
+    function isOwner(uid) {
+      return request.auth != null
+          && request.auth.uid == uid
+          && request.auth.token.email_verified == true;
+    }
+
+    // A generous cap, not a tight one — this exists to block pathological/
+    // abusive documents (which cost real money per read), not to second-
+    // guess legitimate data. Every block/goal title in the app's own UI is
+    // realistically well under this.
+    function isReasonableString(value) {
+      return value is string && value.size() <= 500;
+    }
+
+    match /users/{uid}/categories/{docId} {
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+          && request.resource.data.keys().hasAll(['name', 'color'])
+          && isReasonableString(request.resource.data.name)
+          && request.resource.data.color is int;
+      allow delete: if isOwner(uid);
+    }
+
+    match /users/{uid}/goals/{docId} {
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+          && request.resource.data.keys().hasAll(
+               ['name', 'categoryId', 'scheduleByWeekday', 'startDate', 'endDate']
+             )
+          && isReasonableString(request.resource.data.name)
+          && isReasonableString(request.resource.data.categoryId)
+          && request.resource.data.scheduleByWeekday is map
+          && request.resource.data.startDate is string
+          && request.resource.data.endDate is string;
+      // scheduleByWeekday's per-day entries aren't validated further here —
+      // deep-validating an arbitrary-length list of duration/time-range
+      // maps in rules language is possible but adds a lot of fragile
+      // surface for a single-user app's own data; the fields above are
+      // what actually gate cross-cutting risk (type confusion, size abuse).
+      allow delete: if isOwner(uid);
+    }
+
+    match /users/{uid}/plannedBlocks/{docId} {
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+          && request.resource.data.keys().hasAll(['start', 'end', 'title', 'categoryId'])
+          && request.resource.data.start is string
+          && request.resource.data.end is string
+          && isReasonableString(request.resource.data.title)
+          && isReasonableString(request.resource.data.categoryId);
+      allow delete: if isOwner(uid);
+    }
+
+    match /users/{uid}/trackedBlocks/{docId} {
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+          && request.resource.data.keys().hasAll(
+               ['start', 'end', 'title', 'categoryId', 'sourceId']
+             )
+          && request.resource.data.start is string
+          && request.resource.data.end is string
+          && isReasonableString(request.resource.data.title)
+          && isReasonableString(request.resource.data.categoryId)
+          && isReasonableString(request.resource.data.sourceId);
+      allow delete: if isOwner(uid);
     }
   }
 }

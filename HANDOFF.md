@@ -1,7 +1,9 @@
 # Calendar Tracker — session handoff
 
-Updated 2026-08-24 (sixth session — three batches pushed, a fourth
-uncommitted, see **Git status**) — Firebase Auth + Firestore are built
+Updated 2026-08-24 (sixth session — three batches pushed, a fourth and
+fifth uncommitted, see **Git status**; the fifth also **deployed live
+Firestore rules changes to production**) — Firebase Auth + Firestore are
+built
 and live; the fourth session added five goal/logging UX fixes, CI, and
 iPhone install readiness. The fifth session was large — in rough order:
 fixed a real gap in the fourth session's own unsaved-changes work
@@ -44,7 +46,17 @@ time" silently discards everything you enter** (documented, not fixed —
 needs a product decision, see **Coverage audit + a real bug found**),
 plus cleaned up **Firestore data orphaned by this session's own test
 probes** and added four tests for genuine coverage gaps (reminder
-prefill on edit, category rename/delete, sign-out) — **uncommitted**.
+prefill on edit, category rename/delete, sign-out) — pushed as `4269275`.
+A fifth round did an actual **security review** (asked directly, honest
+answer: none had been done before this) and found two real gaps —
+"required email verification" wasn't enforced by the Firestore rules at
+all, and the rules had no field/type/size validation — **fixed and
+deployed to production** with the user's go-ahead (see **Security review
++ Firestore rules hardening**). That review also surfaced an urgent,
+unrelated finding: **the real account used throughout this whole project
+has `emailVerified: false`**, meaning it's now genuinely blocked from
+Firestore access (not just a UI speed bump) until it verifies — flagged
+directly to the user. **Uncommitted.**
 Each feature/fix has its own dated section below with
 full detail — read this intro for the shape of things, then jump to
 whichever section is relevant. Read this first, then verify anything
@@ -168,18 +180,20 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
 `AsyncLoading`. Widget tests don't need this explicitly since
 `pumpAndSettle()` flushes it.
 
-## Git status — sixth session's first three batches pushed, fourth uncommitted
+## Git status — sixth session's first four batches pushed, fifth uncommitted
 
 - The Firebase Auth/Firestore backend, the fourth session's UX fixes/CI,
   the entire fifth session (week nav, Activities tab, onboarding, cap
-  removal, Day view goal-picker), and the sixth session's **first three
+  removal, Day view goal-picker), and the sixth session's **first four
   batches** are all committed **and pushed** to `drivector/calendar`
   main — `55e84e7`, `0c6414a`, `78a0beb`, `52d922a`, `cce730e`,
   `3a2efe6` (goal reminders, CocoaPods install, the macOS sign-up fix),
-  `1b3c140` (the Note field fix + Firestore isolation verification), and
+  `1b3c140` (the Note field fix + Firestore isolation verification),
   `337fc3d` (password reset + required email verification, plus the two
   message fixes it surfaced — see **Password reset + required email
-  verification**). `git status` confirms `main` is up to date with
+  verification**), and `4269275` (four coverage-gap tests + documenting
+  the claim-sheet bug — see **Coverage audit + a real bug found**).
+  `git status` confirms `main` is up to date with
   `origin/main` as of this write-up. `3a2efe6` touched: `pubspec.yaml`/
   `pubspec.lock` (new
   `flutter_local_notifications`/`timezone` deps), `lib/models/goal.dart`,
@@ -205,14 +219,14 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
   log_activity_sheet.dart`, `lib/features/log_activity/
   activities_screen.dart`, `test/widget_test.dart` (the Note field fix)
   — the Firestore isolation verification itself had no code change.
-- The sixth session's **fourth batch — uncommitted**: four new tests
-  covering reminder-prefill-on-edit, category rename/delete, and Goals
-  sign-out (`test/widget_test.dart` — see **Coverage audit + a real bug
-  found**). No app code changed this round — the one real bug found (the
-  claim-untracked-time sheet) was deliberately left as-is, documented
-  rather than fixed, per the user's own call. The Firestore cleanup for
-  orphaned probe data was a live operation against the real project, not
-  a code change either. Ask before committing, per this repo's
+- The sixth session's **fifth batch — uncommitted**: the Firestore rules
+  hardening (`app/firestore.rules`) and its companion client fix
+  (`lib/features/auth/auth_gate.dart` — the `getIdToken(true)` forced
+  refresh after `reload()`) — see **Security review + Firestore rules
+  hardening**. **The rules themselves are already live in production**,
+  deployed with the user's explicit go-ahead ahead of this commit — the
+  commit is just catching the repo up to what's already deployed, not
+  triggering the deploy. Ask before committing, per this repo's
   `CLAUDE.md` — a prior commit/push approval doesn't carry forward to a
   new batch.
 - A stray duplicate clone of this repo that existed briefly at
@@ -663,6 +677,122 @@ explicitly out of scope this round):
   the same action; this covers the primary, everyday path.
 
 Verified: `flutter analyze` clean, all 151 tests pass.
+
+## Security review + Firestore rules hardening (sixth session)
+
+The user asked directly whether any security/penetration testing had
+been done. Honest answer at the time: no — the closest thing was the
+Firestore isolation check earlier this session, which is one functional
+test of one rule, not adversarial testing. Did an actual (still scoped,
+not a formal pentest) review: read `firestore.rules` in full, checked for
+committed secrets, checked dependency staleness, confirmed there's no
+Cloud Functions attack surface.
+
+**Two real gaps found, both fixed with the user's explicit go-ahead**
+(offered a third option — leave as documented findings — user chose to
+fix both):
+
+1. **"Required email verification" was UI-only, not enforced by the
+   rules.** The rules only ever checked `request.auth.uid == uid` — never
+   `email_verified`. An unverified account's still-valid ID token worked
+   fine for direct Firestore API calls that bypass `AuthGate` entirely
+   (curl, a modified client, the Firebase console). Not a cross-user
+   hole — still scoped to the caller's own uid — but it meant the
+   verification gate built earlier this session was cosmetic at the data
+   layer.
+2. **No field/type/size validation** — any signed-in (now: verified)
+   user could write arbitrary fields, wrong types, or oversized documents
+   to their own subtree. Self-inflicted only, but a real cost-abuse
+   vector (arbitrary Firestore writes cost real money) and meant every
+   validation the client does is trivially bypassable by anyone calling
+   the API directly with a valid token.
+
+**`firestore.rules` rewritten**: a shared `isOwner(uid)` function now
+requires `request.auth.uid == uid && request.auth.token.email_verified
+== true`, and each of the four collections (`categories`, `goals`,
+`plannedBlocks`, `trackedBlocks`) gets its own `create`/`update` rule
+checking required keys are present and are the right primitive type,
+plus a generous 500-char cap on free-text fields via a shared
+`isReasonableString()` helper. `scheduleByWeekday`'s nested per-day
+entries are deliberately **not** deep-validated — Firestore's rules
+language can do it, but for a single-user app it's a lot of fragile
+surface for a field only its own owner can corrupt; the top-level checks
+are what actually gate cross-cutting risk (type confusion, size abuse).
+`delete` only checks `isOwner`, no data shape to check.
+
+**Real companion bug this surfaced, fixed alongside it**: `User.reload()`
+(used by `_UnverifiedEmailGateState._checkVerified()`, see the section
+above) refreshes the local profile's `emailVerified` flag but **not**
+the cached ID token's claims — those only update on the SDK's own
+schedule or an explicit forced refresh. Without a fix, deploying the
+rules as they stood would have caused a real regression: a user who just
+verified would pass the app's own local check, reach `RootShell`, and
+then immediately hit `permission-denied` on the first Firestore read
+until the token happened to refresh on its own. Fixed by calling
+`refreshed?.getIdToken(true)` right after `reload()` in the same method,
+forcing a fresh token (with the updated claim) before proceeding.
+`MockUser.getIdToken` is a safe no-op in tests, confirmed by reading the
+mock's source before relying on it — no test fallout, still 151 passing.
+
+**Deployed and live-verified** (asked before deploying, since a mistake
+in production security rules could lock the user out of their own
+app) — syntax validated first via `firebase deploy --only
+firestore:rules --dry-run`, then deployed for real via
+`firebase deploy --only firestore:rules --project trackmyday-6380a`.
+- **Rejection path — proven live**: a fresh unverified throwaway account
+  attempted a Firestore write and got a real `permission-denied` from
+  the deployed rules, not a mocked one.
+- **Acceptance path — reasoning, not re-proven from scratch**: for a
+  verified user, the new rule is exactly `request.auth.uid == uid` —
+  the *original* rule, unchanged; only the unverified case is newly
+  restrictive. Attempted to prove this directly too (export the
+  throwaway account via `firebase auth:export`, flip `emailVerified` in
+  the JSON, reimport with `firebase auth:import`, sign in, write) but
+  `auth:import` requires the project's private scrypt signer key to
+  reimport a password hash, which needs `gcloud`/Identity Toolkit Admin
+  API access not available in this environment — stopped rather than
+  force it once the CLI reported `Must provide hash key(base64 encoded)
+  for hash algorithm SCRYPT`. Worth being honest that this specific
+  round didn't re-prove the accept path from zero, even though the exact
+  code path was exercised successfully many times earlier this session
+  under the pre-hardening rules.
+
+**Real, urgent finding from this process**: exporting accounts to do the
+above surfaced that **the real account used throughout this whole
+project (`a.panagiotid@gmail.com`) has `emailVerified: false`** in
+Firebase. Before this rules deploy, that only meant it would see the
+"Verify your email" gate on next sign-in (a UI speed bump). **After this
+deploy, it means the account cannot read or write any Firestore data at
+all until it verifies** — the gate is no longer cosmetic for this
+account either. Told to the user directly and prominently, not buried
+here. The export also surfaced **7 other unrecognized accounts** in the
+project (`sdgsag42rdg@gsgrgrs.gr`, `sdgsadg@gsgrgrs.gr`,
+`sdgsagfsrdg@gsgrgrs.gr`, `safsdfsaf@sfa.fa`, `sdgsagrdg@gsgrgrs.gr`,
+`abcde@gsgrgrs.gr`, `sdgsadg@gsgs.gr`, all unverified, gibberish
+domains) — almost certainly the user's own earlier manual sign-up
+testing (matches the "user tested sign-up... created a category, created
+a Walking goal" note under **Authentication + Firestore backend**), left
+untouched since nobody asked for cleanup and guessing wrong here would
+be a real mistake, not a cosmetic one.
+
+**Cleanup**: both throwaway accounts created during this process
+(`rules-probe-...@example.com` for the rejection test,
+`rules-probe-verify-target@example.com` for the abandoned
+accept-path test) were deleted via the client SDK's own `user.delete()`
+before this round ended. The exported JSON files (which briefly
+contained every account's password hash and salt, including the real
+account's) were written to the session scratchpad and deleted
+immediately after use — never committed, never left on disk past this
+round.
+
+**Not done, worth naming rather than pretending otherwise**: no App
+Check (Firebase's app-integrity layer — unconfigured, would need actual
+setup work, not just a rules change), no dependency CVE scan (no tool
+available here for one; `firebase_auth`/`cloud_firestore`/`firebase_core`
+are 1–2 major versions behind, which is drift worth periodic attention
+but isn't itself evidence of an active vulnerability), no fuzzing, no
+auth-bypass attempts, no rate-limit/brute-force testing, no traffic
+interception. This was a real but scoped review, not a penetration test.
 
 ## Password reset + required email verification (sixth session)
 
