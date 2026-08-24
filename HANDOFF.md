@@ -1,6 +1,6 @@
 # Calendar Tracker — session handoff
 
-Updated 2026-08-24 (sixth session — two batches pushed, a third
+Updated 2026-08-24 (sixth session — three batches pushed, a fourth
 uncommitted, see **Git status**) — Firebase Auth + Firestore are built
 and live; the fourth session added five goal/logging UX fixes, CI, and
 iPhone install readiness. The fifth session was large — in rough order:
@@ -19,7 +19,7 @@ gave the **Day view's add-block sheet** a goal picker and independent
 start/end dates, and **removed the cap goal type entirely** (every goal
 is a target now). That whole session is pushed as `cce730e`.
 
-The sixth session (this one, three rounds): first added **goal
+The sixth session (this one, four rounds): first added **goal
 reminders** (a lead-time picker per goal plus real scheduled local
 notifications via `flutter_local_notifications`), installed **CocoaPods**
 in this environment (was missing, blocking any native iOS/macOS plugin
@@ -33,11 +33,19 @@ gap flagged, not fixed, back in the fifth session) and **live-verified
 per-user Firestore data isolation** with two real throwaway accounts
 against the actual security rules (not assumed — confirmed cross-account
 reads are genuinely rejected) — pushed as `1b3c140`. A third round made
-**auth actually complete** — **password reset** (a "forgot password?"
-link on sign-in) and **required email verification** (a new gate between
-sign-in and the app, blocking access until the account's email is
-confirmed) — see **Password reset + required email verification**;
-**uncommitted**. Each feature/fix has its own dated section below with
+**auth actually complete** — **password reset** and **required email
+verification**, both fully live-verified interactively on the iOS
+Simulator (see **Password reset + required email verification**, which
+also documents a real self-correction: an earlier claim that the
+Simulator's touch input was broken was itself wrong — a pixel/point unit
+mistake, not an environment problem) — pushed as `337fc3d`. A fourth
+round audited test coverage and found a real bug: **"claim untracked
+time" silently discards everything you enter** (documented, not fixed —
+needs a product decision, see **Coverage audit + a real bug found**),
+plus cleaned up **Firestore data orphaned by this session's own test
+probes** and added four tests for genuine coverage gaps (reminder
+prefill on edit, category rename/delete, sign-out) — **uncommitted**.
+Each feature/fix has its own dated section below with
 full detail — read this intro for the shape of things, then jump to
 whichever section is relevant. Read this first, then verify anything
 time-sensitive (git status, test count, Firebase console state) since it
@@ -134,7 +142,7 @@ and a Claim-untracked-time bottom sheet.
 
 ## Testing
 
-`flutter analyze` is clean; `flutter test` currently passes **147 tests**
+`flutter analyze` is clean; `flutter test` currently passes **151 tests**
 across `test/models/`, `test/state/`, `test/utils/`, `test/widget_test.dart`,
 and `test/features/auth/login_screen_test.dart`. Convention: after any
 change, run both and fix before moving on. Run from `app/`:
@@ -160,17 +168,20 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
 `AsyncLoading`. Widget tests don't need this explicitly since
 `pumpAndSettle()` flushes it.
 
-## Git status — sixth session's first two batches pushed, third uncommitted
+## Git status — sixth session's first three batches pushed, fourth uncommitted
 
 - The Firebase Auth/Firestore backend, the fourth session's UX fixes/CI,
   the entire fifth session (week nav, Activities tab, onboarding, cap
-  removal, Day view goal-picker), and the sixth session's **first two
+  removal, Day view goal-picker), and the sixth session's **first three
   batches** are all committed **and pushed** to `drivector/calendar`
   main — `55e84e7`, `0c6414a`, `78a0beb`, `52d922a`, `cce730e`,
   `3a2efe6` (goal reminders, CocoaPods install, the macOS sign-up fix),
-  and `1b3c140` (the Note field fix + Firestore isolation verification).
-  `git status` confirms `main` is up to date with `origin/main` as of
-  this write-up. `3a2efe6` touched: `pubspec.yaml`/`pubspec.lock` (new
+  `1b3c140` (the Note field fix + Firestore isolation verification), and
+  `337fc3d` (password reset + required email verification, plus the two
+  message fixes it surfaced — see **Password reset + required email
+  verification**). `git status` confirms `main` is up to date with
+  `origin/main` as of this write-up. `3a2efe6` touched: `pubspec.yaml`/
+  `pubspec.lock` (new
   `flutter_local_notifications`/`timezone` deps), `lib/models/goal.dart`,
   `lib/models/goal_reminders.dart` (new), `lib/services/
   goal_reminder_service.dart` (new), `lib/state/
@@ -194,11 +205,14 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
   log_activity_sheet.dart`, `lib/features/log_activity/
   activities_screen.dart`, `test/widget_test.dart` (the Note field fix)
   — the Firestore isolation verification itself had no code change.
-- The sixth session's **third batch — uncommitted**: password reset +
-  required email verification (`lib/features/auth/login_screen.dart`,
-  `lib/features/auth/auth_gate.dart`,
-  `test/features/auth/login_screen_test.dart` — see **Password reset +
-  required email verification**). Ask before committing, per this repo's
+- The sixth session's **fourth batch — uncommitted**: four new tests
+  covering reminder-prefill-on-edit, category rename/delete, and Goals
+  sign-out (`test/widget_test.dart` — see **Coverage audit + a real bug
+  found**). No app code changed this round — the one real bug found (the
+  claim-untracked-time sheet) was deliberately left as-is, documented
+  rather than fixed, per the user's own call. The Firestore cleanup for
+  orphaned probe data was a live operation against the real project, not
+  a code change either. Ask before committing, per this repo's
   `CLAUDE.md` — a prior commit/push approval doesn't carry forward to a
   new batch.
 - A stray duplicate clone of this repo that existed briefly at
@@ -568,6 +582,87 @@ Both throwaway accounts and their test documents were fully cleaned up
 by the probe itself before it exited. No code changes — this section
 exists purely as a record that the isolation guarantee has now been
 checked for real, closing out that line item.
+
+## Coverage audit + a real bug found: "claim untracked time" is dead UI (sixth session)
+
+The user asked directly whether there were more test gaps and whether
+any of this session's own probe activity had left dummy-user mess behind
+(see below for that half). Auditing coverage by mapping every screen file
+against what actually references it in `test/` (not just "does a test
+mention this filename," since text-finder-driven tests don't always) —
+turned up one thing worth calling a real bug, not just a gap.
+
+**`lib/features/day_view/widgets/claim_gap_sheet.dart` doesn't do
+anything.** The one existing test (`Tapping the untracked gap opens the
+claim sheet`) opens it and asserts `SAVE` is present — it never taps it,
+which is exactly how this survived:
+- **SAVE is `Navigator.of(context).pop()`** — no repository call, no
+  `TrackedBlock`, no provider read at all in the whole file. The duration
+  stepper and the category you pick are simply discarded.
+- **Its six category options are hardcoded** from `mock_categories.dart`
+  (Walking / Deep work / Meeting / Errands / Admin / Other) — it never
+  reads live `categoriesProvider`. A real account starts with zero
+  categories, so every user sees six categories that were never theirs
+  to pick from.
+- `"suggested: Errands — calendar had 'grocery run'"` is static text, not
+  a real suggestion derived from anything.
+
+**User's call, asked directly rather than assumed**: document this as a
+known-broken feature needing a redesign, not a quick patch — a real fix
+means deciding what "claim" should actually do (create a `TrackedBlock`
+sized to the stepper's duration? which categories, live ones?), which is
+a product decision, not a bug fix. **Not touched this round.** Whoever
+picks this up next should treat the whole file as a placeholder: rebuild
+`SAVE` to actually write through `trackedBlocksRepositoryProvider`, swap
+the hardcoded six for live `categoriesProvider` (same
+`resolveCategory`/`CategoryChip` pattern every other picker in this app
+already uses), and drop the fake suggestion line entirely rather than try
+to make it real (deriving a suggestion from calendar/context data is a
+separate feature, not implied by "make claiming work").
+
+**Dummy-user mess found and cleaned up**: earlier probes this session
+that called `createUserWithEmailAndPassword` against the real project
+(four `keychain-error` diagnosis runs, the live sign-up verification run,
+the two Firestore-isolation accounts) all deleted the **Auth** account
+afterward — but deleting a Firebase Auth account does **not** delete its
+Firestore data, and one of those runs (the successful post-fix sign-up,
+uid `I1jFlqVgN1Xmr61zLmRPdJrGVxr2`) had gone far enough to reach
+onboarding and seed 9 real categories under `users/{uid}/...` before
+being cleaned up at the Auth layer only. Confirmed via
+`firebase firestore:delete -r "users/I1jFlqVgN1Xmr61zLmRPdJrGVxr2"
+--project trackmyday-6380a -f` (exit 0; the CLI is silent on success, and
+there's no way to positively verify a delete-by-uid without Admin SDK
+access, so exit code is the available signal) — the other two probe uids
+were cleaned the same way for completeness, though their own probes had
+already deleted their Firestore docs directly. **Lesson for future
+sessions**: an Auth-account cleanup step must delete Firestore data too,
+or explicitly say it isn't going to — "deleted the account" is not the
+same claim as "left no trace," and this session's earlier reporting
+implied the stronger one without having checked.
+
+**Four new tests added** (147 → 151), closing the gaps the audit
+actually found real value in (reminder prefill, category edit/delete,
+sign-out from the main app — not the claim sheet, since fixing that is
+explicitly out of scope this round):
+- **Reminder prefill on edit** — this exact sheet has had a real prefill
+  bug before (`goal_edit_sheet.dart`'s time-range fields once opened
+  empty when editing an existing goal), so a goal with
+  `reminderMinutesBefore: 30` reopening with that chip already
+  filled-in-styled (not just present in the widget tree — the fill color
+  distinguishes selected from merely-rendered) is the same class of risk
+  as the bug that already happened once.
+- **Category rename** — tapping an existing category's row, editing its
+  name, confirming the list reflects it.
+- **Category delete leaves existing blocks readable** — deletes a
+  category that real blocks still reference, then navigates to Day view
+  (which renders those blocks) and confirms no crash — `resolveCategory`'s
+  "Unknown" fallback existed already but had never actually been
+  exercised through the full delete → re-render path.
+- **Sign out from the main app** — the Goals screen's own "sign out" link
+  was previously only tested from the *unverified-email* gate's copy of
+  the same action; this covers the primary, everyday path.
+
+Verified: `flutter analyze` clean, all 151 tests pass.
 
 ## Password reset + required email verification (sixth session)
 
@@ -1161,15 +1256,17 @@ goal was empty"). Five more tests, all in `test/widget_test.dart`:
    target')` and failed. Fixed the assertion, not the (correctly
    uppercase, by design) label.
 
-**Separate finding, not fixed**: the log sheet's **Note** field
-(`draft.note`, set via `notifier.setNote`) is captured in
-`DraftLogEntryProvider` state but never actually used anywhere —
-`TrackedBlock` has no `note` field at all, so whatever the user types
-there is silently discarded on save. Same class of bug as the one just
-fixed (input captured, then dropped with no feedback), but out of scope
-for this round — flagged to the user rather than fixed unasked, since it
-needs a model field + Firestore schema change + a place to actually show
-the note, not just a validation tweak.
+**Separate finding, not fixed *at the time*** — same class of bug as the
+one just fixed (input captured, then dropped with no feedback): the log
+sheet's **Note** field (`draft.note`, set via `notifier.setNote`) was
+captured in `DraftLogEntryProvider` state but never actually used
+anywhere — `TrackedBlock` had no `note` field at all, so whatever the
+user typed there was silently discarded on save. Flagged rather than
+fixed in the moment, since it needed a model field + Firestore schema
+change + a display location, not just a validation tweak. **This was
+fixed in the sixth session** — see **Note field: actually saved and
+shown now** above (kept this paragraph rather than deleting it, since it
+still accurately explains the original bug).
 
 Verified: `flutter analyze` clean, all 117 tests pass (112 + 5 new).
 

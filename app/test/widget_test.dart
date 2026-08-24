@@ -2505,4 +2505,177 @@ void main() {
       expect(find.text('ADD ACTUAL'), findsNothing);
     },
   );
+
+  testWidgets(
+    'Goals: editing a goal that has a reminder shows it already selected, and '
+    'saving without touching it keeps it',
+    (WidgetTester tester) async {
+      // Guards a prefill bug this exact sheet has had before (time ranges
+      // used to open empty when editing) — if `_reminderMinutesBefore`
+      // didn't seed from the existing goal, an unrelated edit would
+      // silently wipe the user's reminder.
+      final container = ProviderContainer(
+        overrides: await _signedInOverrides(),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final walking = container
+          .read(goalsProvider)
+          .firstWhere((g) => g.name == 'Walking');
+      await container.read(goalsRepositoryProvider).upsert(
+        Goal(
+          id: walking.id,
+          name: walking.name,
+          categoryId: walking.categoryId,
+          scheduleByWeekday: walking.scheduleByWeekday,
+          startDate: walking.startDate,
+          endDate: walking.endDate,
+          reminderMinutesBefore: 30,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('GOALS'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Walking'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('EDIT'));
+      await tester.pumpAndSettle();
+
+      // Selected chips are a solid accent fill; unselected ones are only
+      // bordered — so the fill is what proves it prefilled.
+      await tester.ensureVisible(find.text('30 min before'));
+      await tester.pumpAndSettle();
+      final chip = find
+          .ancestor(
+            of: find.text('30 min before'),
+            matching: find.byType(Container),
+          )
+          .first;
+      final decoration =
+          tester.widget<Container>(chip).decoration as BoxDecoration;
+      expect(
+        decoration.color,
+        isNotNull,
+        reason: 'the stored 30-minute lead time should open pre-selected',
+      );
+
+      await tester.ensureVisible(find.text('SAVE CHANGES'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('SAVE CHANGES'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        container
+            .read(goalsProvider)
+            .firstWhere((g) => g.name == 'Walking')
+            .reminderMinutesBefore,
+        30,
+      );
+    },
+  );
+
+  testWidgets('Categories: renaming a category updates it in the list', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: await _signedInOverrides(),
+        child: const CalendarTrackerApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('GOALS'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('categories'));
+    await tester.pumpAndSettle();
+
+    // The whole row is the tap target, so tapping the name opens its edit
+    // sheet — no separate "edit" hit needed.
+    await tester.tap(find.text('Walking'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'Strolling');
+    await tester.tap(find.text('SAVE CHANGES'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Strolling'), findsOneWidget);
+    expect(find.text('Walking'), findsNothing);
+  });
+
+  testWidgets(
+    'Categories: deleting a category still leaves its existing blocks '
+    'readable rather than crashing',
+    (WidgetTester tester) async {
+      // resolveCategory falls back to a neutral "Unknown" placeholder for a
+      // category deleted out from under existing blocks — this pins that
+      // graceful degradation, since blocks keep a bare categoryId with no
+      // foreign-key guarantee behind it.
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: await _signedInOverrides(),
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('GOALS'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('categories'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Walking'));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('DELETE CATEGORY'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('DELETE CATEGORY'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Walking'), findsNothing);
+
+      // Back out to the Day view, which still holds blocks pointing at the
+      // now-deleted category — it must render, not throw.
+      await tester.tap(find.text('close'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('DAY'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('Goals: sign out returns to the login screen', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: await _signedInOverrides(),
+        child: const CalendarTrackerApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('GOALS'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('sign out'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('SIGN IN'), findsOneWidget);
+    expect(find.byType(RootShell), findsNothing);
+  });
 }
