@@ -1,10 +1,10 @@
 # Calendar Tracker — session handoff
 
-Updated 2026-08-24 (sixth session — first batch pushed as `3a2efe6`, a
-second batch uncommitted, see **Git status**) — Firebase Auth + Firestore
-are built and live; the fourth session added five goal/logging UX fixes,
-CI, and iPhone install readiness. The fifth session was large — in rough
-order: fixed a real gap in the fourth session's own unsaved-changes work
+Updated 2026-08-24 (sixth session — two batches pushed, a third
+uncommitted, see **Git status**) — Firebase Auth + Firestore are built
+and live; the fourth session added five goal/logging UX fixes, CI, and
+iPhone install readiness. The fifth session was large — in rough order:
+fixed a real gap in the fourth session's own unsaved-changes work
 (barrier-tap did nothing instead of prompting), added a **Capacity** page
 off the Week view, fixed two real gaps in the goal detail sheet (hidden
 date range, today-only target), added **week-to-week navigation** to
@@ -19,7 +19,7 @@ gave the **Day view's add-block sheet** a goal picker and independent
 start/end dates, and **removed the cap goal type entirely** (every goal
 is a target now). That whole session is pushed as `cce730e`.
 
-The sixth session (this one, in two pushes): first added **goal
+The sixth session (this one, three rounds): first added **goal
 reminders** (a lead-time picker per goal plus real scheduled local
 notifications via `flutter_local_notifications`), installed **CocoaPods**
 in this environment (was missing, blocking any native iOS/macOS plugin
@@ -27,15 +27,18 @@ build), and used that to find and **fully resolve** a real bug — sign-up
 returning a generic error on the macOS build, root-caused to a missing
 code-signing Team, fixed for real and confirmed with a live sign-up that
 actually succeeds (see **Bug: sign-up fails with "keychain-error" on
-macOS**) — all pushed as `3a2efe6`. A second, smaller round then **fixed
-the Note field** in Log activity (captured but silently dropped before —
-a known gap flagged, not fixed, back in the fifth session) and
-**live-verified per-user Firestore data isolation** with two real
-throwaway accounts against the actual security rules (not assumed —
-confirmed cross-account reads are genuinely rejected). See **Note field:
-actually saved and shown now** and **Verified: per-user Firestore
-isolation** for both. Each feature/fix has its own dated section below
-with full detail — read this intro for the shape of things, then jump to
+macOS**) — pushed as `3a2efe6`. A second round then **fixed the Note
+field** in Log activity (captured but silently dropped before — a known
+gap flagged, not fixed, back in the fifth session) and **live-verified
+per-user Firestore data isolation** with two real throwaway accounts
+against the actual security rules (not assumed — confirmed cross-account
+reads are genuinely rejected) — pushed as `1b3c140`. A third round made
+**auth actually complete** — **password reset** (a "forgot password?"
+link on sign-in) and **required email verification** (a new gate between
+sign-in and the app, blocking access until the account's email is
+confirmed) — see **Password reset + required email verification**;
+**uncommitted**. Each feature/fix has its own dated section below with
+full detail — read this intro for the shape of things, then jump to
 whichever section is relevant. Read this first, then verify anything
 time-sensitive (git status, test count, Firebase console state) since it
 may have moved on since this was written.
@@ -131,7 +134,7 @@ and a Claim-untracked-time bottom sheet.
 
 ## Testing
 
-`flutter analyze` is clean; `flutter test` currently passes **134 tests**
+`flutter analyze` is clean; `flutter test` currently passes **147 tests**
 across `test/models/`, `test/state/`, `test/utils/`, `test/widget_test.dart`,
 and `test/features/auth/login_screen_test.dart`. Convention: after any
 change, run both and fix before moving on. Run from `app/`:
@@ -157,16 +160,17 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
 `AsyncLoading`. Widget tests don't need this explicitly since
 `pumpAndSettle()` flushes it.
 
-## Git status — sixth session's first batch pushed, second batch uncommitted
+## Git status — sixth session's first two batches pushed, third uncommitted
 
 - The Firebase Auth/Firestore backend, the fourth session's UX fixes/CI,
   the entire fifth session (week nav, Activities tab, onboarding, cap
-  removal, Day view goal-picker), and the sixth session's **first
-  batch** (goal reminders, CocoaPods install, the macOS sign-up fix) are
-  all committed **and pushed** to `drivector/calendar` main — `55e84e7`,
-  `0c6414a`, `78a0beb`, `52d922a`, `cce730e`, and `3a2efe6`. `git status`
-  confirms `main` is up to date with `origin/main` as of this write-up.
-  `3a2efe6` touched: `pubspec.yaml`/`pubspec.lock` (new
+  removal, Day view goal-picker), and the sixth session's **first two
+  batches** are all committed **and pushed** to `drivector/calendar`
+  main — `55e84e7`, `0c6414a`, `78a0beb`, `52d922a`, `cce730e`,
+  `3a2efe6` (goal reminders, CocoaPods install, the macOS sign-up fix),
+  and `1b3c140` (the Note field fix + Firestore isolation verification).
+  `git status` confirms `main` is up to date with `origin/main` as of
+  this write-up. `3a2efe6` touched: `pubspec.yaml`/`pubspec.lock` (new
   `flutter_local_notifications`/`timezone` deps), `lib/models/goal.dart`,
   `lib/models/goal_reminders.dart` (new), `lib/services/
   goal_reminder_service.dart` (new), `lib/state/
@@ -185,15 +189,18 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
   Flutter-{Debug,Release}.xcconfig`, `macos/Flutter/
   GeneratedPluginRegistrant.swift` — all Flutter-tooling-generated in
   response to the new plugin, legitimate and meant to be committed
-  alongside it, not manual edits).
-- The sixth session's **second batch — uncommitted**: the Note field fix
-  (`lib/models/tracked_block.dart`, `lib/features/log_activity/widgets/
+  alongside it, not manual edits). `1b3c140` touched:
+  `lib/models/tracked_block.dart`, `lib/features/log_activity/widgets/
   log_activity_sheet.dart`, `lib/features/log_activity/
-  activities_screen.dart`, `test/widget_test.dart`) and the Firestore
-  isolation verification (no code changes — see **Verified: per-user
-  Firestore isolation**, a live check only). Ask before committing, per
-  this repo's `CLAUDE.md` — a prior commit/push approval doesn't carry
-  forward to a new batch.
+  activities_screen.dart`, `test/widget_test.dart` (the Note field fix)
+  — the Firestore isolation verification itself had no code change.
+- The sixth session's **third batch — uncommitted**: password reset +
+  required email verification (`lib/features/auth/login_screen.dart`,
+  `lib/features/auth/auth_gate.dart`,
+  `test/features/auth/login_screen_test.dart` — see **Password reset +
+  required email verification**). Ask before committing, per this repo's
+  `CLAUDE.md` — a prior commit/push approval doesn't carry forward to a
+  new batch.
 - A stray duplicate clone of this repo that existed briefly at
   `/Users/alexandrospanagiotidis/DriVector/Calendar/calendar/` (see the
   sign-up bug section for how it got there) has been **deleted** — it had
@@ -561,6 +568,231 @@ Both throwaway accounts and their test documents were fully cleaned up
 by the probe itself before it exited. No code changes — this section
 exists purely as a record that the isolation guarantee has now been
 checked for real, closing out that line item.
+
+## Password reset + required email verification (sixth session)
+
+Ask: make auth "fully working" — scoped down via `AskUserQuestion` to
+two specific pieces (declined for this round: Google/Apple sign-in,
+which need real Firebase-console + platform OAuth setup beyond what's
+achievable here): **password reset** and **required email verification**.
+
+### Password reset
+- **`login_screen.dart`** — a **"forgot password?"** link, shown only in
+  sign-in mode (`!_isSignUp` — makes no sense mid-sign-up), right under
+  the password field. Tapping it with the email field empty shows "Enter
+  your email first."; otherwise calls
+  `FirebaseAuth.sendPasswordResetEmail(email: ...)` and shows a neutral
+  confirmation ("Password reset email sent — check your inbox."). New
+  `_message` state field, deliberately kept separate from the existing
+  `_error` (styled `AppColors.text`, not the accent-red error color) so a
+  success confirmation never reads as a failure. A dedicated
+  `_resetMessageFor(code)` (not the existing `_messageFor`) maps
+  `user-not-found` to "No account found for that email." — the sign-in
+  version of that same code says "Email or password is incorrect,"
+  which would be a non sequitur here (there's no password involved in a
+  reset request).
+- No Firebase console changes needed — password-reset email templates
+  are enabled by default alongside Email/Password sign-in, already on
+  since the earlier session's Firebase setup.
+
+### Required email verification
+- **`login_screen.dart`**'s `_submit()` — a successful sign-up now also
+  calls `credential.user?.sendEmailVerification()` (fire-and-forget: the
+  new gate below covers a failed/delayed send via its own "resend"
+  action, so nothing blocks on this call succeeding).
+- **`auth_gate.dart`** — new `_UnverifiedEmailGate`, inserted between
+  "signed in" and `_SignedInGate`: `AuthGate` now checks
+  `user.emailVerified` and shows this gate instead of the app when
+  false, for both a fresh sign-up and any **already-existing** account
+  that predates this feature (nothing retroactively migrated — an old
+  account just needs one verification pass the next time it signs in).
+  - **The real design problem here**: `authStateChangesProvider`'s stream
+    only emits on sign-in/sign-out/token changes — clicking the
+    verification link in an email does **not** trigger a new emission,
+    so there's no reactive way to notice "the user just verified in
+    another tab." Solved with local widget state instead of trying to
+    force the stream: `_UnverifiedEmailGateState` seeds `_verified` from
+    the `User` snapshot `AuthGate` handed it, and an **"I'VE VERIFIED —
+    CONTINUE"** button explicitly calls `user.reload()` then re-reads
+    `firebaseAuthProvider.currentUser?.emailVerified` (the *current*
+    `FirebaseAuth` singleton's user, not the possibly-stale captured
+    reference) into that local state — once true, the widget's own
+    `build()` just returns `_SignedInGate()` directly, no need to coerce
+    the parent stream into re-evaluating.
+  - Also offers **"resend verification email"** (calls
+    `sendEmailVerification()` again, confirms with a neutral message,
+    same styling convention as the reset-email confirmation) and **"sign
+    out"** (in case the wrong account got signed into, or someone wants
+    to start over) — both real, bordered, ≥44pt tap targets per this
+    repo's button convention, not bare text.
+- **Real, one-time consequence for the account already used throughout
+  this project's testing**: it predates this feature and has never been
+  verified, so **the next time it signs in, it'll land on the "Verify
+  your email" gate**, not straight into the app. Not a bug — tap "resend
+  verification email," check the inbox, click the link, come back and
+  tap "I've verified — continue." One-time, not disruptive beyond that.
+  Flagging it here rather than letting it be a surprise.
+
+### Tests
+`firebase_auth_mocks`' `MockUser` defaults `isEmailVerified` to **`true`**
+— confirmed by reading its source before relying on it — so every one of
+this project's ~130 existing signed-in-flow tests kept working completely
+unchanged; only a test that explicitly wants the *unverified* path needs
+`MockUser(isEmailVerified: false, ...)`. Ten tests total in
+`test/features/auth/login_screen_test.dart` cover this feature:
+
+- "forgot password?" only shows in sign-in mode; tapping it with no email
+  asks for one; tapping it with an email confirms the send; an unknown
+  email shows the specific message (via `whenCalling(...).thenThrow(...)`,
+  same pattern the existing wrong-password test already uses).
+- An unverified account is blocked from reaching `RootShell`/
+  `OnboardingScreen` and shown the gate instead; "resend" doesn't crash
+  and confirms; "sign out" from the gate returns to `LoginScreen`.
+- **Follow-up round, after the user pushed back on relying on a stated
+  "can't test this" limitation instead of actually checking**: three more
+  tests close real gaps the first pass left open —
+  1. Signing up (via `MockFirebaseAuth(verifyEmailAutomatically: false)`,
+     matching real Firebase's actual default rather than the mock's more
+     convenient one) genuinely creates an unverified account and lands on
+     the gate, not onboarding.
+  2. Tapping "I've verified — continue" while genuinely still unverified
+     stays on the gate and shows "Still not verified — check your email."
+  3. **The specific transition originally assumed untestable** — tap
+     continue *after* actually becoming verified, and confirm it reaches
+     `OnboardingScreen`. Solved by reading `MockFirebaseAuth`'s own
+     source rather than taking the "mock's `emailVerified` is `final`"
+     limitation at face value: `MockFirebaseAuth.mockUser` is a live
+     setter that updates `currentUser`, so a test can swap in a freshly
+     verified `MockUser` for the same uid mid-test — simulating "the
+     account got verified elsewhere" — then tap continue and confirm the
+     app actually opens. This also directly validates why the real
+     `_UnverifiedEmailGateState._checkVerified()` re-reads
+     `firebaseAuthProvider.currentUser` after `reload()` instead of
+     trusting the `User` instance it was constructed with: the swapped
+     mock proves the stale instance never changes, only the auth's own
+     `currentUser` does — the same reasoning the implementation itself is
+     built on.
+
+Verified: `flutter analyze` clean, all 147 tests pass (134 + 13 — 10
+here plus 3 more from the two fixes below). Real
+Firestore Auth calls used throughout this session's diagnostics
+(`sendPasswordResetEmail`/`sendEmailVerification`/`reload`/
+`createUserWithEmailAndPassword`/`currentUser.delete()`, all against the
+live `trackmyday-6380a` project during the Firestore-isolation probe)
+without issue, so the SDK layer itself was never the open question —
+the widget wiring and the actual state-transition logic were, and both
+are now directly covered by tests, not assumed.
+
+### Platform verification — fully live-verified on iOS
+
+**Important correction, and a lesson worth keeping**: an earlier pass of
+this section claimed interactive tap-through was impossible this session
+and that wrong coordinates had been "ruled out." **That conclusion was
+wrong.** The taps were failing because image-pixel coordinates were being
+passed where **device points** were expected — the screenshot renders at
+roughly 919px wide while the tap coordinate space is 402 points, a ~2.28×
+factor, so every tap overshot ~2.3× down/right and landed in empty space
+below its target. The "calibration test" that supposedly proved
+input was dead was itself using the same bad conversion, so it proved
+nothing. Two takeaways for future sessions:
+1. **Always convert screenshot pixels → points before tapping** (divide
+   by `imageWidth / pointWidth`; the `attach`/`launch` result states the
+   point dimensions, e.g. `402x874`). Confirm with one deliberately
+   unambiguous target (an empty-field submit button that must produce a
+   validation error) before trusting a whole tap sequence.
+2. Be much slower to conclude "the environment is broken." The
+   pre-existing **Known environment quirks** note about Simulator tap
+   flakiness made a wrong self-diagnosis feel plausible — a documented
+   quirk became a place to file a bug that was actually mine.
+
+With correct point coordinates (and after an `xcrun simctl shutdown`/
+`boot` cycle, which also required one retry of the first gesture — the
+tool reports `Connection reset; retry the gesture` after a reboot), the
+**entire flow was driven interactively on the iOS Simulator against the
+real `trackmyday-6380a` Firebase project**, every step screenshot-
+confirmed:
+1. SIGN IN with both fields empty → "Enter an email and password."
+2. "forgot password?" with an empty email → "Enter your email first."
+3. A real email typed in → "forgot password?" → "Password reset email
+   sent — check your inbox.", rendering in **neutral dark text, not
+   error-red** — confirming the deliberate `_message`/`_error` split
+   works visually, not just structurally.
+4. Toggled to sign-up → header/button swap, **"forgot password?"
+   disappears**, and the previous confirmation message is cleared.
+5. **CREATE ACCOUNT against real Firebase** → the new
+   `_UnverifiedEmailGate` appeared, with the real address correctly
+   interpolated ("We sent a link to …"). This is the one thing widget
+   tests genuinely can't prove: that a *real* Firebase sign-up yields
+   `emailVerified == false` and that `AuthGate` catches it rather than
+   letting the account through to onboarding.
+6. "I'VE VERIFIED — CONTINUE" while still genuinely unverified → "Still
+   not verified — check your email.", i.e. the real `user.reload()` +
+   `currentUser.emailVerified` recheck path works against live Firebase.
+7. "sign out" → back to `LoginScreen`, fields cleared.
+
+**Real behavioural finding — Firebase email enumeration protection**:
+step 3 was run with a deliberately non-existent address and Firebase
+returned **success**, not `user-not-found`. That's current Firebase
+default behaviour (enumeration protection: password-reset requests must
+not reveal whether an address is registered). **Both problems this
+surfaced were then fixed** (see below).
+
+**macOS**: built and launched, confirmed it starts and stays running with
+no crash (no code-signing issues, per the earlier fix this session). No
+visual check is possible there — no macOS screen-capture permission in
+this environment, a separate pre-existing documented limitation — so
+macOS coverage is "builds and runs," with the behavioural verification
+coming from iOS plus the widget tests.
+
+**Test-account hygiene**: the live sign-up created a real Firebase
+account, and a check of earlier probes this session found that the four
+`keychain-error` diagnostic runs had *also* each created real accounts —
+Firebase creates the user server-side *before* the keychain write fails,
+so a thrown `keychain-error` does **not** mean "no account was created."
+Those had been quietly accumulating. All six throwaway accounts
+(`no-such-account-probe@…` plus five `probe-…@example.com`) were deleted
+via a temporary cleanup pass, confirmed by its own log output, and the
+cleanup code reverted immediately after (`git diff` on `main.dart` shows
+no trace). Worth remembering: **any probe that calls
+`createUserWithEmailAndPassword` leaves a real account behind even when
+it appears to fail** — clean up explicitly rather than assuming an error
+meant nothing happened.
+
+### Two fixes that came out of the live verification
+
+Both were cases of **an error message that didn't match reality** — the
+live run is the only reason either was found.
+
+1. **The reset confirmation was lying, and one branch was unreachable.**
+   Given enumeration protection (above), `sendPasswordResetEmail`
+   succeeds for an unregistered address — so the old flat "Password reset
+   email sent — check your inbox." was simply false in that case, and
+   `_resetMessageFor`'s `user-not-found` branch could never fire.
+   Fixed: the branch is **removed** (with a comment recording *why*, so
+   nobody helpfully "fixes" it back), and the confirmation is reworded to
+   **"If an account exists for that email, a reset link is on its way."**
+   — true either way, and deliberately non-committal, since spelling out
+   which case it was is exactly what enumeration protection prevents.
+   `invalid-email` stays: a malformed address still genuinely errors.
+2. **A failed sign-up could strand the user in a retry loop.** Firebase
+   creates the account server-side *before* persisting the session, so a
+   post-creation failure (the `keychain-error` case, but the shape is
+   general) showed a flat failure message while a real account existed.
+   The natural retry then hit "An account already exists for that email."
+   — a dead end that never mentions the one thing that actually works:
+   signing in. Fixed both messages: `keychain-error` now leads with
+   **"Your account may have been created… try signing in"** (platform
+   detail demoted to a parenthetical), and `email-already-in-use` now
+   ends with **"— sign in instead."**
+
+Four tests added and one deleted (the old `user-not-found` test, which
+mocked a throw that can't happen) — net 144 → **147**. The new ones: the
+neutral reset answer for an unregistered email, explicitly asserting the
+old "No account found" wording is *gone* so a regression re-introducing
+enumeration leakage fails loudly; a malformed email still producing a
+real error; and the two sign-up recovery messages. The reworded reset
+confirmation was also **re-verified live on the simulator** against a
+deliberately unregistered address.
 
 ## Goal detail sheet: week navigation (fifth session)
 
@@ -1703,10 +1935,11 @@ crash in the first place.
 1. ~~Test a second account to confirm per-user Firestore data
    isolation~~ — **done, sixth session**, see **Verified: per-user
    Firestore isolation**.
-2. No password-reset flow, no email verification requirement, no
-   Google/Apple sign-in — email/password only, matching what was asked for.
-   Worth asking the user if any of those are wanted before considering auth
-   "done."
+2. ~~No password-reset flow, no email verification requirement~~ —
+   **done, sixth session**, see **Password reset + required email
+   verification**. **Google/Apple sign-in still not built** — explicitly
+   declined for that round (needs real Firebase-console + platform OAuth
+   setup); ask again if wanted.
 
 ## Known environment quirks
 
@@ -1716,6 +1949,23 @@ crash in the first place.
   changes, prefer precise widget tests (`find.descendant`, checking rendered
   `Size`/`BoxDecoration` directly) over trying to screenshot-and-tap through
   the simulator — this has proven far more reliable this session.
+  **Major correction from the sixth session — read this before blaming
+  the environment**: a long stretch of "taps do nothing" during that
+  session turned out **not** to be an environment problem at all. It was
+  a unit mistake: screenshot **pixels** were being passed where the tool
+  expects device **points**. The screenshot renders ~919px wide while the
+  coordinate space is 402 points (~2.28×), so every tap overshot down and
+  right into empty space. Once converted correctly, a full interactive
+  tap-through of the auth flow — typing into fields, tapping links and
+  buttons, real Firebase sign-up — worked perfectly, first try, every
+  step. **So: convert pixels → points first** (divide by
+  `imageWidth / pointWidth`; `attach`/`launch` reports the point
+  dimensions), and sanity-check with one unambiguous target that must
+  produce a visible result before concluding anything is broken. Genuine
+  flakiness may still exist, but it was over-diagnosed here, and this
+  note's earlier wording actively encouraged that mistake.
+  Also: after `xcrun simctl shutdown`/`boot`, the first gesture can fail
+  with `Connection reset; retry the gesture` — just retry it once.
 - **No macOS screen capture available** in this environment (`screencapture`
   fails with "could not create image from display" — no Screen Recording
   permission grantable here). macOS-only features (e.g. trackpad two-finger

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,13 +20,36 @@ String _messageFor(String code) {
     case 'invalid-credential':
       return 'Email or password is incorrect.';
     case 'email-already-in-use':
-      return 'An account already exists for that email.';
+      // Reachable via an ordinary duplicate sign-up, but *also* after a
+      // sign-up that errored **after** Firebase had already created the
+      // account server-side (see `keychain-error` below) — so point at
+      // the recovery path instead of just stating the fact.
+      return 'An account already exists for that email — sign in instead.';
     case 'weak-password':
       return 'Password must be at least 6 characters.';
     case 'keychain-error':
-      return "Couldn't save your session to the keychain — this build "
-          "isn't code-signed with a development team yet (macOS only; "
-          'see HANDOFF.md).';
+      // Firebase creates the account server-side *before* persisting the
+      // session, so this error does NOT mean sign-up didn't happen —
+      // saying otherwise sends people into a retry loop that then fails
+      // with 'email-already-in-use'.
+      return "Your account may have been created, but the session couldn't "
+          "be saved to the keychain — try signing in. (macOS only: this "
+          "build isn't code-signed with a development team; see "
+          'HANDOFF.md.)';
+    default:
+      return 'Something went wrong. Please try again.';
+  }
+}
+
+/// Deliberately has no `user-not-found` case: Firebase's email enumeration
+/// protection (on by default) makes `sendPasswordResetEmail` *succeed* for
+/// an unregistered address rather than reveal that it isn't registered —
+/// verified live against this project. A malformed address still errors,
+/// so `invalid-email` is real and stays.
+String _resetMessageFor(String code) {
+  switch (code) {
+    case 'invalid-email':
+      return 'That email address looks wrong.';
     default:
       return 'Something went wrong. Please try again.';
   }
@@ -46,6 +71,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _isSignUp = false;
   bool _submitting = false;
   String? _error;
+  // Neutral confirmation text (e.g. "reset email sent") — kept separate
+  // from _error so the two never fight over the same styling/meaning.
+  String? _message;
 
   @override
   void dispose() {
@@ -58,22 +86,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
     if (email.isEmpty || password.isEmpty) {
-      setState(() => _error = 'Enter an email and password.');
+      setState(() {
+        _error = 'Enter an email and password.';
+        _message = null;
+      });
       return;
     }
 
     setState(() {
       _submitting = true;
       _error = null;
+      _message = null;
     });
 
     final auth = ref.read(firebaseAuthProvider);
     try {
       if (_isSignUp) {
-        await auth.createUserWithEmailAndPassword(
+        final credential = await auth.createUserWithEmailAndPassword(
           email: email,
           password: password,
         );
+        // Fire-and-forget: AuthGate gates on emailVerified regardless of
+        // whether this succeeds, and a "resend" action covers the case
+        // where it doesn't (e.g. a flaky send right at sign-up).
+        unawaited(credential.user?.sendEmailVerification());
       } else {
         await auth.signInWithEmailAndPassword(email: email, password: password);
       }
@@ -81,6 +117,47 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       setState(() => _error = _messageFor(e.code));
     } catch (e) {
       setState(() => _error = 'Something went wrong. Please try again.');
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<void> _sendPasswordReset() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      setState(() {
+        _error = 'Enter your email first.';
+        _message = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _submitting = true;
+      _error = null;
+      _message = null;
+    });
+
+    final auth = ref.read(firebaseAuthProvider);
+    try {
+      await auth.sendPasswordResetEmail(email: email);
+      if (mounted) {
+        // Phrased conditionally on purpose. Firebase succeeds here even for
+        // an unregistered address (enumeration protection), so a flat
+        // "email sent" would be a lie in that case — and spelling out
+        // which it was would defeat the protection.
+        setState(
+          () => _message =
+              'If an account exists for that email, a reset link is on '
+              'its way.',
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      if (mounted) setState(() => _error = _resetMessageFor(e.code));
+    } catch (e) {
+      if (mounted) {
+        setState(() => _error = 'Something went wrong. Please try again.');
+      }
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -118,9 +195,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             decoration: const InputDecoration(isDense: true),
             onSubmitted: (_) => _submit(),
           ),
+          if (!_isSignUp)
+            GestureDetector(
+              onTap: _submitting ? null : _sendPasswordReset,
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 44),
+                alignment: Alignment.centerLeft,
+                child: Text('forgot password?', style: AppTextStyles.mono()),
+              ),
+            ),
           if (_error != null) ...[
             const SizedBox(height: AppSpacing.s3),
             Text(_error!, style: AppTextStyles.mono(color: AppColors.accent)),
+          ],
+          if (_message != null) ...[
+            const SizedBox(height: AppSpacing.s3),
+            Text(_message!, style: AppTextStyles.mono(color: AppColors.text)),
           ],
           const SizedBox(height: AppSpacing.s6),
           GestureDetector(
@@ -147,6 +238,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 : () => setState(() {
                     _isSignUp = !_isSignUp;
                     _error = null;
+                    _message = null;
                   }),
             behavior: HitTestBehavior.opaque,
             child: Container(
