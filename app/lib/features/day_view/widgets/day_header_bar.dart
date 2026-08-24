@@ -8,6 +8,7 @@ import '../../../state/day_view_providers.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../theme/app_text_styles.dart';
+import '../../log_activity/widgets/log_activity_sheet.dart';
 
 class DayHeaderBar extends ConsumerWidget {
   const DayHeaderBar({super.key});
@@ -66,15 +67,39 @@ class DayHeaderBar extends ConsumerWidget {
                 ),
               ],
             ),
-            SegmentedControl<DayLayer>(
-              selected: dayLayer,
-              onChanged: (value) =>
-                  ref.read(dayLayerProvider.notifier).state = value,
-              options: const [
-                SegmentedOption(value: DayLayer.actual, label: 'Day'),
-                SegmentedOption(
-                  value: DayLayer.planAndActual,
-                  label: 'Plan + actual',
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                GestureDetector(
+                  onTap: () => showLogActivitySheet(context, ref),
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    constraints: const BoxConstraints(minHeight: 32),
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.s2,
+                    ),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.text, width: 1.5),
+                    ),
+                    child: Text(
+                      '+ LOG',
+                      style: AppTextStyles.small(color: AppColors.text),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.s2),
+                SegmentedControl<DayLayer>(
+                  selected: dayLayer,
+                  onChanged: (value) =>
+                      ref.read(dayLayerProvider.notifier).state = value,
+                  options: const [
+                    SegmentedOption(value: DayLayer.actual, label: 'Day'),
+                    SegmentedOption(
+                      value: DayLayer.planAndActual,
+                      label: 'Plan + actual',
+                    ),
+                  ],
                 ),
               ],
             ),

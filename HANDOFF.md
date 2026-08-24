@@ -79,7 +79,7 @@ display-name key there) — deliberately **not** touching the internal
 Dart package name or the bundle identifier, since neither is
 user-visible and the bundle ID is wired into Firebase config and the
 code-signing fixed earlier this session (see **App renamed**).
-**Uncommitted.**
+**Committed** as `80dfd70`, not yet pushed.
 An eighth round restructured the goal-edit sheet from one long scrolling
 form into a **4-step wizard** (Category → Name & dates → Schedule →
 Reminders, the first three mandatory, reminders optional) per explicit
@@ -88,7 +88,22 @@ tests the restructure broke, confirmed the full suite still passes
 (151/151) and `flutter analyze` is clean, and live-verified the core
 wizard mechanism on the iOS Simulator (real taps advancing
 Category → Name & dates, progress bar and footer updating correctly).
-**Also uncommitted.**
+**Committed** as `0fb9d41`, not yet pushed. A ninth round did three
+related things in one pass: renamed the **Activities tab to Account**
+(shows the signed-in email and a SIGN OUT button by default, moved from
+the Goals screen header where it lived before; a segmented control
+switches to the same day-by-day activity list that used to be the whole
+screen), moved the **"+ LOG" manual-entry action from that screen onto
+the Day view's header** instead (so logging an activity by hand no
+longer requires leaving the Day tab), and **deleted the "claim untracked
+time" feature outright** — the dashed "Xh Ym untracked" box and its
+sheet, flagged as fully broken (silently discarded everything you
+entered) back in the fourth round's coverage audit and never fixed since
+— so tapping anywhere in the Day view's Actual lane, including where an
+untracked gap used to intercept the tap, now opens the same real
+add-actual-block sheet as any other empty-space tap. See **Account tab:
+replaces Activities, "+ LOG" moves to Day view, claim-untracked-time
+removed**. **Uncommitted.**
 Each feature/fix has its own dated section below with
 full detail — read this intro for the shape of things, then jump to
 whichever section is relevant. Read this first, then verify anything
@@ -126,14 +141,19 @@ Git remote: `https://github.com/drivector/calendar.git` — up to date, see
 
 ## What's built so far
 
-Four tabs (Day / Week / Goals / +Log) hosted in `RootShell` behind an
-`IndexedStack`, plus a Categories admin screen (pushed as a route, not a tab)
-and a Claim-untracked-time bottom sheet.
+Four tabs (Day / Week / Goals / Account) hosted in `RootShell` behind an
+`IndexedStack`, plus a Categories admin screen (pushed as a route, not a tab).
+There is no more "claim untracked time" feature — see **Account tab: replaces
+Activities, "+ LOG" moves to Day view, claim-untracked-time removed**
+(ninth batch, sixth session) for why.
 
 - **Day view** — continuous 24h timeline, Plan lane + Actual lane, tap empty
-  space to create a planned/actual entry, tap a block/gap for its detail.
-  Header has `<`/`>` arrow buttons plus touch-swipe and trackpad-swipe for
-  day navigation (`DateSwipeNav`).
+  space (including where an untracked gap sits — there's no separate widget
+  for those any more) to create a planned/actual entry, tap an existing block
+  for its detail. Header has `<`/`>` arrow buttons, touch-swipe and
+  trackpad-swipe for day navigation (`DateSwipeNav`), a **"+ LOG"** action
+  (opens the same manual-entry sheet the Activities tab used to host), and
+  the Day/Plan+actual segmented control.
 - **Week view** — 7 day rows with live per-day category bars, **derived from
   real block data** (not synthetic — this was a mid-session refactor), same
   `<`/`>` + swipe navigation pattern for week-to-week.
@@ -149,17 +169,19 @@ and a Claim-untracked-time bottom sheet.
   "auto-placed" in the UI, distinct from a real fixed time-range commitment).
   Only `GoalType.target` goals generate blocks — `cap` goals (a ceiling, not
   a plan) never do.
-- **Activities** (was "+ Log") — every tracked activity ever, grouped
-  into a day-by-day list (most recent day first); the manual-entry form
-  is now a "+ LOG" action on this page (a sheet, with its own Day field —
-  logging for a day other than today doesn't require leaving the sheet),
-  not the tab itself — see **"+ Log" tab renamed to Activities**, **Log
-  activity sheet: pick the day first**, and **Activities screen:
-  day-by-day list** below.
+- **Account** (was "Activities", was "+ Log" before that) — account
+  details by default (signed-in email, SIGN OUT button — moved here from
+  the Goals screen header), with a segmented control switching to the
+  same day-by-day activity list (most recent day first) that used to be
+  the whole screen. The manual-entry form itself now opens from the Day
+  view's "+ LOG" instead of from here — see **Account tab: replaces
+  Activities, "+ LOG" moves to Day view, claim-untracked-time removed**,
+  **"+ Log" tab renamed to Activities**, **Log activity sheet: pick the
+  day first**, and **Activities screen: day-by-day list** below.
 - **Categories admin** — full CRUD, color palette picker.
 - **Navigation** — Day/Week own horizontal swipe+trackpad for date/week
-  stepping. Goals and +Log (which have no competing horizontal gesture) use
-  the same `DateSwipeNav` widget for **tab-switching** instead (swipe
+  stepping. Goals and Account (which have no competing horizontal gesture)
+  use the same `DateSwipeNav` widget for **tab-switching** instead (swipe
   left/right moves between tabs, clamped at the ends). Day/Week were
   deliberately left out of tab-switch swipe to avoid two nested gesture
   handlers fighting over one swipe.
@@ -212,7 +234,7 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
 `AsyncLoading`. Widget tests don't need this explicitly since
 `pumpAndSettle()` flushes it.
 
-## Git status — sixth session's first five batches pushed, sixth and eighth uncommitted
+## Git status — sixth session's first eight batches committed but not pushed, ninth uncommitted
 
 - The Firebase Auth/Firestore backend, the fourth session's UX fixes/CI,
   the entire fifth session (week nav, Activities tab, onboarding, cap
@@ -253,21 +275,35 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
   log_activity_sheet.dart`, `lib/features/log_activity/
   activities_screen.dart`, `test/widget_test.dart` (the Note field fix)
   — the Firestore isolation verification itself had no code change.
-- The sixth session's **sixth batch — uncommitted**: the app rename
-  (`lib/app.dart`, `lib/features/auth/login_screen.dart`,
+- The sixth session's **sixth batch — committed as `80dfd70`, not yet
+  pushed**: the app rename (`lib/app.dart`,
+  `lib/features/auth/login_screen.dart`,
   `lib/features/onboarding/onboarding_screen.dart`,
   `ios/Runner/Info.plist`, `macos/Runner/Configs/AppInfo.xcconfig` — see
-  **App renamed**). No Firestore/deploy component this time — purely a
-  code change. Ask before committing, per this repo's `CLAUDE.md` — a
-  prior commit/push approval doesn't carry forward to a new batch.
-- The sixth session's **eighth batch — uncommitted**: the goal-edit-sheet
-  4-step wizard restructure (`lib/features/goals/widgets/
-  goal_edit_sheet.dart`, `test/widget_test.dart`,
+  **App renamed**). No Firestore/deploy component — purely a code change.
+- The sixth session's **eighth batch — committed as `0fb9d41`, not yet
+  pushed**: the goal-edit-sheet 4-step wizard restructure
+  (`lib/features/goals/widgets/goal_edit_sheet.dart`,
+  `test/widget_test.dart`,
   `test/features/onboarding/onboarding_screen_test.dart` — see **Goal edit
   sheet: 4-step wizard**). Also purely a code change, no Firestore/deploy
-  component. Batches six and eight are independent (different files) and
-  could be committed together or separately — ask the user how they want
-  them split, don't assume.
+  component. `main` is 2 commits ahead of `origin/main` as of this
+  write-up (these two) — ask before pushing, per this repo's `CLAUDE.md`.
+- The sixth session's **ninth batch — uncommitted**: the Account tab
+  restructure, "+ LOG" relocation to the Day view, and claim-untracked-time
+  removal (`lib/shell/root_shell.dart`, `lib/features/goals/goals_screen.dart`,
+  `lib/features/day_view/widgets/day_header_bar.dart`,
+  `lib/features/day_view/widgets/time_body_grid.dart`,
+  `lib/state/derived_providers.dart`, new
+  `lib/features/account/account_screen.dart`, new
+  `lib/features/log_activity/widgets/activities_list.dart`; deleted
+  `lib/features/log_activity/activities_screen.dart`,
+  `lib/features/day_view/widgets/claim_gap_sheet.dart`,
+  `lib/features/day_view/widgets/untracked_gap_widget.dart`;
+  `test/widget_test.dart` — see **Account tab: replaces Activities,
+  "+ LOG" moves to Day view, claim-untracked-time removed**). Ask before
+  committing — a prior commit/push approval doesn't carry forward to a
+  new batch, per this repo's `CLAUDE.md`.
 - A stray duplicate clone of this repo that existed briefly at
   `/Users/alexandrospanagiotidis/DriVector/Calendar/calendar/` (see the
   sign-up bug section for how it got there) has been **deleted** — it had
@@ -1012,6 +1048,119 @@ selection/prefill — is already covered in precise detail by the widget
 suite (including a dedicated regression test for reminder prefill on
 edit). Stating this explicitly rather than claiming a full visual
 walkthrough that didn't happen.
+
+## Account tab: replaces Activities, "+ LOG" moves to Day view, claim-untracked-time removed (sixth session)
+
+Three related asks in one round: "let's change the activities to
+account, in which it should display the account detail, email. and
+have a 'tab' for the activities. Then the add activity should be added
+in the day view", followed mid-turn by "remove the untracked, when
+clicking in calendar be able to create a new activity".
+
+### Account tab
+
+`lib/features/log_activity/activities_screen.dart` (the old "Activities"
+tab — day-grouped list + its own "+ LOG" header button) is gone. Its list
+rendering moved, largely unchanged, into a new
+`lib/features/log_activity/widgets/activities_list.dart` (`ActivitiesList`,
+a body-only `ConsumerWidget` with no header of its own). A new
+`lib/features/account/account_screen.dart` (`AccountScreen`) is the 4th
+tab now (`root_shell.dart`'s tab label `'Activities'` → `'Account'`,
+`ActivitiesScreen()` → `AccountScreen()`): a header ("Account" +
+`SegmentedControl<_AccountTab>` with two options, `Details` and
+`Activities`, defaulting to `Details`), then either an `_AccountDetails`
+body (EMAIL label + `ref.watch(authStateChangesProvider).valueOrNull
+?.email`, plus a bordered SIGN OUT button) or the `ActivitiesList` body,
+switched via local `State` (not a provider — `IndexedStack` already keeps
+the screen's state alive across tab switches, so a plain `_tab` field is
+enough, no new global state needed).
+
+**Sign out moved here from the Goals screen header** (`goals_screen.dart`
+lost its `GestureDetector` for `'sign out'` and the now-unused
+`auth_providers.dart` import) — it's a bordered `SIGN OUT` button now,
+not bare mono text, matching this design system's "real border, real tap
+target" rule for anything you can tap (the old version was a plain-text
+link, technically under the system's own convention even before this
+round — fixed as a side effect of relocating it, not asked for
+separately, worth knowing in case it looks like scope creep in the diff).
+
+### "+ LOG" moves to the Day view
+
+`day_header_bar.dart` (`DayHeaderBar`, already a `ConsumerWidget`) gained
+a bordered "+ LOG" button — identical styling to the one that used to
+live on the Activities screen — next to the existing Day/Plan+actual
+`SegmentedControl`, calling the same `showLogActivitySheet(context, ref)`
+as before. Nothing about `LogActivitySheet` itself changed — only where
+its entry point lives.
+
+### "Claim untracked time" deleted
+
+This was flagged as fully broken back in the fourth round's coverage
+audit (**Coverage audit + a real bug found**, this session) — its `SAVE`
+button just called `Navigator.pop()`, no repository write, ever. Deleted
+outright rather than fixed, per this round's ask: `claim_gap_sheet.dart`
+and `untracked_gap_widget.dart` are gone; `time_body_grid.dart` no longer
+renders an `UntrackedGapWidget` over each gap (it was painted on top of
+the ordinary empty-space tap target, intercepting the tap first); the
+now-fully-unused `untrackedGapsProvider` is gone from
+`derived_providers.dart` too (`dayWindowFor` and `computeUntrackedGaps`
+itself are untouched — `week_view_providers.dart`'s own "untracked hours"
+stat still uses both, that's a separate, legitimate feature). The net
+effect is exactly the ask: tapping anywhere in the Day view's Actual
+lane — including where a gap used to intercept the tap — now always
+opens the real `showAddBlockSheet`, the same sheet any other empty-space
+tap already opened. Live-verified on the iOS Simulator: a tap that
+previously would have landed inside a gap now opens "New actual
+activity" with a goal chip pre-selected, not any claim-sheet remnant.
+
+### Tests
+
+15 widget-test failures from this restructure, all fixture/navigation
+issues, not real regressions:
+- Every test that switched to the `'ACTIVITIES'` tab before tapping
+  `'+ LOG'` had that line deleted outright (Day is tab 0, the default —
+  no navigation needed any more) — except two sites inside one test
+  (`Categories: a new category needs a goal of its own...`) that were
+  already on a *different* tab (Goals) at that point, where `'ACTIVITIES'`
+  became `'DAY'` instead of a deletion.
+- Every test that only wanted to *see* the day-grouped list (not open
+  "+ LOG") now taps `'ACCOUNT'` then `'Activities'` (the segmented
+  control) instead of `'ACTIVITIES'`.
+- One genuinely new bug this restructure's own tests caught:
+  `find.text('walking')`/`find.text('deep work')` inside `LogActivitySheet`
+  tests started throwing "found 2 widgets" — the Day view's own
+  `DriftFooter` (`DRIFT TODAY`, showing each category with nonzero
+  planned-vs-tracked delta by its lowercased name) collided with the
+  sheet's own goal chip, because the sheet now opens *from* the Day tab
+  (previously it opened from the Activities tab, and Day's own content —
+  per `IndexedStack`'s per-tab build behavior — simply wasn't part of the
+  tree while Day was the inactive tab). Fixed by scoping those specific
+  finders to `find.descendant(of: find.byType(LogActivitySheet), ...)`
+  rather than bare text — the one non-mechanical fix in this batch, worth
+  knowing about if a similar "ambiguous finder" surfaces elsewhere after
+  moving a trigger between tabs.
+- One test deleted outright (`Tapping the untracked gap opens the claim
+  sheet` — the feature it tested no longer exists) and one new test added
+  (`Account: shows the signed-in email`) — net test count unchanged at
+  151.
+
+All 151 tests pass, `flutter analyze` is clean.
+
+### Platform verification — live, iOS Simulator
+
+Rebuilt (`flutter build ios --simulator --debug`) and reinstalled before
+checking — same lesson as every prior round: a previously-installed build
+predates the code change and will silently show stale UI otherwise.
+Confirmed live: the tab bar reads DAY/WEEK/GOALS/ACCOUNT; the Day header
+shows "+ LOG" next to the segmented control; tapping empty space in the
+Actual lane opens "New actual activity" with a goal pre-selected (the
+claim-sheet-removal behavior, described above); the Account tab shows
+"Account" + Details/Activities segmented control, the signed-in email
+(`test-dummy@example.com`), and a bordered SIGN OUT button; tapping
+"Activities" switches to "No activity yet." for this account. Did not
+walk through actually signing out (would have ended the session) or
+logging a real entry via the relocated "+ LOG" button specifically on
+this pass — both are exercised in detail by the widget suite instead.
 
 ## Password reset + required email verification (sixth session)
 

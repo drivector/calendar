@@ -7,7 +7,6 @@ import '../../../models/tracked_block.dart';
 import '../../../shared/widgets/date_swipe_nav.dart';
 import '../../../state/categories_providers.dart';
 import '../../../state/day_view_providers.dart';
-import '../../../state/derived_providers.dart';
 import '../../../state/goals_providers.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
@@ -15,16 +14,16 @@ import 'actual_block_widget.dart';
 import 'add_block_sheet.dart';
 import 'column_headers.dart';
 import 'plan_block_widget.dart';
-import 'untracked_gap_widget.dart';
 
 /// A continuous, scrollable 24-hour timeline — hour rows at a fixed height,
 /// events positioned and sized by their real clock time, the way a standard
 /// calendar app's day view works (Google/Apple Calendar), rather than one
 /// row per planned block. Plan and Actual still run as two lanes side by
 /// side so the comparison the app is built around stays visible. Tapping
-/// empty space in either lane opens [showAddBlockSheet] to add a new entry
-/// there; tapping an existing block or gap opens its own sheet instead,
-/// since those are painted on top and claim the hit first.
+/// empty space in either lane — including an untracked gap, which has no
+/// widget of its own — opens [showAddBlockSheet] to add a new entry there;
+/// tapping an existing block opens its own sheet instead, since it's
+/// painted on top and claims the hit first.
 ///
 /// Wrapped by the caller in an [Expanded]/[Flexible] — this widget must not
 /// introduce its own [Expanded] (two [Expanded]s cannot share one underlying
@@ -105,7 +104,6 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
 
     final planned = ref.watch(dayViewPlannedBlocksProvider);
     final tracked = ref.watch(trackedBlocksProvider);
-    final gaps = ref.watch(untrackedGapsProvider);
     final dayLayer = ref.watch(dayLayerProvider);
     final categories = ref.watch(categoriesProvider);
     final showPlan = dayLayer == DayLayer.planAndActual;
@@ -198,14 +196,6 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
                         block: block,
                         category: resolveCategory(categories, block.categoryId),
                       ),
-                    ),
-                  for (final gap in gaps)
-                    _timedPositioned(
-                      start: gap.start,
-                      end: gap.end,
-                      left: actualLeft,
-                      width: laneWidth,
-                      child: UntrackedGapWidget(gap: gap),
                     ),
                 ],
               ),

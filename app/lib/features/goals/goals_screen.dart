@@ -6,7 +6,6 @@ import '../../models/goal_completion.dart';
 import '../../models/goal_progress.dart';
 import '../../models/planned_block.dart';
 import '../../shared/widgets/date_swipe_nav.dart';
-import '../../state/auth_providers.dart';
 import '../../state/day_view_providers.dart';
 import '../../state/goals_providers.dart';
 import '../../state/root_shell_providers.dart';
@@ -60,27 +59,14 @@ class GoalsScreen extends ConsumerWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text('Goals', style: AppTextStyles.title()),
-                    Row(
-                      children: [
-                        GestureDetector(
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const CategoriesScreen(),
-                            ),
-                          ),
-                          behavior: HitTestBehavior.opaque,
-                          child: Text(
-                            'categories',
-                            style: AppTextStyles.mono(),
-                          ),
+                    GestureDetector(
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const CategoriesScreen(),
                         ),
-                        const SizedBox(width: AppSpacing.s3),
-                        GestureDetector(
-                          onTap: () => ref.read(firebaseAuthProvider).signOut(),
-                          behavior: HitTestBehavior.opaque,
-                          child: Text('sign out', style: AppTextStyles.mono()),
-                        ),
-                      ],
+                      ),
+                      behavior: HitTestBehavior.opaque,
+                      child: Text('categories', style: AppTextStyles.mono()),
                     ),
                   ],
                 ),

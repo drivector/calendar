@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:calendar_tracker/app.dart';
 import 'package:calendar_tracker/data/mock/mock_categories.dart';
 import 'package:calendar_tracker/data/mock/mock_day_20aug.dart';
+import 'package:calendar_tracker/features/account/account_screen.dart';
 import 'package:calendar_tracker/features/categories/categories_screen.dart';
 import 'package:calendar_tracker/features/day_view/widgets/day_header_bar.dart';
 import 'package:calendar_tracker/features/day_view/widgets/time_body_grid.dart';
@@ -15,7 +16,7 @@ import 'package:calendar_tracker/features/goals/goals_screen.dart';
 import 'package:calendar_tracker/features/goals/widgets/goal_block.dart';
 import 'package:calendar_tracker/features/goals/widgets/goal_detail_sheet.dart';
 import 'package:calendar_tracker/features/goals/widgets/goal_edit_sheet.dart';
-import 'package:calendar_tracker/features/log_activity/activities_screen.dart';
+import 'package:calendar_tracker/features/log_activity/widgets/log_activity_sheet.dart';
 import 'package:calendar_tracker/shell/root_shell.dart';
 import 'package:calendar_tracker/features/week_view/capacity_screen.dart';
 import 'package:calendar_tracker/features/week_view/week_view_screen.dart';
@@ -153,7 +154,6 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('Walk 45 m'), findsOneWidget);
-    expect(find.text('2h 35m untracked'), findsOneWidget);
   });
 
   testWidgets('Day view: the header arrows step to the next/previous day', (
@@ -209,29 +209,6 @@ void main() {
     },
   );
 
-  testWidgets('Tapping the untracked gap opens the claim sheet', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: await _signedInOverrides(),
-        child: const CalendarTrackerApp(),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    // The timeline auto-scrolls to the first event, so the gap being
-    // tapped may start outside the viewport — bring it into view first.
-    await tester.ensureVisible(find.text('2h 35m untracked'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('2h 35m untracked'));
-    await tester.pumpAndSettle();
-
-    expect(tester.takeException(), isNull);
-    expect(find.text('CATEGORY'), findsOneWidget);
-    expect(find.text('SAVE'), findsOneWidget);
-  });
-
   testWidgets('Tab bar switches through all 4 tabs without layout errors', (
     WidgetTester tester,
   ) async {
@@ -243,14 +220,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    for (final tab in ['WEEK', 'GOALS', 'ACTIVITIES', 'DAY']) {
+    for (final tab in ['WEEK', 'GOALS', 'ACCOUNT', 'DAY']) {
       await tester.tap(find.text(tab));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull, reason: 'after tapping $tab');
     }
   });
 
-  testWidgets('Goals: a leftward swipe steps to the next tab (Activities)', (
+  testWidgets('Goals: a leftward swipe steps to the next tab (Account)', (
     WidgetTester tester,
   ) async {
     final container = ProviderContainer(overrides: await _signedInOverrides());
@@ -278,7 +255,7 @@ void main() {
   });
 
   testWidgets(
-    'Activities: a rightward swipe steps to the previous tab (Goals)',
+    'Account: a rightward swipe steps to the previous tab (Goals)',
     (WidgetTester tester) async {
       final container = ProviderContainer(
         overrides: await _signedInOverrides(),
@@ -292,12 +269,12 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('ACTIVITIES'));
+      await tester.tap(find.text('ACCOUNT'));
       await tester.pumpAndSettle();
       expect(container.read(currentTabIndexProvider), 3);
 
       await tester.fling(
-        find.byType(ActivitiesScreen),
+        find.byType(AccountScreen),
         const Offset(300, 0),
         1000,
       );
@@ -308,7 +285,7 @@ void main() {
     },
   );
 
-  testWidgets('Activities: swiping left at the last tab clamps, not wraps', (
+  testWidgets('Account: swiping left at the last tab clamps, not wraps', (
     WidgetTester tester,
   ) async {
     final container = ProviderContainer(overrides: await _signedInOverrides());
@@ -321,14 +298,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('ACTIVITIES'));
+    await tester.tap(find.text('ACCOUNT'));
     await tester.pumpAndSettle();
     expect(container.read(currentTabIndexProvider), 3);
 
-    // Activities is already the last tab — swiping further "next" should
+    // Account is already the last tab — swiping further "next" should
     // stay put, not wrap around to Day.
     await tester.fling(
-      find.byType(ActivitiesScreen),
+      find.byType(AccountScreen),
       const Offset(-300, 0),
       1000,
     );
@@ -582,7 +559,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('ACTIVITIES'));
+      await tester.tap(find.text('ACCOUNT'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Activities'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
@@ -626,7 +605,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('ACTIVITIES'));
+      await tester.tap(find.text('ACCOUNT'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Activities'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
@@ -644,7 +625,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('ACTIVITIES'));
+    await tester.tap(find.text('ACCOUNT'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Activities'));
     await tester.pumpAndSettle();
 
     // "Walk 48 m" (mock_day_20aug.dart) is in the Walking category, which
@@ -708,7 +691,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('ACTIVITIES'));
+      await tester.tap(find.text('ACCOUNT'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Activities'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
@@ -737,8 +722,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('ACTIVITIES'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('+ LOG'));
     await tester.pumpAndSettle();
 
@@ -748,7 +731,15 @@ void main() {
     expect(find.text('Thu, 20 Aug 2026'), findsOneWidget);
     expect(find.text('—'), findsOneWidget); // duration, empty
 
-    await tester.tap(find.text('deep work'));
+    // Scoped to the sheet — the Day view behind it (now visible, since
+    // "+ LOG" lives there) has its own "deep work" text in the drift
+    // footer whenever that category has nonzero drift for the day.
+    await tester.tap(
+      find.descendant(
+        of: find.byType(LogActivitySheet),
+        matching: find.text('deep work'),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
@@ -1782,8 +1773,6 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('ACTIVITIES'));
-      await tester.pumpAndSettle();
       await tester.tap(find.text('+ LOG'));
       await tester.pumpAndSettle();
 
@@ -1824,8 +1813,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('ACTIVITIES'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('+ LOG'));
     await tester.pumpAndSettle();
 
@@ -1866,13 +1853,18 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('ACTIVITIES'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('+ LOG'));
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField).first, 'No time set');
-    await tester.tap(find.text('walking'));
+    // Scoped to the sheet — the Day view's drift footer also shows
+    // "walking" whenever that category has nonzero drift for the day.
+    await tester.tap(
+      find.descendant(
+        of: find.byType(LogActivitySheet),
+        matching: find.text('walking'),
+      ),
+    );
     // Deliberately no start/end.
     await tester.pumpAndSettle();
 
@@ -1907,8 +1899,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('ACTIVITIES'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('+ LOG'));
     await tester.pumpAndSettle();
 
@@ -1926,8 +1916,15 @@ void main() {
     // First attempt fails (no goal) — same as the test above.
     expect(find.text('Set a goal before saving'), findsOneWidget);
 
-    // Now actually pick a goal and try again.
-    await tester.tap(find.text('walking'));
+    // Now actually pick a goal and try again. Scoped to the sheet — the
+    // Day view's drift footer also shows "walking" when that category
+    // has nonzero drift for the day.
+    await tester.tap(
+      find.descendant(
+        of: find.byType(LogActivitySheet),
+        matching: find.text('walking'),
+      ),
+    );
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('SAVE ENTRY'));
     await tester.pumpAndSettle();
@@ -1941,7 +1938,8 @@ void main() {
           .any((b) => b.title == 'Recovered entry'),
       isTrue,
     );
-    // Sheet closed this time — back on Activities, entry visible there.
+    // Sheet closed this time — back on the Day view, entry visible there
+    // (same day, same title text shown on the block itself).
     expect(find.text('Recovered entry'), findsOneWidget);
   });
 
@@ -1961,8 +1959,6 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('ACTIVITIES'));
-      await tester.pumpAndSettle();
       await tester.tap(find.text('+ LOG'));
       await tester.pumpAndSettle();
 
@@ -1997,12 +1993,17 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('ACTIVITIES'));
-      await tester.pumpAndSettle();
       await tester.tap(find.text('+ LOG'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('deep work'));
+      // Scoped to the sheet — the Day view's drift footer also shows
+      // "deep work" when that category has nonzero drift for the day.
+      await tester.tap(
+        find.descendant(
+          of: find.byType(LogActivitySheet),
+          matching: find.text('deep work'),
+        ),
+      );
       await tester.pumpAndSettle();
       expect(find.text('WEEKLY TARGET'), findsOneWidget); // a goal is selected
 
@@ -2032,8 +2033,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('ACTIVITIES'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('+ LOG'));
     await tester.pumpAndSettle();
 
@@ -2055,8 +2054,8 @@ void main() {
       tracked.any((b) => b.title == 'Evening walk' && b.sourceId == 'manual'),
       isTrue,
     );
-    // Saving closes the sheet, back on Activities — the new entry should
-    // now render there.
+    // Saving closes the sheet, back on the Day view — the new entry's
+    // block should now render there too.
     expect(find.text('Evening walk'), findsOneWidget);
   });
 
@@ -2076,8 +2075,6 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('ACTIVITIES'));
-      await tester.pumpAndSettle();
       await tester.tap(find.text('+ LOG'));
       await tester.pumpAndSettle();
 
@@ -2099,6 +2096,13 @@ void main() {
           .read(allTrackedBlocksProvider)
           .firstWhere((b) => b.title == 'Evening walk');
       expect(tracked.note, 'felt great, new personal best pace');
+
+      // The Day view's block only shows title + source, not the note — the
+      // Activities list is where the note itself renders.
+      await tester.tap(find.text('ACCOUNT'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Activities'));
+      await tester.pumpAndSettle();
       expect(find.text('felt great, new personal best pace'), findsOneWidget);
     },
   );
@@ -2119,8 +2123,6 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('ACTIVITIES'));
-      await tester.pumpAndSettle();
       await tester.tap(find.text('+ LOG'));
       await tester.pumpAndSettle();
 
@@ -2160,8 +2162,6 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('ACTIVITIES'));
-      await tester.pumpAndSettle();
       await tester.tap(find.text('+ LOG'));
       await tester.pumpAndSettle();
 
@@ -2189,8 +2189,15 @@ void main() {
       // The app's own selected date (still 20 Aug, mockDay) was never
       // touched — picking a day for this one entry is local to the sheet.
       expect(container.read(selectedDateProvider), DateTime(2026, 8, 20));
-      // The Activities list shows every day, so the entry does show up —
-      // but filed under the 19th's own section, not the 20th's.
+
+      // The Day view is still showing the 20th, so this entry (dated the
+      // 19th) doesn't render there — the Activities list shows every day,
+      // so the entry does show up there, filed under the 19th's own
+      // section, not the 20th's.
+      await tester.tap(find.text('ACCOUNT'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Activities'));
+      await tester.pumpAndSettle();
       expect(find.text('WEDNESDAY, 19 AUG'), findsOneWidget);
       expect(find.text('Yesterday\'s walk'), findsOneWidget);
       final entryY = tester.getTopLeft(find.text('Yesterday\'s walk')).dy;
@@ -2292,8 +2299,9 @@ void main() {
       await tester.pumpAndSettle();
 
       // Logging is goal-first now — the bare category alone isn't enough to
-      // log against; there needs to be a goal for it too.
-      await tester.tap(find.text('ACTIVITIES'));
+      // log against; there needs to be a goal for it too. Logging itself now
+      // lives on the Day tab, not Account.
+      await tester.tap(find.text('DAY'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('+ LOG'));
       await tester.pumpAndSettle();
@@ -2331,7 +2339,7 @@ void main() {
       await tester.tap(find.text('CREATE GOAL'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('ACTIVITIES'));
+      await tester.tap(find.text('DAY'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('+ LOG'));
       await tester.pumpAndSettle();
@@ -2703,7 +2711,7 @@ void main() {
     },
   );
 
-  testWidgets('Goals: sign out returns to the login screen', (
+  testWidgets('Account: shows the signed-in email', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -2714,10 +2722,27 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('GOALS'));
+    await tester.tap(find.text('ACCOUNT'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('sign out'));
+    expect(find.text('test@example.com'), findsOneWidget);
+  });
+
+  testWidgets('Account: sign out returns to the login screen', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: await _signedInOverrides(),
+        child: const CalendarTrackerApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('ACCOUNT'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('SIGN OUT'));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
