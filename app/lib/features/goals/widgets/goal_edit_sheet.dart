@@ -504,39 +504,53 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
 
   Widget _buildFooter() {
     final isLastStep = _step == _stepCount;
+    final primaryButton = GestureDetector(
+      onTap: isLastStep ? _save : _next,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 44),
+        alignment: Alignment.center,
+        color: AppColors.accent,
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s3),
+        child: Text(
+          isLastStep ? (_isEditing ? 'SAVE CHANGES' : 'CREATE GOAL') : 'NEXT',
+          style: AppTextStyles.small(color: AppColors.bg),
+        ),
+      ),
+    );
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        GestureDetector(
-          onTap: isLastStep ? _save : _next,
-          behavior: HitTestBehavior.opaque,
-          child: Container(
-            width: double.infinity,
-            constraints: const BoxConstraints(minHeight: 44),
-            alignment: Alignment.centerLeft,
-            color: AppColors.accent,
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s3),
-            child: Text(
-              isLastStep
-                  ? (_isEditing ? 'SAVE CHANGES' : 'CREATE GOAL')
-                  : 'NEXT',
-              style: AppTextStyles.small(color: AppColors.bg),
-            ),
-          ),
-        ),
-        if (_step > 1) ...[
-          const SizedBox(height: AppSpacing.s2),
-          GestureDetector(
-            onTap: _back,
-            behavior: HitTestBehavior.opaque,
-            child: Container(
-              width: double.infinity,
-              constraints: const BoxConstraints(minHeight: 44),
-              alignment: Alignment.centerLeft,
-              child: Text('BACK', style: AppTextStyles.small(color: AppColors.text)),
-            ),
-          ),
-        ],
+        // Back and Next/Save share one row once there's a Back to show —
+        // stacked full-width blocks read as two separate decisions instead
+        // of one forward/backward pair.
+        if (_step > 1)
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: _back,
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    constraints: const BoxConstraints(minHeight: 44),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.text),
+                    ),
+                    child: Text(
+                      'BACK',
+                      style: AppTextStyles.small(color: AppColors.text),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.s2),
+              Expanded(child: primaryButton),
+            ],
+          )
+        else
+          primaryButton,
         if (_isEditing) ...[
           const SizedBox(height: AppSpacing.s2),
           GestureDetector(

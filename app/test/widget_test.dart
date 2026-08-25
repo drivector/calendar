@@ -9,6 +9,7 @@ import 'package:calendar_tracker/data/mock/mock_categories.dart';
 import 'package:calendar_tracker/data/mock/mock_day_20aug.dart';
 import 'package:calendar_tracker/features/account/account_screen.dart';
 import 'package:calendar_tracker/features/categories/categories_screen.dart';
+import 'package:calendar_tracker/features/day_view/widgets/actual_block_widget.dart';
 import 'package:calendar_tracker/features/day_view/widgets/day_header_bar.dart';
 import 'package:calendar_tracker/features/day_view/widgets/time_body_grid.dart';
 import 'package:calendar_tracker/features/goals/goals_screen.dart';
@@ -22,6 +23,7 @@ import 'package:calendar_tracker/models/category.dart';
 import 'package:calendar_tracker/models/clock_time.dart';
 import 'package:calendar_tracker/models/goal.dart';
 import 'package:calendar_tracker/models/planned_block.dart';
+import 'package:calendar_tracker/shared/widgets/dashed_border.dart';
 import 'package:calendar_tracker/shared/widgets/step_arrow_button.dart';
 import 'package:calendar_tracker/state/auth_providers.dart';
 import 'package:calendar_tracker/state/day_view_providers.dart';
@@ -153,6 +155,45 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Walk 45 m'), findsOneWidget);
   });
+
+  testWidgets(
+    'Day view: an actual block linked to a plan renders with a dashed '
+    'outline, an unplanned one does not',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: await _signedInOverrides(),
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // mock_day_20aug.dart: 'actual-walk' carries plannedBlockId
+      // 'plan-walk' (its own plan block); 'actual-unplanned-call' has none.
+      final linked = find.byWidgetPredicate(
+        (w) => w is ActualBlockWidget && w.block.id == 'actual-walk',
+      );
+      final unplanned = find.byWidgetPredicate(
+        (w) => w is ActualBlockWidget && w.block.id == 'actual-unplanned-call',
+      );
+      await tester.ensureVisible(linked);
+      await tester.ensureVisible(unplanned);
+      expect(linked, findsOneWidget);
+      expect(unplanned, findsOneWidget);
+
+      expect(
+        find.descendant(of: linked, matching: find.byType(DashedRectBorder)),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: unplanned,
+          matching: find.byType(DashedRectBorder),
+        ),
+        findsNothing,
+      );
+    },
+  );
 
   testWidgets('Day view: the header arrows step to the next/previous day', (
     WidgetTester tester,
