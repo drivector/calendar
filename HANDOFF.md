@@ -1,11 +1,7 @@
 # Track My Day (formerly "Calendar Tracker") — session handoff
 
-Updated 2026-08-25 (sixth session — nineteen batches pushed, all clean,
-plus a twentieth batch **done but not yet committed** (two bug fixes —
-stale "+ Log" date default, goal schedule overnight-range confirmation —
-see **Edge-case unit tests + two new bug fixes: stale "+ Log" date, goal
-schedule overnight ranges** and **Git status**); the fifth pushed batch
-also **deployed live
+Updated 2026-08-25 (sixth session — twenty batches pushed, all clean,
+see **Git status**; the fifth pushed batch also **deployed live
 Firestore rules changes to production**) — the app's user-visible
 name changed from **"Calendar Tracker" to "Track My Day"** partway
 through this session (see **App renamed**, near the end) — this doc's
@@ -309,8 +305,7 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
 `AsyncLoading`. Widget tests don't need this explicitly since
 `pumpAndSettle()` flushes it.
 
-## Git status — sixth session's first nineteen batches pushed, all
-clean; a twentieth batch is done but uncommitted
+## Git status — sixth session's first twenty batches pushed, all clean
 
 - The Firebase Auth/Firestore backend, the fourth session's UX fixes/CI,
   the entire fifth session (week nav, Activities tab, onboarding, cap
@@ -465,7 +460,7 @@ clean; a twentieth batch is done but uncommitted
   two new bug fixes: stale "+ Log" date, goal schedule overnight ranges**
   for the full writeup (covers this batch too). `flutter analyze` +
   `flutter test` (175/175) clean.
-- The sixth session's **twentieth batch — done, not yet committed**: the
+- The sixth session's **twentieth batch — pushed as `0afdc06`**: the
   stale "+ Log" date-default bug fix and the goal schedule
   overnight-range confirmation dialog — see the same section above for
   the full writeup. Touched: new `lib/models/clock_time.dart`
