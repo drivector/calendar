@@ -425,7 +425,7 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
   `lib/state/week_view_providers.dart` (doc comment only),
   `test/widget_test.dart`. Live-verified on the iOS Simulator, including
   the tight "Working week" case at real phone width.
-- The sixth session's **seventeenth batch — pushed as `TBD`**: edit and
+- The sixth session's **seventeenth batch — pushed as `e689ace`**: edit and
   delete for entries in the Activities list, reusing `LogActivitySheet`
   for edit (an optional `existing: TrackedBlock?` param) rather than a
   second form, with a "Delete activity" row once editing (mirrors the
