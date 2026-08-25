@@ -1,4 +1,5 @@
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart' show UserMetadata;
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,7 +19,7 @@ import 'package:calendar_tracker/features/goals/widgets/goal_detail_sheet.dart';
 import 'package:calendar_tracker/features/goals/widgets/goal_edit_sheet.dart';
 import 'package:calendar_tracker/features/log_activity/widgets/log_activity_sheet.dart';
 import 'package:calendar_tracker/shell/root_shell.dart';
-import 'package:calendar_tracker/features/account/capacity_screen.dart';
+import 'package:calendar_tracker/features/account/capacity_view.dart';
 import 'package:calendar_tracker/models/category.dart';
 import 'package:calendar_tracker/models/clock_time.dart';
 import 'package:calendar_tracker/models/goal.dart';
@@ -144,8 +145,10 @@ Future<void> _goalSheetNext(WidgetTester tester, [int times = 1]) async {
 /// Taps a bottom tab by its label, scoped to [AppTabBar].
 ///
 /// Scoped rather than a bare `find.text` because tab labels are sentence
-/// case since the Outlook restyle, and "Day" now also appears on the Day
-/// view's own view-mode button — a bare finder matches both.
+/// case since the Outlook restyle, so they can collide with body copy
+/// elsewhere on screen. (The sharpest case is gone — the first tab is
+/// "Calendar" now, not "Day", which used to also match the Day view's own
+/// view-mode button — but staying scoped keeps the next rename safe.)
 Future<void> _tapTab(WidgetTester tester, String label) async {
   await tester.tap(
     find.descendant(of: find.byType(AppTabBar), matching: find.text(label)),
@@ -406,7 +409,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    for (final tab in ['Goals', 'Account', 'Day']) {
+    for (final tab in ['Goals', 'Account', 'Calendar']) {
       await _tapTab(tester, tab);
       expect(tester.takeException(), isNull, reason: 'after tapping $tab');
     }
@@ -498,7 +501,8 @@ void main() {
   });
 
   testWidgets(
-    'Account: the capacity link opens per-day free time and per-goal room, and close returns to Account',
+    'Account: the Capacity menu item shows per-day free time and per-goal '
+    'room, and switching back to Details returns to the account details',
     (WidgetTester tester) async {
       await tester.pumpWidget(
         ProviderScope(
@@ -510,12 +514,11 @@ void main() {
 
       await _tapTab(tester, 'Account');
 
-      await tester.tap(find.text('capacity'));
+      await tester.tap(find.text('Capacity'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      expect(find.byType(CapacityScreen), findsOneWidget);
-      expect(find.text('Capacity'), findsOneWidget);
+      expect(find.byType(CapacityView), findsOneWidget);
 
       // Free time per day — every day of the mock week shows up.
       expect(find.text('FREE TIME PER DAY'), findsOneWidget);
@@ -527,11 +530,11 @@ void main() {
       expect(find.text('ROOM TOWARD GOALS'), findsOneWidget);
       expect(find.textContaining('Walking · planned'), findsOneWidget);
 
-      await tester.tap(find.text('close'));
+      await tester.tap(find.text('Details'));
       await tester.pumpAndSettle();
 
-      expect(find.byType(CapacityScreen), findsNothing);
-      expect(find.byType(AccountScreen), findsOneWidget);
+      expect(find.byType(CapacityView), findsNothing);
+      expect(find.text('EMAIL'), findsOneWidget);
     },
   );
 
@@ -567,7 +570,7 @@ void main() {
       await tester.pump();
 
       await _tapTab(tester, 'Account');
-      await tester.tap(find.text('capacity'));
+      await tester.tap(find.text('Capacity'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
@@ -986,7 +989,7 @@ void main() {
     // shows the original mock day untouched.
     await tester.tapAt(const Offset(200, 50));
     await tester.pumpAndSettle();
-    await _tapTab(tester, 'Day');
+    await _tapTab(tester, 'Calendar');
 
     expect(find.text('20 Aug'), findsOneWidget);
   });
@@ -1724,7 +1727,7 @@ void main() {
       // Back on the Day tab automatically (creating a goal doesn't navigate,
       // but the app opens on Day and the sheet closes onto whatever's behind
       // it — Goals in this case, so switch to Day explicitly).
-      await _tapTab(tester, 'Day');
+      await _tapTab(tester, 'Calendar');
 
       // The new goal is a duration-mode target with no fixed time — a plain
       // duration has nowhere real to be placed, so it must not appear on the
@@ -2384,7 +2387,7 @@ void main() {
       // Logging is goal-first now — the bare category alone isn't enough to
       // log against; there needs to be a goal for it too. Logging itself now
       // lives on the Day tab, not Account.
-      await _tapTab(tester, 'Day');
+      await _tapTab(tester, 'Calendar');
       await tester.tap(find.text('+ Log'));
       await tester.pumpAndSettle();
       expect(find.text('reading'), findsNothing);
@@ -2420,7 +2423,7 @@ void main() {
       await tester.tap(find.text('Create goal'));
       await tester.pumpAndSettle();
 
-      await _tapTab(tester, 'Day');
+      await _tapTab(tester, 'Calendar');
       await tester.tap(find.text('+ Log'));
       await tester.pumpAndSettle();
 
@@ -3074,7 +3077,7 @@ void main() {
       // now-deleted category — it must render, not throw.
       await tester.tap(find.text('close'));
       await tester.pumpAndSettle();
-      await _tapTab(tester, 'Day');
+      await _tapTab(tester, 'Calendar');
 
       expect(tester.takeException(), isNull);
     },
@@ -3095,6 +3098,70 @@ void main() {
 
     expect(find.text('test@example.com'), findsOneWidget);
   });
+
+  testWidgets(
+    'Account: shows the account creation date when the user has one',
+    (WidgetTester tester) async {
+      const uid = 'test-uid-with-creation-date';
+      final firestore = await seededFirestore(uid);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            firebaseAuthProvider.overrideWithValue(
+              MockFirebaseAuth(
+                signedIn: true,
+                mockUser: MockUser(
+                  uid: uid,
+                  email: 'joined@example.com',
+                  // UTC noon, not midnight — the screen converts
+                  // .toLocal() before formatting, and a midnight UTC input
+                  // would land on the wrong calendar day for a negative
+                  // host timezone offset. Noon gives real-world margin
+                  // either direction.
+                  metadata: UserMetadata(
+                    DateTime.utc(2025, 3, 14, 12).millisecondsSinceEpoch,
+                    DateTime.utc(2025, 3, 14, 12).millisecondsSinceEpoch,
+                  ),
+                ),
+              ),
+            ),
+            firestoreProvider.overrideWithValue(firestore),
+            selectedDateProvider.overrideWith((ref) => mockDay),
+          ],
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _tapTab(tester, 'Account');
+
+      expect(find.text('MEMBER SINCE'), findsOneWidget);
+      expect(find.text('14 March 2025'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    "Account: a user with no real creation timestamp doesn't show a "
+    'fabricated one',
+    (WidgetTester tester) async {
+      // The shared _signedInOverrides fixture's MockUser never sets
+      // metadata, so this covers the everyday test path — MockUser then
+      // defaults to UserMetadata(0, 0), the epoch, which must not render
+      // as if it were a real date.
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: await _signedInOverrides(),
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _tapTab(tester, 'Account');
+
+      expect(find.text('MEMBER SINCE'), findsNothing);
+    },
+  );
 
   testWidgets('Account: sign out returns to the login screen', (
     WidgetTester tester,

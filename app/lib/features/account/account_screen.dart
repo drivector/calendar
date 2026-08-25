@@ -1,3 +1,4 @@
+import 'package:intl/intl.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -10,16 +11,17 @@ import '../../theme/app_shapes.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 import '../log_activity/widgets/activities_list.dart';
-import 'capacity_screen.dart';
+import 'capacity_view.dart';
 
-enum _AccountTab { details, activities }
+enum _AccountTab { details, activities, capacity }
 
-/// The former Activities tab — now "Account": account details (email, sign
-/// out) by default, with a segmented control to switch to the same
-/// day-by-day activity list that used to be the whole screen. Logging a new
-/// activity by hand now happens from the Day view instead (see
-/// `showLogActivitySheet` there), so this screen has no "+ LOG" action of
-/// its own any more.
+/// The former Activities tab — now "Account": account details (email,
+/// creation date, sign out) by default, with a segmented control to switch
+/// between that, the day-by-day activity list, and the weekly Capacity
+/// view — all three are menu items on the same screen, not separate
+/// pushed routes. Logging a new activity by hand happens from the Day view
+/// instead (see `showLogActivitySheet` there), so this screen has no
+/// "+ LOG" action of its own.
 class AccountScreen extends ConsumerStatefulWidget {
   const AccountScreen({super.key});
 
@@ -46,20 +48,19 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
           children: [
             DecoratedBox(
               decoration: BoxDecoration(
+                color: AppColors.surface,
                 border: Border(bottom: BorderSide(color: AppColors.divider)),
               ),
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.s3,
-                  vertical: AppSpacing.s2,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.center,
+                padding: const EdgeInsets.all(AppSpacing.s3),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Account', style: AppTextStyles.title()),
+                    const SizedBox(height: AppSpacing.s2),
                     SegmentedControl<_AccountTab>(
                       selected: _tab,
+                      stretch: true,
                       onChanged: (value) => setState(() => _tab = value),
                       options: const [
                         SegmentedOption(
@@ -69,6 +70,10 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                         SegmentedOption(
                           value: _AccountTab.activities,
                           label: 'Activities',
+                        ),
+                        SegmentedOption(
+                          value: _AccountTab.capacity,
+                          label: 'Capacity',
                         ),
                       ],
                     ),
@@ -80,6 +85,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
               child: switch (_tab) {
                 _AccountTab.details => const _AccountDetails(),
                 _AccountTab.activities => const ActivitiesList(),
+                _AccountTab.capacity => const CapacityView(),
               },
             ),
           ],
@@ -94,7 +100,16 @@ class _AccountDetails extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final email = ref.watch(authStateChangesProvider).valueOrNull?.email ?? '';
+    final user = ref.watch(authStateChangesProvider).valueOrNull;
+    final email = user?.email ?? '';
+    // A Firebase user with no real creation timestamp reports the epoch
+    // (0ms) rather than null — the test fixtures' MockUser never sets one,
+    // so this is what tells "no real value" apart from "1 Jan 1970".
+    final rawCreatedAt = user?.metadata.creationTime;
+    final createdAt =
+        rawCreatedAt != null && rawCreatedAt.millisecondsSinceEpoch > 0
+        ? rawCreatedAt
+        : null;
 
     return Padding(
       padding: const EdgeInsets.all(AppSpacing.s3),
@@ -104,12 +119,18 @@ class _AccountDetails extends ConsumerWidget {
           Text('EMAIL', style: AppTextStyles.kicker()),
           const SizedBox(height: AppSpacing.s1),
           Text(email, style: AppTextStyles.mono()),
-          const SizedBox(height: AppSpacing.s3),
-          GestureDetector(
-            onTap: () => showCapacityScreen(context),
-            behavior: HitTestBehavior.opaque,
-            child: Text('capacity', style: AppTextStyles.mono()),
-          ),
+          if (createdAt != null) ...[
+            const SizedBox(height: AppSpacing.s3),
+            Text('MEMBER SINCE', style: AppTextStyles.kicker()),
+            const SizedBox(height: AppSpacing.s1),
+            Text(
+              // Firebase's creation timestamp comes back UTC — .toLocal()
+              // so the calendar day matches what the user actually saw
+              // when they signed up, not whatever day it was in UTC.
+              DateFormat('d MMMM y').format(createdAt.toLocal()),
+              style: AppTextStyles.mono(),
+            ),
+          ],
           const SizedBox(height: AppSpacing.s4),
           GestureDetector(
             onTap: () => ref.read(firebaseAuthProvider).signOut(),
@@ -119,7 +140,8 @@ class _AccountDetails extends ConsumerWidget {
               alignment: Alignment.center,
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s2),
               decoration: BoxDecoration(
-                border: Border.all(color: AppColors.neutral500), borderRadius: AppShapes.small,
+                border: Border.all(color: AppColors.neutral500),
+                borderRadius: AppShapes.small,
               ),
               child: Text(
                 'Sign out',

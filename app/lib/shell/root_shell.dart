@@ -8,7 +8,7 @@ import '../shared/widgets/app_tab_bar.dart';
 import '../state/root_shell_providers.dart';
 
 const _tabs = [
-  AppTabBarItem('Day'),
+  AppTabBarItem('Calendar'),
   AppTabBarItem('Goals'),
   AppTabBarItem('Account'),
 ];

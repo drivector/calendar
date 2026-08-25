@@ -1,8 +1,8 @@
 # Track My Day (formerly "Calendar Tracker") — session handoff
 
-Updated 2026-08-25 (sixth session — nine batches pushed, tenth through
-thirteenth uncommitted, see **Git status**; the fifth pushed batch also
-**deployed live Firestore rules changes to production**) — the app's user-visible
+Updated 2026-08-25 (sixth session — sixteen batches pushed, all clean, see
+**Git status**; the fifth pushed batch also **deployed live Firestore
+rules changes to production**) — the app's user-visible
 name changed from **"Calendar Tracker" to "Track My Day"** partway
 through this session (see **App renamed**, near the end) — this doc's
 own title reflects that now, but earlier dated sections below still say
@@ -305,7 +305,7 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
 `AsyncLoading`. Widget tests don't need this explicitly since
 `pumpAndSettle()` flushes it.
 
-## Git status — sixth session's first nine batches pushed, tenth through thirteenth uncommitted
+## Git status — sixth session's first sixteen batches pushed, all clean
 
 - The Firebase Auth/Firestore backend, the fourth session's UX fixes/CI,
   the entire fifth session (week nav, Activities tab, onboarding, cap
@@ -372,60 +372,59 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
   `lib/features/day_view/widgets/untracked_gap_widget.dart`;
   `test/widget_test.dart` — see **Account tab: replaces Activities,
   "+ LOG" moves to Day view, claim-untracked-time removed**).
-- The sixth session's **tenth batch — uncommitted**: the add-block
-  sheet's full redesign across several passes — no date field, goal
-  dropdown, header save/cancel with a save-or-cancel prompt on any other
-  close attempt, required name/goal, inline computed duration
-  (`lib/features/day_view/widgets/add_block_sheet.dart`,
-  `test/widget_test.dart` — see **Add-block sheet redesign: no date
-  field, goal dropdown, "Save Activity"** and **Add-block sheet, round
-  2: header save/cancel, required fields, inline duration**). Purely a
-  code change, no Firestore/deploy component. Ask before committing — a
-  prior commit/push approval doesn't carry forward to a new batch, per
-  this repo's `CLAUDE.md`.
-- The sixth session's **eleventh batch — uncommitted**: the validation-error
-  visibility bug fix + app-wide audit — new
-  `lib/shared/widgets/inline_form_error.dart`, wired into
-  `lib/features/day_view/widgets/add_block_sheet.dart` and
-  `lib/features/log_activity/widgets/log_activity_sheet.dart` in place of
-  `ScaffoldMessenger.showSnackBar`, plus `test/widget_test.dart` (see
-  **Bug fix + app-wide audit: validation errors hidden behind an open
-  sheet**). Purely a code change, no Firestore/deploy component. Live
-  verification on this one is incomplete (see that section) — worth a
-  real check before/alongside committing, not just before pushing.
-- The sixth session's **twelfth batch — uncommitted**: the Day view
-  Plan/Actual lane merge — `lib/features/day_view/widgets/time_body_grid.dart`,
-  `lib/features/day_view/day_view_screen.dart`,
-  `lib/state/day_view_providers.dart` (doc comment only); deleted
-  `lib/features/day_view/widgets/column_headers.dart` (see **Day view:
-  Plan and Actual merged into one column**). Purely a code change, no
-  Firestore/deploy component. Live verification is partial — the merged
-  single-column layout was confirmed on the iOS Simulator, but a dashed
-  plan block actually overlapping a solid actual block was not (see that
-  section for why) — worth a quick look before considering this closed.
-- The sixth session's **thirteenth batch — uncommitted**: the multi-day
-  Day-view timeline (Day/3 Day/Working week/Week), the date picker, and
-  the Week tab's full removal (Capacity relocated to Account) —
-  `lib/state/day_view_providers.dart`, `lib/state/goals_providers.dart`,
-  `lib/state/week_view_providers.dart`,
-  `lib/features/day_view/widgets/time_body_grid.dart`,
-  `lib/features/day_view/widgets/day_header_bar.dart`,
-  `lib/features/day_view/widgets/add_block_sheet.dart`,
+- The sixth session's **tenth through thirteenth batches — bundled and
+  pushed as `822c0f7`**: the add-block sheet's full redesign (no date
+  field, goal dropdown, header save/cancel, required name/goal, inline
+  computed duration), the validation-error visibility bug fix + app-wide
+  audit (new `lib/shared/widgets/inline_form_error.dart`, replacing
+  `ScaffoldMessenger.showSnackBar`), the Day view Plan/Actual lane merge,
+  and the multi-day Day-view timeline (Day/3 Day/Working week/Week) with
+  the date picker and the Week tab's full removal (Capacity relocated to
+  Account) — see **Add-block sheet redesign: no date field, goal
+  dropdown, "Save Activity"**, **Bug fix + app-wide audit: validation
+  errors hidden behind an open sheet**, **Day view: Plan and Actual
+  merged into one column**, and **Day view: multi-day timeline, date
+  picker, Week tab removed**.
+- The sixth session's **fourteenth batch — pushed as `c4f510c`**: the
+  goal-edit sheet's Back/Next moved into one row instead of two stacked
+  full-width blocks, and an actual block whose `TrackedBlock.plannedBlockId`
+  links it back to a plan now renders with the same dashed outline
+  `PlanBlockWidget` uses, on top of its normal solid fill
+  (`lib/features/goals/widgets/goal_edit_sheet.dart`,
   `lib/features/day_view/widgets/actual_block_widget.dart`,
-  `lib/features/day_view/widgets/plan_block_widget.dart`,
-  `lib/features/day_view/day_view_screen.dart`,
-  `lib/shared/widgets/segmented_control.dart`,
-  `lib/shell/root_shell.dart`, `lib/features/account/account_screen.dart`,
-  `lib/features/goals/goals_screen.dart`; new
-  `lib/features/day_view/widgets/day_column_header_row.dart`, new
-  `lib/features/account/capacity_screen.dart` (moved from
-  `lib/features/week_view/capacity_screen.dart`); deleted
-  `lib/features/week_view/` entirely; `test/widget_test.dart`, new
-  `test/state/goals_providers_test.dart` (see **Day view: multi-day
-  timeline, date picker, Week tab removed**). Purely a code change, no
-  Firestore/deploy component. Live-verified on the iOS Simulator,
-  including finding and fixing two real bugs that only surfaced on a
-  real phone width (see that section's own verification write-up).
+  `test/widget_test.dart`).
+- The sixth session's **fifteenth batch — pushed as `5da54ea`**: the
+  whole-app restyle from the flat "Modernist" design system to Microsoft
+  Outlook Calendar's look (rounded corners + elevation, Outlook blue
+  accent, platform system font, Outlook's category palette) — see
+  **Outlook restyle: the whole app leaves the Modernist system** for the
+  full breakdown. New `lib/theme/app_shapes.dart`; every theme file and
+  most of `lib/features/`/`lib/shared/widgets/` touched; `google_fonts`
+  dropped from `pubspec.yaml`. `CLAUDE.md`'s Design system section was
+  rewritten as part of this batch, not left describing the old system.
+- The sixth session's **sixteenth batch — pushed as `TBD`**: collapsed
+  the Day view header from two rows to one (the view-mode dropdown now
+  sits next to "+ Log", both flush right, via an `Expanded` date block
+  that ellipsizes instead of overflowing — the same "Working week" +
+  long-kicker combination that broke the header twice before was
+  specifically re-checked live and fits); removed the bordered box around
+  the `‹`/`›` step arrows (bare chevrons now, Outlook doesn't box these);
+  renamed the "Day" tab to "Calendar"; moved the Account tab's Capacity
+  page from a pushed route into a third segmented-control menu item
+  alongside Details/Activities (`capacity_screen.dart` →
+  `capacity_view.dart`, `CapacityScreen` → `CapacityView`, no more
+  "close" link — switching tabs is how you leave); and added a "member
+  since" creation date to Account Details, converted `.toLocal()` since
+  Firebase reports it in UTC, with a guard against `firebase_auth_mocks`'
+  default `UserMetadata(0, 0)` rendering as a fake "1 January 1970".
+  Touched: `lib/features/day_view/widgets/day_header_bar.dart`,
+  `lib/shared/widgets/step_arrow_button.dart`, `lib/shell/root_shell.dart`,
+  `lib/features/account/account_screen.dart`, renamed
+  `lib/features/account/capacity_screen.dart` →
+  `lib/features/account/capacity_view.dart`,
+  `lib/state/week_view_providers.dart` (doc comment only),
+  `test/widget_test.dart`. Live-verified on the iOS Simulator, including
+  the tight "Working week" case at real phone width.
 - A stray duplicate clone of this repo that existed briefly at
   `/Users/alexandrospanagiotidis/DriVector/Calendar/calendar/` (see the
   sign-up bug section for how it got there) has been **deleted** — it had
@@ -1671,6 +1670,59 @@ iOS Simulator across Day view, Goals, and the goal-edit wizard.
 **`CLAUDE.md`'s Design system section was rewritten** as part of this —
 it previously mandated "flat, zero border-radius, no shadows", which would
 have had every future session fighting this change.
+
+## Outlook restyle follow-ups: header layout, Capacity as a menu item (sixth session)
+
+A round of direct follow-up requests against the freshly-restyled app,
+each small on its own:
+
+- **Day view header collapses to one row.** The view-mode dropdown moved
+  from its own row up next to "+ Log", both now flush right. The
+  previous two-row layout existed specifically to dodge an overflow bug
+  (see the Outlook restyle section above); putting the dropdown back
+  inline risked reintroducing exactly that, since "Working week" is both
+  the longest mode kicker *and* the longest dropdown label and both can
+  be on screen together. Fixed properly this time — the date/arrows
+  block is `Expanded` with `maxLines: 1` + ellipsis, so the failure mode
+  is graceful truncation, not a render error — and the tight case was
+  specifically re-checked live on the Simulator at 402pt width.
+- **Step arrows lost their bordered box** — bare `‹`/`›` chevrons now
+  (Outlook doesn't box these), keeping the 32×32 tap target with no
+  visible border.
+- **"Day" tab renamed to "Calendar"** — also incidentally resolves an
+  ambiguity the Outlook restyle introduced: "Day" was both the first
+  tab's label and the Day view's own view-mode button, so a bare
+  `find.text('Day')` in tests could match either. `test/widget_test.dart`
+  already had a `_tapTab` helper scoped to `AppTabBar` for exactly this
+  reason; its doc comment now says so accurately instead of describing
+  an ambiguity that no longer exists.
+- **Capacity moved from a pushed route to an Account menu item**,
+  alongside Details and Activities, per explicit request ("capacity on
+  account should be menu item, together with details and activities").
+  `capacity_screen.dart` → `capacity_view.dart`; `CapacityScreen`
+  (a `MaterialPageRoute` push with its own header/background/"close"
+  link) → `CapacityView` (a plain body widget — the surrounding chrome
+  is now owned once, by `AccountScreen`, like `ActivitiesList` already
+  was). `showCapacityScreen` is gone; switching the segmented control is
+  now how you get there and leave.
+- **Account Details gained a "member since" creation date** — Firebase's
+  `UserMetadata.creationTime` comes back UTC; the screen converts
+  `.toLocal()` so the calendar day matches what the user actually saw
+  when they signed up. Guards against `firebase_auth_mocks`' default
+  `UserMetadata(0, 0)` — every existing test fixture's `MockUser` never
+  sets metadata, and displaying that default as a real date would show
+  "1 January 1970" everywhere. Two new tests cover both paths: a
+  `MockUser` with real UTC metadata renders the date correctly, and the
+  everyday no-metadata fixture confirms no fabricated date appears.
+
+### Verification
+
+`flutter analyze` + `flutter test` (162 tests) clean. Live-verified on the
+iOS Simulator: the collapsed header at both the easy (Day mode) and tight
+("Working week") cases, the Capacity tab rendering inline with real data
+from the live signed-in account, and the creation date showing correctly
+against that same real account ("25 August 2026" — this session's actual
+sign-up day).
 
 ## Day view: multi-day timeline, date picker, Week tab removed (sixth session)
 

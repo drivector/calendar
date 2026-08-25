@@ -43,22 +43,25 @@ class DayHeaderBar extends ConsumerWidget {
           horizontal: AppSpacing.s3,
           vertical: AppSpacing.s2,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    StepArrowButton(
-                      direction: StepDirection.previous,
-                      onTap: () => stepDayViewWindow(ref, forward: false),
-                    ),
-                    const SizedBox(width: AppSpacing.s2),
-                    GestureDetector(
+            // Expanded, not a bare Row: it claims the leftover width so the
+            // mode button and "+ Log" are pushed flush right, and it lets
+            // the date block shrink. That shrinking matters — a long
+            // kicker ("WORKING WEEK") beside a long mode label is exactly
+            // the combination that overflowed a real phone width before,
+            // and now it ellipsizes instead.
+            Expanded(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  StepArrowButton(
+                    direction: StepDirection.previous,
+                    onTap: () => stepDayViewWindow(ref, forward: false),
+                  ),
+                  Flexible(
+                    child: GestureDetector(
                       onTap: () => _pickDate(context, ref),
                       behavior: HitTestBehavior.opaque,
                       child: Column(
@@ -72,60 +75,53 @@ class DayHeaderBar extends ConsumerWidget {
                                   ).format(selectedDate).toUpperCase()
                                 : _kickerFor(mode),
                             style: AppTextStyles.kicker(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                           Text(
                             mode == DayViewMode.day
                                 ? DateFormat('d MMM').format(selectedDate)
                                 : _rangeLabel(visibleDates),
                             style: AppTextStyles.title(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: AppSpacing.s2),
-                    StepArrowButton(
-                      direction: StepDirection.next,
-                      onTap: () => stepDayViewWindow(ref, forward: true),
-                    ),
-                  ],
-                ),
-                GestureDetector(
-                  onTap: () => showLogActivitySheet(context, ref),
-                  behavior: HitTestBehavior.opaque,
-                  child: Container(
-                    constraints: const BoxConstraints(minHeight: 32),
-                    alignment: Alignment.center,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.s2,
-                    ),
-                    // The one primary action on this screen — Fluent gives
-                    // exactly one filled brand button per surface and
-                    // leaves everything else neutral.
-                    decoration: const BoxDecoration(
-                      color: AppColors.accent,
-                      borderRadius: AppShapes.small,
-                    ),
-                    child: Text(
-                      '+ Log',
-                      style: AppTextStyles.small(color: AppColors.surface),
-                    ),
                   ),
-                ),
-              ],
+                  StepArrowButton(
+                    direction: StepDirection.next,
+                    onTap: () => stepDayViewWindow(ref, forward: true),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: AppSpacing.s2),
-            // Its own row, left-aligned — putting this button inline on the
-            // row above (next to +LOG) risked the same real overflow bug
-            // the old 4-option segmented control had on an actual phone
-            // width, since "Working week" is both the longest mode kicker
-            // and the longest dropdown label, and the two can appear at
-            // once.
-            Align(
-              alignment: Alignment.centerLeft,
-              child: _ViewModeButton(
-                mode: mode,
-                onChanged: (value) =>
-                    ref.read(dayViewModeProvider.notifier).state = value,
+            const SizedBox(width: AppSpacing.s2),
+            _ViewModeButton(
+              mode: mode,
+              onChanged: (value) =>
+                  ref.read(dayViewModeProvider.notifier).state = value,
+            ),
+            const SizedBox(width: AppSpacing.s2),
+            GestureDetector(
+              onTap: () => showLogActivitySheet(context, ref),
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 32),
+                alignment: Alignment.center,
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s2),
+                // The one primary action on this screen — Fluent gives
+                // exactly one filled brand button per surface and leaves
+                // everything else neutral.
+                decoration: const BoxDecoration(
+                  color: AppColors.accent,
+                  borderRadius: AppShapes.small,
+                ),
+                child: Text(
+                  '+ Log',
+                  style: AppTextStyles.small(color: AppColors.surface),
+                ),
               ),
             ),
           ],

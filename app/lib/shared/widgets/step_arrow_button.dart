@@ -1,14 +1,15 @@
 import 'package:flutter/widgets.dart';
 
 import '../../theme/app_colors.dart';
-import '../../theme/app_shapes.dart';
 
 enum StepDirection { previous, next }
 
-/// A subtle "‹"/"›" navigation button — same visual language as the goal
-/// sheet's +/- steppers, reused here for day/week navigation. Outlook keeps
-/// these quiet: a hairline-bordered white square with a neutral chevron,
-/// rather than a filled or accented control.
+/// A bare "‹"/"›" navigation chevron for day/week stepping. No box: Outlook
+/// leaves its calendar's back/forward controls as plain glyphs, and boxing
+/// them competes with the one filled button the header is allowed.
+///
+/// The 32×32 footprint stays even without a visible border — it's the tap
+/// target, and this repo's conventions require a real one.
 class StepArrowButton extends StatelessWidget {
   const StepArrowButton({
     super.key,
@@ -24,22 +25,18 @@ class StepArrowButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Container(
+      child: SizedBox(
         width: 32,
         height: 32,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          border: Border.all(color: AppColors.neutral500),
-          borderRadius: AppShapes.small,
-        ),
-        child: Text(
-          direction == StepDirection.previous ? '‹' : '›',
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            height: 1,
-            color: AppColors.textSecondary,
+        child: Center(
+          child: Text(
+            direction == StepDirection.previous ? '‹' : '›',
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w500,
+              height: 1,
+              color: AppColors.textSecondary,
+            ),
           ),
         ),
       ),

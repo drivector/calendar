@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart' show MaterialPageRoute;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -14,20 +13,17 @@ import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 import '../../utils/duration_format.dart';
 
-/// Pushes [CapacityScreen] — called from the Account screen's "capacity"
-/// link.
-Future<void> showCapacityScreen(BuildContext context) {
-  return Navigator.of(context)
-      .push(MaterialPageRoute(builder: (_) => const CapacityScreen()));
-}
-
 /// "How much is planned, and how much is still available" — shows plan vs.
 /// available time per day and per goal for the current week. Two sections:
 /// free time slots per day (against the same 07:00–18:00 window the Day
 /// view already uses for "untracked"), and remaining room per goal (target
 /// minus what's already planned toward it this week).
-class CapacityScreen extends ConsumerWidget {
-  const CapacityScreen({super.key});
+///
+/// A body, not a screen: it's one of the Account screen's segments, so the
+/// surrounding chrome (background, safe area, header) belongs to
+/// [AccountScreen] rather than being repeated here.
+class CapacityView extends ConsumerWidget {
+  const CapacityView({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -39,35 +35,7 @@ class CapacityScreen extends ConsumerWidget {
     final totalAvailable = days.fold<double>(0, (t, d) => t + d.availableHours);
     final totalWindow = days.fold<double>(0, (t, d) => t + d.windowHours);
 
-    return ColoredBox(
-      color: AppColors.bg,
-      child: SafeArea(
-        child: Column(
-          children: [
-            DecoratedBox(
-              decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: AppColors.divider)),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.s3,
-                  vertical: AppSpacing.s2,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Capacity', style: AppTextStyles.title()),
-                    GestureDetector(
-                      onTap: () => Navigator.of(context).pop(),
-                      behavior: HitTestBehavior.opaque,
-                      child: Text('close', style: AppTextStyles.mono()),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            Expanded(
-              child: SingleChildScrollView(
+    return SingleChildScrollView(
                 padding: const EdgeInsets.all(AppSpacing.s3),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -133,12 +101,7 @@ class CapacityScreen extends ConsumerWidget {
                         ),
                   ],
                 ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+              );
   }
 }
 

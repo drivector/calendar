@@ -11,7 +11,7 @@ import 'derived_providers.dart';
 /// derived from the same planned/tracked block data the Day view uses, so
 /// looking at a different week's Capacity page shows that week's real
 /// activity (or an honest empty day for one with nothing logged). Backs
-/// the Capacity page (`features/account/capacity_screen.dart`) — there is
+/// the Capacity page (`features/account/capacity_view.dart`) — there is
 /// no "Week view" tab any more.
 final weekDaySummariesProvider = Provider<List<WeekDaySummary>>((ref) {
   final selectedDate = ref.watch(selectedDateProvider);
