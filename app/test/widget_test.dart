@@ -3,7 +3,6 @@ import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:intl/intl.dart';
 
 import 'package:calendar_tracker/app.dart';
 import 'package:calendar_tracker/data/mock/mock_categories.dart';
@@ -18,8 +17,7 @@ import 'package:calendar_tracker/features/goals/widgets/goal_detail_sheet.dart';
 import 'package:calendar_tracker/features/goals/widgets/goal_edit_sheet.dart';
 import 'package:calendar_tracker/features/log_activity/widgets/log_activity_sheet.dart';
 import 'package:calendar_tracker/shell/root_shell.dart';
-import 'package:calendar_tracker/features/week_view/capacity_screen.dart';
-import 'package:calendar_tracker/features/week_view/week_view_screen.dart';
+import 'package:calendar_tracker/features/account/capacity_screen.dart';
 import 'package:calendar_tracker/models/category.dart';
 import 'package:calendar_tracker/models/clock_time.dart';
 import 'package:calendar_tracker/models/goal.dart';
@@ -209,7 +207,135 @@ void main() {
     },
   );
 
-  testWidgets('Tab bar switches through all 4 tabs without layout errors', (
+  testWidgets(
+    'Day view: tapping the date opens a picker that jumps to the picked date',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: await _signedInOverrides(),
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('20 Aug'), findsOneWidget);
+
+      await tester.tap(find.text('20 Aug'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(CalendarDatePicker),
+          matching: find.text('15'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('15 Aug'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Day view: switching the mode toggle changes the number of visible day columns',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: await _signedInOverrides(),
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Day mode: the per-column header row is collapsed — a single day is
+      // already named by the header above.
+      expect(find.text('THU 20'), findsNothing);
+
+      await tester.tap(find.text('3 Day'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text('THU 20'), findsOneWidget);
+      expect(find.text('FRI 21'), findsOneWidget);
+      expect(find.text('SAT 22'), findsOneWidget);
+      expect(find.text('SUN 23'), findsNothing);
+
+      await tester.tap(find.text('Working week'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      // Anchored at the Monday of the selected day's week (17 Aug), 5 days.
+      expect(find.text('MON 17'), findsOneWidget);
+      expect(find.text('FRI 21'), findsOneWidget);
+      expect(find.text('SAT 22'), findsNothing);
+
+      await tester.tap(find.text('Week'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text('MON 17'), findsOneWidget);
+      expect(find.text('SUN 23'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Day view: tapping empty space in a non-first day-column creates a '
+    'block dated to that column, not the selected date',
+    (WidgetTester tester) async {
+      final container = ProviderContainer(
+        overrides: await _signedInOnboardedNoActivityOverrides(),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('3 Day'));
+      await tester.pumpAndSettle();
+
+      // 3-Day mode starting on mockDay (20 Aug): columns are 20/21/22 Aug —
+      // tap into the third column (22 Aug). The fixture has no blocks at
+      // all, so any tap in that column is "empty space".
+      final gridTopLeft = tester.getTopLeft(find.byType(TimeBodyGrid));
+      final gridSize = tester.getSize(find.byType(TimeBodyGrid));
+      final columnWidth = (gridSize.width - kGutterWidth) / 3;
+      final tapPoint = Offset(
+        gridTopLeft.dx + kGutterWidth + columnWidth * 2 + columnWidth / 2,
+        gridTopLeft.dy + gridSize.height / 2,
+      );
+      await tester.tapAt(tapPoint);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('New actual activity'), findsOneWidget);
+
+      await tester.enterText(
+        find.byType(TextField).first,
+        'Third column entry',
+      );
+      await tester.tap(find.text('set goal'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('test goal'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('save'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      final saved = container
+          .read(allTrackedBlocksProvider)
+          .firstWhere((b) => b.title == 'Third column entry');
+      expect(
+        DateTime(saved.start.year, saved.start.month, saved.start.day),
+        DateTime(2026, 8, 22),
+      );
+    },
+  );
+
+  testWidgets('Tab bar switches through all 3 tabs without layout errors', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -220,7 +346,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    for (final tab in ['WEEK', 'GOALS', 'ACCOUNT', 'DAY']) {
+    for (final tab in ['GOALS', 'ACCOUNT', 'DAY']) {
       await tester.tap(find.text(tab));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull, reason: 'after tapping $tab');
@@ -242,16 +368,16 @@ void main() {
 
     await tester.tap(find.text('GOALS'));
     await tester.pumpAndSettle();
-    expect(container.read(currentTabIndexProvider), 2);
+    expect(container.read(currentTabIndexProvider), 1);
 
-    // Goals has no competing horizontal gesture (unlike Day/Week, which use
+    // Goals has no competing horizontal gesture (unlike Day, which uses
     // swipe for date navigation), so a swipe here is free to mean
     // "next/previous tab".
     await tester.fling(find.byType(GoalsScreen), const Offset(-300, 0), 1000);
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(container.read(currentTabIndexProvider), 3);
+    expect(container.read(currentTabIndexProvider), 2);
   });
 
   testWidgets(
@@ -271,7 +397,7 @@ void main() {
 
       await tester.tap(find.text('ACCOUNT'));
       await tester.pumpAndSettle();
-      expect(container.read(currentTabIndexProvider), 3);
+      expect(container.read(currentTabIndexProvider), 2);
 
       await tester.fling(
         find.byType(AccountScreen),
@@ -281,7 +407,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      expect(container.read(currentTabIndexProvider), 2);
+      expect(container.read(currentTabIndexProvider), 1);
     },
   );
 
@@ -300,7 +426,7 @@ void main() {
 
     await tester.tap(find.text('ACCOUNT'));
     await tester.pumpAndSettle();
-    expect(container.read(currentTabIndexProvider), 3);
+    expect(container.read(currentTabIndexProvider), 2);
 
     // Account is already the last tab — swiping further "next" should
     // stay put, not wrap around to Day.
@@ -312,61 +438,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(container.read(currentTabIndexProvider), 3);
-  });
-
-  testWidgets('Week screen renders day rows and the goals footer', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: await _signedInOverrides(),
-        child: const CalendarTrackerApp(),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('WEEK'));
-    await tester.pumpAndSettle();
-
-    expect(tester.takeException(), isNull);
-    expect(find.text('Tracked'), findsOneWidget);
-    expect(find.text('Against goals'), findsOneWidget);
-  });
-
-  testWidgets('Week view: the header arrows step to the next/previous week', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: await _signedInOverrides(),
-        child: const CalendarTrackerApp(),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('WEEK'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Week 17 – 23 Aug'), findsOneWidget);
-
-    final arrows = find.descendant(
-      of: find.byType(WeekViewScreen),
-      matching: find.byType(StepArrowButton),
-    );
-    expect(arrows, findsNWidgets(2)); // previous, then next
-
-    await tester.tap(arrows.at(1)); // next
-    await tester.pumpAndSettle();
-    expect(find.text('Week 24 – 30 Aug'), findsOneWidget);
-
-    await tester.tap(arrows.at(0)); // previous
-    await tester.pumpAndSettle();
-    expect(find.text('Week 17 – 23 Aug'), findsOneWidget);
+    expect(container.read(currentTabIndexProvider), 2);
   });
 
   testWidgets(
-    'Week: the capacity link opens per-day free time and per-goal room, and close returns to Week',
+    'Account: the capacity link opens per-day free time and per-goal room, and close returns to Account',
     (WidgetTester tester) async {
       await tester.pumpWidget(
         ProviderScope(
@@ -376,7 +452,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('WEEK'));
+      await tester.tap(find.text('ACCOUNT'));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('capacity'));
@@ -400,12 +476,12 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(CapacityScreen), findsNothing);
-      expect(find.byType(WeekViewScreen), findsOneWidget);
+      expect(find.byType(AccountScreen), findsOneWidget);
     },
   );
 
   testWidgets(
-    'Week: a day planned past its window reports overplanned instead of negative free time',
+    'Capacity: a day planned past its window reports overplanned instead of negative free time',
     (WidgetTester tester) async {
       final container = ProviderContainer(
         overrides: await _signedInOverrides(),
@@ -435,7 +511,7 @@ void main() {
           );
       await tester.pump();
 
-      await tester.tap(find.text('WEEK'));
+      await tester.tap(find.text('ACCOUNT'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('capacity'));
       await tester.pumpAndSettle();
@@ -744,28 +820,6 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.textContaining('20h/wk'), findsOneWidget);
-  });
-
-  testWidgets('Tapping a day in the Week view opens that day in Day view', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: await _signedInOverrides(),
-        child: const CalendarTrackerApp(),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('WEEK'));
-    await tester.pumpAndSettle();
-
-    // mockWeekStart is the Monday before the mock day (20 Aug) — 17 Aug.
-    await tester.tap(find.text('MON 17'));
-    await tester.pumpAndSettle();
-
-    expect(tester.takeException(), isNull);
-    expect(find.text('17 Aug'), findsOneWidget);
   });
 
   testWidgets('Goals: tapping a goal opens its detail with activity', (
@@ -1789,6 +1843,9 @@ void main() {
       // Stays open — a silent no-op would have popped the sheet here.
       expect(find.text('Log activity'), findsOneWidget);
       expect(find.textContaining('before saving'), findsOneWidget);
+      // Inline, not a SnackBar — a SnackBar shown while this sheet is open
+      // renders behind it (invisible), which is the exact bug this guards.
+      expect(find.byType(SnackBar), findsNothing);
       expect(
         container
             .read(allTrackedBlocksProvider)
@@ -1832,6 +1889,7 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Log activity'), findsOneWidget);
     expect(find.text('Set a goal before saving'), findsOneWidget);
+    expect(find.byType(SnackBar), findsNothing);
     expect(
       container
           .read(allTrackedBlocksProvider)
@@ -1876,6 +1934,7 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Log activity'), findsOneWidget);
     expect(find.text('Set a start and end time before saving'), findsOneWidget);
+    expect(find.byType(SnackBar), findsNothing);
     expect(
       container
           .read(allTrackedBlocksProvider)
@@ -1915,6 +1974,7 @@ void main() {
 
     // First attempt fails (no goal) — same as the test above.
     expect(find.text('Set a goal before saving'), findsOneWidget);
+    expect(find.byType(SnackBar), findsNothing);
 
     // Now actually pick a goal and try again. Scoped to the sheet — the
     // Day view's drift footer also shows "walking" when that category
@@ -2456,17 +2516,21 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      // "test goal" — the fixture's one goal, shown as a chip. Not the
-      // category name ("Work") — goals and categories happen to differ here
-      // specifically so this can't pass by coincidence.
-      expect(find.text('test goal'), findsOneWidget);
+      // No goal pre-selected — picking one is a real, required choice now.
+      expect(find.text('set goal'), findsOneWidget);
 
       await tester.enterText(find.byType(TextField).first, 'Morning walk');
       await tester.pumpAndSettle();
 
-      // Whichever lane the tap landed in — the button reads ADD PLAN or ADD
-      // ACTUAL, and either is a valid outcome for this test.
-      await tester.tap(find.textContaining('ADD '));
+      // "test goal" — the fixture's one goal, in the picker list. Not the
+      // category name ("Work") — goals and categories happen to differ here
+      // specifically so this can't pass by coincidence.
+      await tester.tap(find.text('set goal'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('test goal'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('save'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
@@ -2485,8 +2549,9 @@ void main() {
   );
 
   testWidgets(
-    'Day view: the add-block sheet has independent start/end date fields, '
-    'defaulting to today and opening the date picker',
+    'Day view: the add-block sheet has no date field — it always uses '
+    'whichever day the Day view is showing — and the goal picker is a '
+    'dropdown, not chips',
     (WidgetTester tester) async {
       await tester.pumpWidget(
         ProviderScope(
@@ -2500,24 +2565,314 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      expect(find.text('START DATE'), findsOneWidget);
-      expect(find.text('END DATE'), findsOneWidget);
-      // The fixture pins selectedDateProvider to mockDay — both fields
-      // default to that, independently of each other.
-      final today = DateFormat('EEE, d MMM y').format(mockDay);
-      expect(find.text(today), findsNWidgets(2));
+      expect(find.text('START DATE'), findsNothing);
+      expect(find.text('END DATE'), findsNothing);
+      expect(find.text('START TIME'), findsOneWidget);
+      expect(find.text('END TIME'), findsOneWidget);
 
-      // Opens the real date picker — dismissing it with CANCEL should leave
-      // the add-block sheet exactly as it was, not crash or lose state.
-      await tester.tap(find.text(today).last);
+      // No goal pre-selected — the closed field reads "set goal" until one
+      // is actually picked, not the Wrap of chips this used to be.
+      expect(find.text('set goal'), findsOneWidget);
+      expect(find.text('test goal'), findsNothing);
+
+      // Tapping opens a flat picker list rather than a native dropdown menu.
+      await tester.tap(find.text('set goal'));
       await tester.pumpAndSettle();
-      expect(find.text('Cancel'), findsOneWidget);
+      expect(find.text('test goal'), findsOneWidget); // the one list row
 
-      await tester.tap(find.text('Cancel'));
+      await tester.tap(find.text('test goal'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      expect(find.text(today), findsNWidgets(2));
+      // Picker closed, field now shows the picked goal.
+      expect(find.text('set goal'), findsNothing);
+      expect(find.text('test goal'), findsOneWidget);
+
+      // The bottom save button is gone — "save" now lives in the header,
+      // next to the title, to keep the sheet as short as possible.
+      expect(find.text('save'), findsOneWidget);
+      expect(find.text('ADD PLAN'), findsNothing);
+      expect(find.text('SAVE ACTIVITY'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'Day view: the add-block sheet shows a computed duration next to '
+    'its title',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: await _signedInOnboardedNoActivityOverrides(),
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tapAt(tester.getCenter(find.byType(TimeBodyGrid)));
+      await tester.pumpAndSettle();
+
+      // End time defaults to 30 minutes after start.
+      expect(find.text('· 30m'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Day view: the add-block sheet requires an activity name before saving',
+    (WidgetTester tester) async {
+      final container = ProviderContainer(
+        overrides: await _signedInOnboardedNoActivityOverrides(),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tapAt(tester.getCenter(find.byType(TimeBodyGrid)));
+      await tester.pumpAndSettle();
+
+      // A goal is picked, but the activity name is left blank.
+      await tester.tap(find.text('set goal'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('test goal'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('save'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        find.text('Enter an activity name before saving'),
+        findsOneWidget,
+      );
+      // Inline, not a SnackBar — a SnackBar shown while this sheet is open
+      // renders behind it (invisible), which is the exact bug this guards.
+      expect(find.byType(SnackBar), findsNothing);
+      // Stays open — a silent no-op or a fallback title would have popped
+      // the sheet instead.
+      expect(find.text('save'), findsOneWidget);
+      expect(
+        container.read(allTrackedBlocksProvider).isEmpty &&
+            container.read(allPlannedBlocksProvider).isEmpty,
+        isTrue,
+      );
+    },
+  );
+
+  testWidgets(
+    'Day view: the add-block sheet requires a goal before saving',
+    (WidgetTester tester) async {
+      final container = ProviderContainer(
+        overrides: await _signedInOnboardedNoActivityOverrides(),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tapAt(tester.getCenter(find.byType(TimeBodyGrid)));
+      await tester.pumpAndSettle();
+
+      // A name is entered, but no goal is picked — still defaults to none.
+      await tester.enterText(find.byType(TextField).first, 'Morning walk');
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('save'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Set a goal before saving'), findsOneWidget);
+      expect(find.byType(SnackBar), findsNothing);
+      expect(find.text('save'), findsOneWidget);
+      expect(
+        container.read(allTrackedBlocksProvider).isEmpty &&
+            container.read(allPlannedBlocksProvider).isEmpty,
+        isTrue,
+      );
+    },
+  );
+
+  testWidgets(
+    'Day view: tapping outside the add-block sheet with no changes closes '
+    'it immediately, no confirmation',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: await _signedInOnboardedNoActivityOverrides(),
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tapAt(tester.getCenter(find.byType(TimeBodyGrid)));
+      await tester.pumpAndSettle();
+      // Whichever lane the tap landed in — "save" in the header is common
+      // to both the planned and actual variant.
+      expect(find.text('save'), findsOneWidget);
+
+      // A tap near the very top of the screen lands on the modal barrier
+      // above the sheet, not on the sheet's own content.
+      await tester.tapAt(const Offset(200, 10));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Save this activity?'), findsNothing);
+      expect(find.text('save'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'Day view: tapping outside the add-block sheet with unsaved changes '
+    'asks to save — Cancel discards',
+    (WidgetTester tester) async {
+      final container = ProviderContainer(
+        overrides: await _signedInOnboardedNoActivityOverrides(),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tapAt(tester.getCenter(find.byType(TimeBodyGrid)));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField).first, 'Evening walk');
+      await tester.pumpAndSettle();
+
+      await tester.tapAt(const Offset(200, 10));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Save this activity?'), findsOneWidget);
+
+      await tester.tap(find.text('CANCEL'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('save'), findsNothing);
+      expect(
+        container
+            .read(allPlannedBlocksProvider)
+            .any((b) => b.title == 'Evening walk'),
+        isFalse,
+      );
+      expect(
+        container
+            .read(allTrackedBlocksProvider)
+            .any((b) => b.title == 'Evening walk'),
+        isFalse,
+      );
+    },
+  );
+
+  testWidgets(
+    'Day view: tapping outside the add-block sheet with unsaved changes '
+    'asks to save — Save saves it',
+    (WidgetTester tester) async {
+      final container = ProviderContainer(
+        overrides: await _signedInOnboardedNoActivityOverrides(),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tapAt(tester.getCenter(find.byType(TimeBodyGrid)));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField).first, 'Evening walk');
+      await tester.pumpAndSettle();
+      // A goal is required to save now — pick the fixture's one goal.
+      await tester.tap(find.text('set goal'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('test goal'));
+      await tester.pumpAndSettle();
+
+      await tester.tapAt(const Offset(200, 10));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Save this activity?'), findsOneWidget);
+
+      await tester.tap(find.text('SAVE'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('save'), findsNothing);
+      final plannedMatch = container
+          .read(allPlannedBlocksProvider)
+          .any((b) => b.title == 'Evening walk');
+      final trackedMatch = container
+          .read(allTrackedBlocksProvider)
+          .any((b) => b.title == 'Evening walk');
+      expect(plannedMatch || trackedMatch, isTrue);
+    },
+  );
+
+  testWidgets(
+    'Day view: tapping outside the add-block sheet then SAVE with no '
+    'activity name set shows the validation error, not a silent no-op',
+    (WidgetTester tester) async {
+      // The exact bug report this guards: closing via the outside-tap
+      // prompt used to route into the same validation as the header
+      // "save" link, but showed it as a SnackBar — invisible behind the
+      // still-open sheet, so it looked like tapping SAVE did nothing.
+      final container = ProviderContainer(
+        overrides: await _signedInOnboardedNoActivityOverrides(),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tapAt(tester.getCenter(find.byType(TimeBodyGrid)));
+      await tester.pumpAndSettle();
+
+      // A goal is picked (enough to count as "unsaved changes"), but the
+      // activity name is deliberately left blank.
+      await tester.tap(find.text('set goal'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('test goal'));
+      await tester.pumpAndSettle();
+
+      await tester.tapAt(const Offset(200, 10));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Save this activity?'), findsOneWidget);
+
+      await tester.tap(find.text('SAVE'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      // Stays open with a visible, inline error — not closed, and not a
+      // SnackBar hidden behind the sheet.
+      expect(find.text('save'), findsOneWidget);
+      expect(find.text('Enter an activity name before saving'), findsOneWidget);
+      expect(find.byType(SnackBar), findsNothing);
+      expect(container.read(allTrackedBlocksProvider), isEmpty);
+      expect(container.read(allPlannedBlocksProvider), isEmpty);
     },
   );
 

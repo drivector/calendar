@@ -29,11 +29,20 @@ class PlanBlockWidget extends StatelessWidget {
       child: Container(
         alignment: Alignment.topLeft,
         padding: const EdgeInsets.all(AppSpacing.s1),
+        // maxLines/ellipsis on the title — a narrow multi-day column
+        // (Working week/Week mode) is narrow enough that unbounded text
+        // would wrap onto more lines than the block's minimum height fits,
+        // overflowing it.
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(block.title, style: AppTextStyles.label()),
+            Text(
+              block.title,
+              style: AppTextStyles.label(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
             if (onConfirm != null)
               GestureDetector(
                 onTap: onConfirm,

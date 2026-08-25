@@ -32,12 +32,26 @@ class ActualBlockWidget extends StatelessWidget {
           border: Border(left: BorderSide(color: category.color, width: 3)),
         ),
         padding: const EdgeInsets.all(AppSpacing.s1),
+        // maxLines/ellipsis on both lines — a narrow multi-day column
+        // (Working week/Week mode) is narrow enough that unbounded text
+        // would wrap onto more lines than the block's minimum height fits,
+        // overflowing it.
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(block.title, style: AppTextStyles.label()),
-            Text('(${block.sourceId})', style: AppTextStyles.mono()),
+            Text(
+              block.title,
+              style: AppTextStyles.label(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            Text(
+              '(${block.sourceId})',
+              style: AppTextStyles.mono(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ],
         ),
       ),

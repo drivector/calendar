@@ -130,6 +130,47 @@ final dayViewPlannedBlocksProvider = Provider<List<PlannedBlock>>((ref) {
   return [...manual, ...goalBlocks]..sort((a, b) => a.start.compareTo(b.start));
 });
 
+/// One day's worth of planned + tracked blocks — the per-column unit the
+/// Day view's multi-day timeline renders.
+class DayBlocks {
+  const DayBlocks({
+    required this.date,
+    required this.planned,
+    required this.tracked,
+  });
+
+  final DateTime date;
+  final List<PlannedBlock> planned;
+  final List<TrackedBlock> tracked;
+}
+
+/// The timeline's actual data source, for every visible column at once —
+/// deliberately calls [generateGoalPlannedBlocksForDate] directly per date
+/// rather than routing through [goalGeneratedBlocksThisWeekProvider], since
+/// that provider only ever covers one Monday-anchored week: a 3-Day window
+/// straddling two calendar weeks (e.g. starting on a Saturday) would
+/// silently lose a goal's generated blocks for the day(s) in the next week.
+final visibleDayBlocksProvider = Provider<List<DayBlocks>>((ref) {
+  final dates = ref.watch(visibleDatesProvider);
+  final goals = ref.watch(goalsProvider);
+  final allPlanned = ref.watch(allPlannedBlocksProvider);
+  final allTracked = ref.watch(allTrackedBlocksProvider);
+
+  return [
+    for (final date in dates)
+      DayBlocks(
+        date: date,
+        planned:
+            [
+                ...allPlanned.where((b) => isSameDay(b.start, date)),
+                ...generateGoalPlannedBlocksForDate(goals: goals, date: date),
+              ]
+              ..sort((a, b) => a.start.compareTo(b.start)),
+        tracked: allTracked.where((b) => isSameDay(b.start, date)).toList(),
+      ),
+  ];
+});
+
 final goalProgressListProvider = Provider<List<GoalProgress>>((ref) {
   final goals = ref.watch(activeGoalsProvider);
   final selectedDate = ref.watch(selectedDateProvider);

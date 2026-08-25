@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart' show showDatePicker;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -13,17 +14,23 @@ import '../../log_activity/widgets/log_activity_sheet.dart';
 class DayHeaderBar extends ConsumerWidget {
   const DayHeaderBar({super.key});
 
+  Future<void> _pickDate(BuildContext context, WidgetRef ref) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: ref.read(selectedDateProvider),
+      firstDate: DateTime(2020, 1, 1),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (picked != null) {
+      ref.read(selectedDateProvider.notifier).state = picked;
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final selectedDate = ref.watch(selectedDateProvider);
-    final dayLayer = ref.watch(dayLayerProvider);
-
-    void step(int deltaDays) {
-      final current = ref.read(selectedDateProvider);
-      ref.read(selectedDateProvider.notifier).state = current.add(
-        Duration(days: deltaDays),
-      );
-    }
+    final mode = ref.watch(dayViewModeProvider);
+    final visibleDates = ref.watch(visibleDatesProvider);
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -34,42 +41,52 @@ class DayHeaderBar extends ConsumerWidget {
           horizontal: AppSpacing.s3,
           vertical: AppSpacing.s2,
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.center,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
-              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                StepArrowButton(
-                  direction: StepDirection.previous,
-                  onTap: () => step(-1),
-                ),
-                const SizedBox(width: AppSpacing.s2),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      DateFormat('EEEE').format(selectedDate).toUpperCase(),
-                      style: AppTextStyles.kicker(),
+                    StepArrowButton(
+                      direction: StepDirection.previous,
+                      onTap: () => stepDayViewWindow(ref, forward: false),
                     ),
-                    Text(
-                      DateFormat('d MMM').format(selectedDate),
-                      style: AppTextStyles.title(),
+                    const SizedBox(width: AppSpacing.s2),
+                    GestureDetector(
+                      onTap: () => _pickDate(context, ref),
+                      behavior: HitTestBehavior.opaque,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            mode == DayViewMode.day
+                                ? DateFormat(
+                                    'EEEE',
+                                  ).format(selectedDate).toUpperCase()
+                                : _kickerFor(mode),
+                            style: AppTextStyles.kicker(),
+                          ),
+                          Text(
+                            mode == DayViewMode.day
+                                ? DateFormat('d MMM').format(selectedDate)
+                                : _rangeLabel(visibleDates),
+                            style: AppTextStyles.title(),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.s2),
+                    StepArrowButton(
+                      direction: StepDirection.next,
+                      onTap: () => stepDayViewWindow(ref, forward: true),
                     ),
                   ],
                 ),
-                const SizedBox(width: AppSpacing.s2),
-                StepArrowButton(
-                  direction: StepDirection.next,
-                  onTap: () => step(1),
-                ),
-              ],
-            ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
                 GestureDetector(
                   onTap: () => showLogActivitySheet(context, ref),
                   behavior: HitTestBehavior.opaque,
@@ -88,19 +105,26 @@ class DayHeaderBar extends ConsumerWidget {
                     ),
                   ),
                 ),
-                const SizedBox(width: AppSpacing.s2),
-                SegmentedControl<DayLayer>(
-                  selected: dayLayer,
-                  onChanged: (value) =>
-                      ref.read(dayLayerProvider.notifier).state = value,
-                  options: const [
-                    SegmentedOption(value: DayLayer.actual, label: 'Day'),
-                    SegmentedOption(
-                      value: DayLayer.planAndActual,
-                      label: 'Plan + actual',
-                    ),
-                  ],
+              ],
+            ),
+            const SizedBox(height: AppSpacing.s2),
+            // Its own row, full width — "Day | 3 Day | Working week | Week"
+            // alongside the arrows/date/+LOG row above overflowed on a real
+            // phone width (only fit in tests, whose default viewport is far
+            // wider than any phone).
+            SegmentedControl<DayViewMode>(
+              selected: mode,
+              stretch: true,
+              onChanged: (value) =>
+                  ref.read(dayViewModeProvider.notifier).state = value,
+              options: const [
+                SegmentedOption(value: DayViewMode.day, label: 'Day'),
+                SegmentedOption(value: DayViewMode.threeDay, label: '3 Day'),
+                SegmentedOption(
+                  value: DayViewMode.workingWeek,
+                  label: 'Working week',
                 ),
+                SegmentedOption(value: DayViewMode.week, label: 'Week'),
               ],
             ),
           ],
@@ -108,4 +132,18 @@ class DayHeaderBar extends ConsumerWidget {
       ),
     );
   }
+}
+
+String _kickerFor(DayViewMode mode) => switch (mode) {
+  DayViewMode.day => 'DAY',
+  DayViewMode.threeDay => '3 DAY',
+  DayViewMode.workingWeek => 'WORKING WEEK',
+  DayViewMode.week => 'WEEK',
+};
+
+/// "24 – 30 Aug" — the same range format the old Week tab used.
+String _rangeLabel(List<DateTime> visibleDates) {
+  final first = visibleDates.first;
+  final last = visibleDates.last;
+  return '${DateFormat('d').format(first)} – ${DateFormat('d MMM').format(last)}';
 }

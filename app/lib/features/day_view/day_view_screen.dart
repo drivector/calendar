@@ -1,7 +1,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../../theme/app_colors.dart';
-import 'widgets/column_headers.dart';
+import 'widgets/day_column_header_row.dart';
 import 'widgets/day_header_bar.dart';
 import 'widgets/drift_footer.dart';
 import 'widgets/legend_row.dart';
@@ -20,7 +20,7 @@ class DayViewScreen extends StatelessWidget {
         children: [
           const DayHeaderBar(),
           const LegendRow(),
-          const ColumnHeaders(),
+          const DayColumnHeaderRow(),
           const Expanded(child: TimeBodyGrid()),
           const DriftFooter(),
         ],

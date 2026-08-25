@@ -14,18 +14,18 @@ import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 import '../../utils/duration_format.dart';
 
-/// Pushes [CapacityScreen] — called from the Week view's "capacity" link.
+/// Pushes [CapacityScreen] — called from the Account screen's "capacity"
+/// link.
 Future<void> showCapacityScreen(BuildContext context) {
   return Navigator.of(context)
       .push(MaterialPageRoute(builder: (_) => const CapacityScreen()));
 }
 
-/// "How much is planned, and how much is still available" — the one thing
-/// the main Week view doesn't answer: it shows plan vs actual per day and
-/// per goal, but never says how much open room is left. Two sections: free
-/// time slots per day (against the same 07:00–18:00 window the Day view
-/// already uses for "untracked"), and remaining room per goal (target minus
-/// what's already planned toward it this week).
+/// "How much is planned, and how much is still available" — shows plan vs.
+/// available time per day and per goal for the current week. Two sections:
+/// free time slots per day (against the same 07:00–18:00 window the Day
+/// view already uses for "untracked"), and remaining room per goal (target
+/// minus what's already planned toward it this week).
 class CapacityScreen extends ConsumerWidget {
   const CapacityScreen({super.key});
 

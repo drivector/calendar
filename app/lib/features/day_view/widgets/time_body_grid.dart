@@ -12,18 +12,44 @@ import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import 'actual_block_widget.dart';
 import 'add_block_sheet.dart';
-import 'column_headers.dart';
 import 'plan_block_widget.dart';
 
-/// A continuous, scrollable 24-hour timeline — hour rows at a fixed height,
+/// Left gutter reserved for the hour labels ("06", "07", ...).
+const kGutterWidth = 38.0;
+
+/// One day-column's horizontal slot within the timeline — shared by
+/// [TimeBodyGrid] and the per-column date-label header above it so the two
+/// can never drift out of pixel alignment with each other.
+class DayColumnLayout {
+  const DayColumnLayout({required this.left, required this.width});
+
+  final double left;
+  final double width;
+}
+
+List<DayColumnLayout> columnLayoutsFor(double totalWidth, int columnCount) {
+  final columnWidth = (totalWidth - kGutterWidth) / columnCount;
+  return List.generate(
+    columnCount,
+    (i) => DayColumnLayout(left: kGutterWidth + i * columnWidth, width: columnWidth),
+  );
+}
+
+/// A continuous, scrollable 24-hour timeline showing 1, 3, 5, or 7 day
+/// columns side by side (see [DayViewMode]) — hour rows at a fixed height,
 /// events positioned and sized by their real clock time, the way a standard
-/// calendar app's day view works (Google/Apple Calendar), rather than one
-/// row per planned block. Plan and Actual still run as two lanes side by
-/// side so the comparison the app is built around stays visible. Tapping
-/// empty space in either lane — including an untracked gap, which has no
-/// widget of its own — opens [showAddBlockSheet] to add a new entry there;
-/// tapping an existing block opens its own sheet instead, since it's
-/// painted on top and claims the hit first.
+/// calendar app's day/week view works (Google/Apple Calendar), rather than
+/// one row per planned block. Within each column, Plan and Actual share a
+/// single slot (not side-by-side lanes) so a planned block and what
+/// actually happened for it sit directly on top of one another — planned
+/// blocks stay a dashed, unfilled outline (painted first) specifically so a
+/// solid Actual block (painted after, and the only one of the two with its
+/// own tap handler) reads clearly on top of it rather than the two
+/// competing for the same space. Tapping empty space — including an
+/// untracked gap, which has no widget of its own — opens [showAddBlockSheet]
+/// to log a new actual entry for that column's own date; tapping an
+/// existing block opens its own sheet instead, since it's painted on top
+/// and claims the hit first.
 ///
 /// Wrapped by the caller in an [Expanded]/[Flexible] — this widget must not
 /// introduce its own [Expanded] (two [Expanded]s cannot share one underlying
@@ -48,9 +74,9 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
   void initState() {
     super.initState();
     _scrollController = ScrollController(
-      initialScrollOffset: _scrollOffsetForFirstEvent(
-        ref.read(dayViewPlannedBlocksProvider),
-        ref.read(trackedBlocksProvider),
+      initialScrollOffset: _initialScrollOffset(
+        ref.read(dayViewModeProvider),
+        ref.read(visibleDayBlocksProvider),
       ),
     );
   }
@@ -59,6 +85,16 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
   void dispose() {
     _scrollController.dispose();
     super.dispose();
+  }
+
+  // Restricted to Day mode: in a multi-day view, one outlier day's early
+  // block yanking the whole shared vertical scroll position for every
+  // column would read as a bug, not a feature — multi-day modes always
+  // start at the same fixed default instead.
+  static double _initialScrollOffset(DayViewMode mode, List<DayBlocks> dayBlocks) {
+    if (mode != DayViewMode.day) return _scrollOffsetForFirstEvent(const [], const []);
+    final only = dayBlocks.single;
+    return _scrollOffsetForFirstEvent(only.planned, only.tracked);
   }
 
   static double _scrollOffsetForFirstEvent(
@@ -77,56 +113,44 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
     return ((earliestMinute - 60).clamp(0, 24 * 60 - 1)) * _pxPerMinute;
   }
 
-  void _handleLaneTap(TapUpDetails details, {required bool isPlan}) {
+  // Always logs an actual entry — with Plan and Actual sharing one slot
+  // now, there's no separate Plan-only region left to tap for a manual
+  // planned block; planned blocks come from a goal's own schedule instead.
+  void _handleEmptySpaceTap(TapUpDetails details, DateTime date) {
     final minutes = (details.localPosition.dy / _pxPerMinute).round();
     final rounded = ((minutes / 15).round() * 15).clamp(0, 24 * 60 - 30);
     showAddBlockSheet(
       context,
       ref,
-      isPlan: isPlan,
+      isPlan: false,
+      date: date,
       initialStart: TimeOfDay(hour: rounded ~/ 60, minute: rounded % 60),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    // Changing the selected date — from the day-to-day swipe below, or from
-    // tapping a day in the Week view — re-centers the timeline on that new
-    // day's first event.
+    // Changing the selected date or the view mode re-centers the timeline
+    // on the (Day-mode-only) first event, or the fixed default otherwise.
     ref.listen<DateTime>(selectedDateProvider, (previous, next) {
       if (previous == next) return;
-      final target = _scrollOffsetForFirstEvent(
-        ref.read(dayViewPlannedBlocksProvider),
-        ref.read(trackedBlocksProvider),
-      );
-      if (_scrollController.hasClients) _scrollController.jumpTo(target);
+      _jumpToInitialOffset();
+    });
+    ref.listen<DayViewMode>(dayViewModeProvider, (previous, next) {
+      if (previous == next) return;
+      _jumpToInitialOffset();
     });
 
-    final planned = ref.watch(dayViewPlannedBlocksProvider);
-    final tracked = ref.watch(trackedBlocksProvider);
-    final dayLayer = ref.watch(dayLayerProvider);
+    final dates = ref.watch(visibleDatesProvider);
+    final dayBlocks = ref.watch(visibleDayBlocksProvider);
     final categories = ref.watch(categoriesProvider);
-    final showPlan = dayLayer == DayLayer.planAndActual;
 
     return DateSwipeNav(
-      onPrevious: () {
-        final current = ref.read(selectedDateProvider);
-        ref.read(selectedDateProvider.notifier).state = current.subtract(
-          const Duration(days: 1),
-        );
-      },
-      onNext: () {
-        final current = ref.read(selectedDateProvider);
-        ref.read(selectedDateProvider.notifier).state = current.add(
-          const Duration(days: 1),
-        );
-      },
+      onPrevious: () => stepDayViewWindow(ref, forward: false),
+      onNext: () => stepDayViewWindow(ref, forward: true),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final laneAreaWidth = constraints.maxWidth - kGutterWidth;
-          final laneWidth = showPlan ? laneAreaWidth / 2 : laneAreaWidth;
-          final planLeft = kGutterWidth;
-          final actualLeft = showPlan ? kGutterWidth + laneWidth : kGutterWidth;
+          final layouts = columnLayoutsFor(constraints.maxWidth, dates.length);
 
           return SingleChildScrollView(
             controller: _scrollController,
@@ -137,47 +161,31 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
                 children: [
                   for (var hour = 0; hour < 24; hour++)
                     _HourGridLine(hour: hour, gutterWidth: kGutterWidth),
-                  if (showPlan)
+                  for (var i = 0; i < dates.length; i++) ...[
+                    // Empty-space tap target — added before the blocks
+                    // below so any block painted on top claims its own tap
+                    // first.
                     Positioned(
-                      left: kGutterWidth + laneWidth,
+                      left: layouts[i].left,
                       top: 0,
-                      bottom: 0,
-                      child: Container(width: 1, color: AppColors.divider),
-                    ),
-                  // Empty-space tap targets — added before the blocks below
-                  // so any block painted on top claims its own tap first.
-                  if (showPlan)
-                    Positioned(
-                      left: planLeft,
-                      top: 0,
-                      width: laneWidth,
+                      width: layouts[i].width,
                       height: _dayHeight,
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTapUp: (details) =>
-                            _handleLaneTap(details, isPlan: true),
+                            _handleEmptySpaceTap(details, dates[i]),
                         child: const SizedBox.expand(),
                       ),
                     ),
-                  Positioned(
-                    left: actualLeft,
-                    top: 0,
-                    width: laneWidth,
-                    height: _dayHeight,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTapUp: (details) =>
-                          _handleLaneTap(details, isPlan: false),
-                      child: const SizedBox.expand(),
-                    ),
-                  ),
-                  for (final block in planned)
-                    if (showPlan)
+                    // Planned blocks paint first (dashed, unfilled) so a
+                    // solid Actual block for the same time reads clearly on
+                    // top of it rather than the two competing visually.
+                    for (final block in dayBlocks[i].planned)
                       _timedPositioned(
                         start: block.start,
                         end: block.end,
-                        left: planLeft,
-                        width: laneWidth,
+                        left: layouts[i].left,
+                        width: layouts[i].width,
                         child: PlanBlockWidget(
                           block: block,
                           category: resolveCategory(
@@ -186,17 +194,21 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
                           ),
                         ),
                       ),
-                  for (final block in tracked)
-                    _timedPositioned(
-                      start: block.start,
-                      end: block.end,
-                      left: actualLeft,
-                      width: laneWidth,
-                      child: ActualBlockWidget(
-                        block: block,
-                        category: resolveCategory(categories, block.categoryId),
+                    for (final block in dayBlocks[i].tracked)
+                      _timedPositioned(
+                        start: block.start,
+                        end: block.end,
+                        left: layouts[i].left,
+                        width: layouts[i].width,
+                        child: ActualBlockWidget(
+                          block: block,
+                          category: resolveCategory(
+                            categories,
+                            block.categoryId,
+                          ),
+                        ),
                       ),
-                    ),
+                  ],
                 ],
               ),
             ),
@@ -204,6 +216,14 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
         },
       ),
     );
+  }
+
+  void _jumpToInitialOffset() {
+    final target = _initialScrollOffset(
+      ref.read(dayViewModeProvider),
+      ref.read(visibleDayBlocksProvider),
+    );
+    if (_scrollController.hasClients) _scrollController.jumpTo(target);
   }
 
   Positioned _timedPositioned({

@@ -9,6 +9,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 import '../log_activity/widgets/activities_list.dart';
+import 'capacity_screen.dart';
 
 enum _AccountTab { details, activities }
 
@@ -31,7 +32,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
   @override
   Widget build(BuildContext context) {
     void stepTab(int delta) {
-      final next = (ref.read(currentTabIndexProvider) + delta).clamp(0, 3);
+      final next = (ref.read(currentTabIndexProvider) + delta).clamp(0, 2);
       ref.read(currentTabIndexProvider.notifier).state = next;
     }
 
@@ -104,6 +105,12 @@ class _AccountDetails extends ConsumerWidget {
           Text('EMAIL', style: AppTextStyles.kicker()),
           const SizedBox(height: AppSpacing.s1),
           Text(email, style: AppTextStyles.mono()),
+          const SizedBox(height: AppSpacing.s3),
+          GestureDetector(
+            onTap: () => showCapacityScreen(context),
+            behavior: HitTestBehavior.opaque,
+            child: Text('capacity', style: AppTextStyles.mono()),
+          ),
           const SizedBox(height: AppSpacing.s4),
           GestureDetector(
             onTap: () => ref.read(firebaseAuthProvider).signOut(),

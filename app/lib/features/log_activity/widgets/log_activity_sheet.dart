@@ -6,6 +6,7 @@ import '../../../models/goal.dart';
 import '../../../models/tracked_block.dart';
 import '../../../shared/widgets/category_chip.dart';
 import '../../../shared/widgets/date_field.dart';
+import '../../../shared/widgets/inline_form_error.dart';
 import '../../../state/categories_providers.dart';
 import '../../../state/day_view_providers.dart';
 import '../../../state/goals_providers.dart';
@@ -42,6 +43,10 @@ class LogActivitySheet extends ConsumerStatefulWidget {
 }
 
 class _LogActivitySheetState extends ConsumerState<LogActivitySheet> {
+  // Shown inline rather than as a SnackBar — see InlineFormError's own doc
+  // comment for why a SnackBar doesn't work while this sheet is open.
+  String? _errorMessage;
+
   @override
   void initState() {
     super.initState();
@@ -84,8 +89,8 @@ class _LogActivitySheetState extends ConsumerState<LogActivitySheet> {
       if (goalId == null) 'a goal',
     ];
     if (missing.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Set ${missing.join(' and ')} before saving')),
+      setState(
+        () => _errorMessage = 'Set ${missing.join(' and ')} before saving',
       );
       return;
     }
@@ -176,11 +181,20 @@ class _LogActivitySheetState extends ConsumerState<LogActivitySheet> {
                       ),
                     ],
                   ),
+                  if (_errorMessage != null) ...[
+                    const SizedBox(height: AppSpacing.s3),
+                    InlineFormError(_errorMessage!),
+                  ],
                   const SizedBox(height: AppSpacing.s3),
                   _FieldLabel('Day'),
                   DateField(
                     value: draft.date,
-                    onPick: notifier.setDate,
+                    onPick: (value) {
+                      notifier.setDate(value);
+                      if (_errorMessage != null) {
+                        setState(() => _errorMessage = null);
+                      }
+                    },
                     firstDate: DateTime(2020, 1, 1),
                     lastDate: DateTime.now(),
                   ),
@@ -198,7 +212,12 @@ class _LogActivitySheetState extends ConsumerState<LogActivitySheet> {
                         child: _TimeField(
                           label: 'Start',
                           value: draft.start,
-                          onPick: notifier.setStart,
+                          onPick: (value) {
+                            notifier.setStart(value);
+                            if (_errorMessage != null) {
+                              setState(() => _errorMessage = null);
+                            }
+                          },
                         ),
                       ),
                       const SizedBox(width: AppSpacing.s2),
@@ -206,7 +225,12 @@ class _LogActivitySheetState extends ConsumerState<LogActivitySheet> {
                         child: _TimeField(
                           label: 'End',
                           value: draft.end,
-                          onPick: notifier.setEnd,
+                          onPick: (value) {
+                            notifier.setEnd(value);
+                            if (_errorMessage != null) {
+                              setState(() => _errorMessage = null);
+                            }
+                          },
                         ),
                       ),
                     ],
@@ -247,7 +271,12 @@ class _LogActivitySheetState extends ConsumerState<LogActivitySheet> {
                             goal.categoryId,
                           ).color,
                           selected: draft.goalId == goal.id,
-                          onTap: () => notifier.setGoal(goal.id),
+                          onTap: () {
+                            notifier.setGoal(goal.id);
+                            if (_errorMessage != null) {
+                              setState(() => _errorMessage = null);
+                            }
+                          },
                         ),
                     ],
                   ),

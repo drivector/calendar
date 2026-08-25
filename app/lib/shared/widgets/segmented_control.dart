@@ -18,11 +18,18 @@ class SegmentedControl<T> extends StatelessWidget {
     required this.options,
     required this.selected,
     required this.onChanged,
+    this.stretch = false,
   });
 
   final List<SegmentedOption<T>> options;
   final T selected;
   final ValueChanged<T> onChanged;
+
+  /// Each option expands to share the available width evenly, rather than
+  /// sizing to its own label — for a control placed on its own full-width
+  /// row (see the Day view's mode switcher) rather than inline next to
+  /// other controls.
+  final bool stretch;
 
   @override
   Widget build(BuildContext context) {
@@ -31,15 +38,25 @@ class SegmentedControl<T> extends StatelessWidget {
         border: Border.all(color: AppColors.text, width: 1),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisSize: stretch ? MainAxisSize.max : MainAxisSize.min,
         children: [
           for (var i = 0; i < options.length; i++) ...[
             if (i > 0) Container(width: 1, height: 24, color: AppColors.text),
-            _SegmentedOptionButton(
-              option: options[i],
-              active: options[i].value == selected,
-              onTap: () => onChanged(options[i].value),
-            ),
+            if (stretch)
+              Expanded(
+                child: _SegmentedOptionButton(
+                  option: options[i],
+                  active: options[i].value == selected,
+                  onTap: () => onChanged(options[i].value),
+                  stretch: true,
+                ),
+              )
+            else
+              _SegmentedOptionButton(
+                option: options[i],
+                active: options[i].value == selected,
+                onTap: () => onChanged(options[i].value),
+              ),
           ],
         ],
       ),
@@ -52,11 +69,13 @@ class _SegmentedOptionButton<T> extends StatelessWidget {
     required this.option,
     required this.active,
     required this.onTap,
+    this.stretch = false,
   });
 
   final SegmentedOption<T> option;
   final bool active;
   final VoidCallback onTap;
+  final bool stretch;
 
   @override
   Widget build(BuildContext context) {
@@ -69,6 +88,9 @@ class _SegmentedOptionButton<T> extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           child: Text(
             option.label,
+            textAlign: stretch ? TextAlign.center : null,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: AppTextStyles.small(
               color: active ? AppColors.bg : AppColors.text,
             ),

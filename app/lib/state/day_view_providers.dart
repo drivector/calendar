@@ -1,13 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/firestore/firestore_list_repository.dart';
+import '../models/goal_progress.dart';
 import '../models/planned_block.dart';
 import '../models/tracked_block.dart';
 import 'firestore_providers.dart';
-
-/// Which columns the day view shows — mirrors the header's
-/// "Day | Plan + actual" segmented control.
-enum DayLayer { actual, planAndActual }
 
 DateTime _today() {
   final now = DateTime.now();
@@ -16,12 +13,49 @@ DateTime _today() {
 
 final selectedDateProvider = StateProvider<DateTime>((ref) => _today());
 
-final dayLayerProvider = StateProvider<DayLayer>(
-  (ref) => DayLayer.planAndActual,
-);
-
 bool isSameDay(DateTime a, DateTime b) =>
     a.year == b.year && a.month == b.month && a.day == b.day;
+
+/// How many day-columns the Day view's timeline shows at once — mirrors the
+/// header's "Day | 3 Day | Working week | Week" segmented control.
+enum DayViewMode { day, threeDay, workingWeek, week }
+
+int windowSizeFor(DayViewMode mode) => switch (mode) {
+  DayViewMode.day => 1,
+  DayViewMode.threeDay => 3,
+  DayViewMode.workingWeek => 5,
+  DayViewMode.week => 7,
+};
+
+final dayViewModeProvider = StateProvider<DayViewMode>(
+  (ref) => DayViewMode.day,
+);
+
+/// The dates the timeline currently shows, one per column — "3 Day" starts
+/// at whatever day is selected; "Working week"/"Week" always anchor to the
+/// Monday of the selected day's week (so which weekday within the week is
+/// selected doesn't shift the visible window, matching how a normal
+/// calendar app's week view behaves).
+final visibleDatesProvider = Provider<List<DateTime>>((ref) {
+  final mode = ref.watch(dayViewModeProvider);
+  final selectedDate = ref.watch(selectedDateProvider);
+  final anchor = switch (mode) {
+    DayViewMode.day || DayViewMode.threeDay => selectedDate,
+    DayViewMode.workingWeek || DayViewMode.week => weekStartFor(selectedDate),
+  };
+  return List.generate(windowSizeFor(mode), (i) => anchor.add(Duration(days: i)));
+});
+
+/// Steps [selectedDateProvider] by the current view mode's whole window
+/// size (1/3/5/7 days) — shared by the header's prev/next arrows and the
+/// timeline's own swipe navigation so both always mean the same thing.
+void stepDayViewWindow(WidgetRef ref, {required bool forward}) {
+  final windowSize = windowSizeFor(ref.read(dayViewModeProvider));
+  final current = ref.read(selectedDateProvider);
+  ref.read(selectedDateProvider.notifier).state = current.add(
+    Duration(days: forward ? windowSize : -windowSize),
+  );
+}
 
 final plannedBlocksRepositoryProvider =
     Provider<FirestoreListRepository<PlannedBlock>>((ref) {

@@ -1,8 +1,8 @@
 # Track My Day (formerly "Calendar Tracker") — session handoff
 
-Updated 2026-08-25 (sixth session — four batches pushed, a fifth and
-sixth uncommitted, see **Git status**; the fifth batch also **deployed
-live Firestore rules changes to production**) — the app's user-visible
+Updated 2026-08-25 (sixth session — nine batches pushed, tenth through
+thirteenth uncommitted, see **Git status**; the fifth pushed batch also
+**deployed live Firestore rules changes to production**) — the app's user-visible
 name changed from **"Calendar Tracker" to "Track My Day"** partway
 through this session (see **App renamed**, near the end) — this doc's
 own title reflects that now, but earlier dated sections below still say
@@ -103,7 +103,66 @@ entered) back in the fourth round's coverage audit and never fixed since
 untracked gap used to intercept the tap, now opens the same real
 add-actual-block sheet as any other empty-space tap. See **Account tab:
 replaces Activities, "+ LOG" moves to Day view, claim-untracked-time
-removed**. **Uncommitted.**
+removed**. **Committed** as `746b524` and **pushed**. A tenth round, in
+several back-and-forth passes, reworked that same add-block sheet's own
+form top to bottom: **removed its Start/End date fields** (redundant now
+that it only ever opens for whichever day the Day view is showing),
+replaced the goal `Wrap` of chips with a **bordered dropdown field**;
+moved **save into the header** (replacing "cancel") and **removed the
+full-width bottom button**, with any other close attempt (barrier tap,
+back gesture) now prompting **save or cancel** if anything was actually
+entered (a real bug — a lazy dirty-check baseline that only captured on
+first access, sometimes after the user had already typed — was caught
+and fixed by the new tests before this shipped, not by inspection); made
+the **goal default to none** (must be explicitly picked) and the
+**activity name required** (no more silent fallback to the goal's own
+name); and added a **computed duration**, shown as plain text next to
+the sheet's own title after an interim placement (a third column beside
+Start/End time) was tried live and rejected. See **Add-block sheet
+redesign: no date field, goal dropdown, "Save Activity"** and **Add-block
+sheet, round 2: header save/cancel, required fields, inline duration**.
+**Uncommitted.** An eleventh round fixed a real bug the user caught:
+validation errors (missing activity name, missing goal) were shown via
+`ScaffoldMessenger.showSnackBar` from *inside* the still-open sheet that
+was asking for them — a SnackBar attaches to the app-root
+`ScaffoldMessenger`, which sits *below* a modal bottom sheet's own
+overlay route, so the message technically showed but rendered invisible
+behind the sheet. Audited every `showSnackBar` call in the app for the
+same class of bug (found one more, `log_activity_sheet.dart`'s own
+validation) and fixed both with a new shared inline error banner
+(`InlineFormError`) rendered in the sheet's own layout instead. See
+**Bug fix + app-wide audit: validation errors hidden behind an open
+sheet** — including an honest note that this round's own live-verification
+on the iOS Simulator did not fully succeed (a nested picker's tap
+coordinates proved unreliable this session), so the fix rests on
+`flutter analyze` + the automated suite (158 tests, including one that
+reproduces the exact reported scenario) rather than a confirmed manual
+click-through. **Uncommitted.** A twelfth round merged the Day view's
+**Plan and Actual lanes into a single column** — planned blocks stay a
+dashed, unfilled outline (unchanged styling, just repositioned), painted
+first so a solid actual/tracked block for the same time paints on top of
+it rather than the two sitting in separate half-width lanes. The
+"Day | Plan + actual" toggle keeps working, now meaning "show the dashed
+plan overlay or not." One real behavioral consequence: tapping empty
+timeline space always creates an actual entry now — the old Plan-lane
+tap target (the only place in the app that ever created a manual
+one-off planned block) is gone; goal-generated planned blocks are
+unaffected. See **Day view: Plan and Actual merged into one column**.
+**Uncommitted.** A thirteenth round went further per explicit request:
+**removed that now-meaningless "Day | Plan + actual" toggle entirely**
+(both are always shown), replaced it with a real **Day / 3 Day / Working
+week / Week** view-range switcher (a genuinely new multi-day timeline
+grid, no prior art in the codebase), added a **tap-the-date-to-open-a-
+date-picker**, and **removed the Week tab fully** — its Capacity
+sub-page relocated to the Account tab (user's explicit call: "move it
+under account") rather than deleted. Planned via `EnterPlanMode` before
+any code changed, given the scope. Live verification on the iOS
+Simulator caught two real bugs neither `flutter analyze` nor the test
+suite's wide default viewport could — a header overflow on real phone
+widths, and a `RenderFlex` overflow assertion from unbounded text
+wrapping in narrow multi-day columns — both root-caused and fixed, not
+just papered over. See **Day view: multi-day timeline, date picker,
+Week tab removed**. **Uncommitted.**
 Each feature/fix has its own dated section below with
 full detail — read this intro for the shape of things, then jump to
 whichever section is relevant. Read this first, then verify anything
@@ -141,22 +200,26 @@ Git remote: `https://github.com/drivector/calendar.git` — up to date, see
 
 ## What's built so far
 
-Four tabs (Day / Week / Goals / Account) hosted in `RootShell` behind an
+Three tabs (Day / Goals / Account) hosted in `RootShell` behind an
 `IndexedStack`, plus a Categories admin screen (pushed as a route, not a tab).
 There is no more "claim untracked time" feature — see **Account tab: replaces
 Activities, "+ LOG" moves to Day view, claim-untracked-time removed**
-(ninth batch, sixth session) for why.
+(ninth batch, sixth session) for why. There is no more separate **Week
+tab** — removed fully in the thirteenth batch; its Capacity sub-page now
+lives under Account (see **Day view: multi-day timeline, date picker,
+Week tab removed**).
 
-- **Day view** — continuous 24h timeline, Plan lane + Actual lane, tap empty
-  space (including where an untracked gap sits — there's no separate widget
-  for those any more) to create a planned/actual entry, tap an existing block
-  for its detail. Header has `<`/`>` arrow buttons, touch-swipe and
-  trackpad-swipe for day navigation (`DateSwipeNav`), a **"+ LOG"** action
-  (opens the same manual-entry sheet the Activities tab used to host), and
-  the Day/Plan+actual segmented control.
-- **Week view** — 7 day rows with live per-day category bars, **derived from
-  real block data** (not synthetic — this was a mid-session refactor), same
-  `<`/`>` + swipe navigation pattern for week-to-week.
+- **Day view** — continuous timeline showing 1/3/5/7 day-columns side by
+  side, per the header's **Day / 3 Day / Working week / Week** mode
+  switcher (`DayViewMode`); Plan and Actual share one column per day
+  (planned blocks a dashed outline, actual blocks solid — not
+  side-by-side lanes), tap empty space (including where an untracked gap
+  sits) to create an actual entry dated to whichever column was tapped,
+  tap an existing block for its detail. Header has `<`/`>` arrow buttons
+  (step by the current mode's whole window size), touch-swipe and
+  trackpad-swipe for navigation (`DateSwipeNav`), a **tap-the-date
+  opens a date picker** to jump to any day, and a **"+ LOG"** action
+  (opens the same manual-entry sheet the Activities tab used to host).
 - **Goals** — each goal has a **unified per-day schedule**: every weekday
   holds a list of `DayScheduleEntry`, each either a plain duration or a clock
   time range (a day can mix several of either — e.g. a split shift, or a time
@@ -179,10 +242,11 @@ Activities, "+ LOG" moves to Day view, claim-untracked-time removed**
   **"+ Log" tab renamed to Activities**, **Log activity sheet: pick the
   day first**, and **Activities screen: day-by-day list** below.
 - **Categories admin** — full CRUD, color palette picker.
-- **Navigation** — Day/Week own horizontal swipe+trackpad for date/week
-  stepping. Goals and Account (which have no competing horizontal gesture)
-  use the same `DateSwipeNav` widget for **tab-switching** instead (swipe
-  left/right moves between tabs, clamped at the ends). Day/Week were
+- **Navigation** — Day view owns horizontal swipe+trackpad for
+  date/window stepping. Goals and Account (which have no competing
+  horizontal gesture) use the same `DateSwipeNav` widget for
+  **tab-switching** instead (swipe left/right moves between tabs,
+  clamped at the ends, 0–2 now that there are 3 tabs). Day was
   deliberately left out of tab-switch swipe to avoid two nested gesture
   handlers fighting over one swipe.
 
@@ -193,9 +257,13 @@ Activities, "+ LOG" moves to Day view, claim-untracked-time removed**
 - `lib/models/goal_progress.dart` — pace/status computation, `weekStartFor`.
 - `lib/state/goals_providers.dart` — `goalsProvider`,
   `goalGeneratedBlocksThisWeekProvider`, `dayViewPlannedBlocksProvider`
-  (merges manual + goal-generated blocks for the Day view).
+  (Day-mode-only merge, still used by Goals), `visibleDayBlocksProvider`
+  (the Day view timeline's actual multi-day data source now).
+- `lib/state/day_view_providers.dart` — `DayViewMode`,
+  `visibleDatesProvider`, `stepDayViewWindow`.
 - `lib/state/week_view_providers.dart` — live (not synthetic)
-  `weekDaySummariesProvider`.
+  `weekDaySummariesProvider`, now backing the Capacity page only (no
+  Week tab any more).
 - `lib/features/goals/widgets/goal_edit_sheet.dart` — the unified schedule
   editor UI (`_DayScheduleSection`, `_EntryDurationRow`, `_EntryTimeRangeRow`).
 - `lib/shared/widgets/date_swipe_nav.dart` — the reusable swipe/trackpad
@@ -208,7 +276,7 @@ Activities, "+ LOG" moves to Day view, claim-untracked-time removed**
 
 ## Testing
 
-`flutter analyze` is clean; `flutter test` currently passes **151 tests**
+`flutter analyze` is clean; `flutter test` currently passes **159 tests**
 across `test/models/`, `test/state/`, `test/utils/`, `test/widget_test.dart`,
 and `test/features/auth/login_screen_test.dart`. Convention: after any
 change, run both and fix before moving on. Run from `app/`:
@@ -234,7 +302,7 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
 `AsyncLoading`. Widget tests don't need this explicitly since
 `pumpAndSettle()` flushes it.
 
-## Git status — sixth session's first eight batches committed but not pushed, ninth uncommitted
+## Git status — sixth session's first nine batches pushed, tenth through thirteenth uncommitted
 
 - The Firebase Auth/Firestore backend, the fourth session's UX fixes/CI,
   the entire fifth session (week nav, Activities tab, onboarding, cap
@@ -275,23 +343,22 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
   log_activity_sheet.dart`, `lib/features/log_activity/
   activities_screen.dart`, `test/widget_test.dart` (the Note field fix)
   — the Firestore isolation verification itself had no code change.
-- The sixth session's **sixth batch — committed as `80dfd70`, not yet
-  pushed**: the app rename (`lib/app.dart`,
-  `lib/features/auth/login_screen.dart`,
+- The sixth session's **sixth batch — pushed as `80dfd70`**: the app
+  rename (`lib/app.dart`, `lib/features/auth/login_screen.dart`,
   `lib/features/onboarding/onboarding_screen.dart`,
   `ios/Runner/Info.plist`, `macos/Runner/Configs/AppInfo.xcconfig` — see
   **App renamed**). No Firestore/deploy component — purely a code change.
-- The sixth session's **eighth batch — committed as `0fb9d41`, not yet
-  pushed**: the goal-edit-sheet 4-step wizard restructure
+- The sixth session's **eighth batch — pushed as `0fb9d41`**: the
+  goal-edit-sheet 4-step wizard restructure
   (`lib/features/goals/widgets/goal_edit_sheet.dart`,
   `test/widget_test.dart`,
   `test/features/onboarding/onboarding_screen_test.dart` — see **Goal edit
   sheet: 4-step wizard**). Also purely a code change, no Firestore/deploy
-  component. `main` is 2 commits ahead of `origin/main` as of this
-  write-up (these two) — ask before pushing, per this repo's `CLAUDE.md`.
-- The sixth session's **ninth batch — uncommitted**: the Account tab
-  restructure, "+ LOG" relocation to the Day view, and claim-untracked-time
-  removal (`lib/shell/root_shell.dart`, `lib/features/goals/goals_screen.dart`,
+  component.
+- The sixth session's **ninth batch — pushed as `746b524`**: the Account
+  tab restructure, "+ LOG" relocation to the Day view, and
+  claim-untracked-time removal (`lib/shell/root_shell.dart`,
+  `lib/features/goals/goals_screen.dart`,
   `lib/features/day_view/widgets/day_header_bar.dart`,
   `lib/features/day_view/widgets/time_body_grid.dart`,
   `lib/state/derived_providers.dart`, new
@@ -301,9 +368,61 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
   `lib/features/day_view/widgets/claim_gap_sheet.dart`,
   `lib/features/day_view/widgets/untracked_gap_widget.dart`;
   `test/widget_test.dart` — see **Account tab: replaces Activities,
-  "+ LOG" moves to Day view, claim-untracked-time removed**). Ask before
-  committing — a prior commit/push approval doesn't carry forward to a
-  new batch, per this repo's `CLAUDE.md`.
+  "+ LOG" moves to Day view, claim-untracked-time removed**).
+- The sixth session's **tenth batch — uncommitted**: the add-block
+  sheet's full redesign across several passes — no date field, goal
+  dropdown, header save/cancel with a save-or-cancel prompt on any other
+  close attempt, required name/goal, inline computed duration
+  (`lib/features/day_view/widgets/add_block_sheet.dart`,
+  `test/widget_test.dart` — see **Add-block sheet redesign: no date
+  field, goal dropdown, "Save Activity"** and **Add-block sheet, round
+  2: header save/cancel, required fields, inline duration**). Purely a
+  code change, no Firestore/deploy component. Ask before committing — a
+  prior commit/push approval doesn't carry forward to a new batch, per
+  this repo's `CLAUDE.md`.
+- The sixth session's **eleventh batch — uncommitted**: the validation-error
+  visibility bug fix + app-wide audit — new
+  `lib/shared/widgets/inline_form_error.dart`, wired into
+  `lib/features/day_view/widgets/add_block_sheet.dart` and
+  `lib/features/log_activity/widgets/log_activity_sheet.dart` in place of
+  `ScaffoldMessenger.showSnackBar`, plus `test/widget_test.dart` (see
+  **Bug fix + app-wide audit: validation errors hidden behind an open
+  sheet**). Purely a code change, no Firestore/deploy component. Live
+  verification on this one is incomplete (see that section) — worth a
+  real check before/alongside committing, not just before pushing.
+- The sixth session's **twelfth batch — uncommitted**: the Day view
+  Plan/Actual lane merge — `lib/features/day_view/widgets/time_body_grid.dart`,
+  `lib/features/day_view/day_view_screen.dart`,
+  `lib/state/day_view_providers.dart` (doc comment only); deleted
+  `lib/features/day_view/widgets/column_headers.dart` (see **Day view:
+  Plan and Actual merged into one column**). Purely a code change, no
+  Firestore/deploy component. Live verification is partial — the merged
+  single-column layout was confirmed on the iOS Simulator, but a dashed
+  plan block actually overlapping a solid actual block was not (see that
+  section for why) — worth a quick look before considering this closed.
+- The sixth session's **thirteenth batch — uncommitted**: the multi-day
+  Day-view timeline (Day/3 Day/Working week/Week), the date picker, and
+  the Week tab's full removal (Capacity relocated to Account) —
+  `lib/state/day_view_providers.dart`, `lib/state/goals_providers.dart`,
+  `lib/state/week_view_providers.dart`,
+  `lib/features/day_view/widgets/time_body_grid.dart`,
+  `lib/features/day_view/widgets/day_header_bar.dart`,
+  `lib/features/day_view/widgets/add_block_sheet.dart`,
+  `lib/features/day_view/widgets/actual_block_widget.dart`,
+  `lib/features/day_view/widgets/plan_block_widget.dart`,
+  `lib/features/day_view/day_view_screen.dart`,
+  `lib/shared/widgets/segmented_control.dart`,
+  `lib/shell/root_shell.dart`, `lib/features/account/account_screen.dart`,
+  `lib/features/goals/goals_screen.dart`; new
+  `lib/features/day_view/widgets/day_column_header_row.dart`, new
+  `lib/features/account/capacity_screen.dart` (moved from
+  `lib/features/week_view/capacity_screen.dart`); deleted
+  `lib/features/week_view/` entirely; `test/widget_test.dart`, new
+  `test/state/goals_providers_test.dart` (see **Day view: multi-day
+  timeline, date picker, Week tab removed**). Purely a code change, no
+  Firestore/deploy component. Live-verified on the iOS Simulator,
+  including finding and fixing two real bugs that only surfaced on a
+  real phone width (see that section's own verification write-up).
 - A stray duplicate clone of this repo that existed briefly at
   `/Users/alexandrospanagiotidis/DriVector/Calendar/calendar/` (see the
   sign-up bug section for how it got there) has been **deleted** — it had
@@ -1161,6 +1280,432 @@ claim-sheet-removal behavior, described above); the Account tab shows
 walk through actually signing out (would have ended the session) or
 logging a real entry via the relocated "+ LOG" button specifically on
 this pass — both are exercised in detail by the widget suite instead.
+
+## Add-block sheet redesign: no date field, goal dropdown, "Save Activity" (sixth session)
+
+Ask (after one round of clarification — the user's first message named
+the sheet ambiguously; they confirmed it meant this one, not the "+ LOG"
+sheet, once asked): the Day view's "New actual/planned activity" sheet
+(`lib/features/day_view/widgets/add_block_sheet.dart`, opened by tapping
+empty timeline space) had a Start date + End date pair that no longer
+made sense — the sheet already only ever opens for whichever day the Day
+view is currently showing, so a separate date field was redundant, not a
+real choice. Asked for: **no date field**, activity name, **goal as a
+dropdown** (was a `Wrap` of `CategoryChip`s), start/end time, and the
+save button relabeled **"Save Activity"**.
+
+- Removed `_startDate`/`_endDate` state and both `DateField` rows
+  entirely. `_save()` now reads `selectedDateProvider` directly for both
+  the start and end `DateTime` — the existing overnight rollover safety
+  net (advance the end date by one day if the end time isn't after the
+  start time) still applies unchanged, so a block that crosses midnight
+  still saves correctly with no date input at all.
+- New `_GoalDropdown` widget (bottom of the file): a bordered field
+  showing the selected goal's name with a "▾" indicator — tapping opens
+  a flat `showModalBottomSheet` list (color swatch + goal name per row,
+  matching `CategoryChip`'s own visual language) rather than Flutter's
+  stock `DropdownButton`, which would have brought in rounded-corner
+  Material menu chrome and elevation this app's flat design system
+  doesn't use anywhere else. Replaces the `Wrap` of chips 1:1 — same
+  `goals`/`categories` data, same `_goalId` state.
+- Button label: `widget.isPlan ? 'ADD PLAN' : 'SAVE ACTIVITY'` — the
+  planned-block variant keeps its own label (a "plan" isn't an
+  "activity"); only the actual/tracked variant, the one this request was
+  actually about, changed.
+
+### Tests
+
+One test was retired outright (asserted `START DATE`/`END DATE` fields
+and the native date picker, none of which exist any more) and replaced
+with one asserting the new shape: no date labels, `START TIME`/`END
+TIME` present, the fixture's one goal shown pre-selected on the closed
+dropdown field, tapping it opens a picker list (field text appears
+twice — the closed field plus the list row — while open), and the
+button text is `ADD PLAN` or `SAVE ACTIVITY` depending on which lane the
+test's tap happened to land in (both are valid, same as before). A
+second, pre-existing test that opened this sheet also had its button
+finder changed from `find.textContaining('ADD ')` to an explicit
+either/or check — it was tapping the save button generically and would
+have broken (found nothing) on any test run where the tap happened to
+land in the Actual lane, now that lane's label no longer starts with
+"ADD ". All 151 tests pass (same count — one swapped, not added/removed);
+`flutter analyze` is clean.
+
+### Platform verification — live, iOS Simulator, end to end
+
+Rebuilt and reinstalled, then tapped empty timeline space: the sheet
+opened with exactly the requested fields (Activity, Start time/End time,
+Goal as a bordered dropdown reading "walking" with a ▾, no date
+anywhere) and a "SAVE ACTIVITY" button. Tapping it saved for real — a
+"walking (manual)" block appeared in the Actual lane at the tapped time,
+the header's "tracked" total updated to reflect it, and "DRIFT TODAY"
+picked up the new delta — confirming the whole save path (no date field,
+dropdown-selected goal, times only) works end to end, not just that the
+form renders. Did not additionally walk through opening the dropdown's
+picker list interactively on this pass (tapping it mid-session
+inadvertently hit the save button instead, which is what produced the
+saved block above) — that specific interaction is covered by the new
+widget test instead.
+
+## Add-block sheet, round 2: header save/cancel, required fields, inline duration (sixth session)
+
+Three more asks in sequence against the same sheet, same session:
+
+1. "replace the cancel with save, remove the save at the bottom to
+   minimize space. when clicking elsewhere, pop up save or cancel."
+2. "let's the default the goal to none, and the user must select one
+   active goal to save. the activity name also should be not null. and
+   there should in the same line as start and end time, the duration
+   calculated"
+3. "no I don't like it. Move duration next to New actual activity as
+   text (auto calculated)" — reversing part of (2) after seeing it live.
+
+### Header save + bottom button removed + save-or-cancel prompt
+
+The header's "cancel" link became **"save"** (calls `_save()` directly);
+the full-width bottom button is gone entirely — shorter sheet, one save
+affordance instead of two. Closing any other way (barrier tap, back
+gesture) now goes through a `PopScope(canPop: false, ...)` guard exactly
+like `GoalEditSheet`'s own, calling `_handleClose()`: no changes closes
+immediately, unsaved changes show a **`_UnsavedActivityDialog`**
+(SAVE / CANCEL — two options, not GoalEditSheet's three, since this
+one-shot quick-add sheet has nothing to "keep editing" that isn't
+already fully on screen). `showAddBlockSheet`'s `showModalBottomSheet`
+gained `enableDrag: false` for the same reason GoalEditSheet's does — a
+completed swipe-to-dismiss calls `Navigator.pop` directly inside
+Flutter's `BottomSheet.onClosing`, bypassing `PopScope` entirely.
+
+**Real bug caught by the tests, not by inspection**: the first
+implementation captured `_initialSnapshot` (the dirty-check baseline)
+via `late final _initialSnapshot = _snapshot();` — a *lazy* initializer
+that only runs on first *access*. Since nothing read it until the first
+close attempt, and by then the user might already have typed something,
+it was silently capturing the *already-edited* state as "initial",
+making the dirty-check permanently false. Three new tests (`with no
+changes closes it immediately`, `...Cancel discards`, `...Save saves
+it`) caught this immediately — the two "has changes" tests failed with
+the prompt never appearing at all. Fixed by moving the capture into
+`initState()`, an eager point that always runs before any interaction —
+exactly how `GoalEditSheet` already does it, which is the pattern to
+follow for any future dirty-check like this rather than a `late` field.
+
+### Goal defaults to none; activity name is required
+
+`_goalId` no longer pre-selects the first eligible goal — starts `null`,
+so `_GoalDropdown` reads "set goal" until the user actually picks one.
+`_save()` now validates the activity name too (`Enter an activity name
+before saving`, same SnackBar pattern as the existing goal check) —
+the old "falls back to the goal's name when left blank" behavior (still
+intentional and unchanged in `LogActivitySheet`) is gone from *this*
+sheet specifically, per the explicit ask that the name must not be null.
+
+### Duration: two iterations, second one stuck
+
+First attempt put a computed, read-only `_DurationField` as a third
+column alongside Start time/End time. Rejected on sight ("no I don't
+like it") — moved instead to plain mono text next to the sheet's own
+title, e.g. "New actual activity **· 30m**", `Row(crossAxisAlignment:
+baseline)` so the two sit on the same text baseline despite the
+different styles. Computed the same way either time — from `_start`/
+`_end` `TimeOfDay`s, with the same overnight-rollover rule `_save()`
+itself uses (`_duration` getter, `add_block_sheet.dart`) — never a real
+field, always derived.
+
+### Tests
+
+151 → 157: five new (`no changes closes immediately`, `Cancel discards`,
+`Save saves it`, `requires an activity name`, `requires a goal`, `shows
+a computed duration next to its title` — one was rewritten in place when
+duration moved, not double-counted) plus fixes to the two pre-existing
+tests that assumed a pre-selected goal chip (now select "test goal" from
+the dropdown explicitly, since nothing is pre-picked any more). All 157
+pass; `flutter analyze` is clean.
+
+### Platform verification — live, iOS Simulator
+
+Rebuilt and reinstalled after each of the three sub-rounds. Confirmed:
+header reads "New actual activity **·** 30m" opposite "save", no bottom
+button, Start time/End time back to a clean two-column row; GOAL field
+reads "set goal" until picked; tapping empty timeline space with nothing
+touched closes with no prompt; DriftFooter and drift totals updated
+correctly after a real save from earlier in this same verification pass.
+Did not additionally re-drive the save-or-cancel dialog interactively on
+the very last (duration-relocation-only) rebuild, since that path was
+unchanged by this specific edit and is already covered by the three
+dedicated dialog tests.
+
+## Bug fix + app-wide audit: validation errors hidden behind an open sheet (sixth session)
+
+Ask, verbatim: "when i click outside and i click save, without an
+activity name or goal set, it does nothing but there is no error
+message. ensure there are clear distinct error messages across the
+app." A real bug, not a misunderstanding — reproduced by reasoning
+through the code rather than by re-clicking it live (see **Platform
+verification** below for why the live click-through itself wasn't
+finished this round): `_save()`'s validation calls
+`ScaffoldMessenger.of(context).showSnackBar(...)` from *inside* the
+still-open add-block sheet. A `SnackBar` attaches to the app-root
+`ScaffoldMessenger`, which sits **below** a modal bottom sheet's own
+overlay route in the visual stack — the SnackBar genuinely shows (it's
+in the widget tree, which is why the existing widget tests calling
+`find.textContaining('before saving')` never caught this), it's just
+rendered *behind* the sheet, invisible. Tapping "save" from the
+outside-tap prompt made it worse (dialog closes, sheet's own SnackBar
+call happens next, same occlusion) but the bug already existed on the
+plain in-sheet "save" tap too — the outside-tap path just made it more
+noticeable.
+
+**App-wide audit** (the "across the app" half of the ask): grepped every
+`showSnackBar` call in `lib/`. Five total — two are the `add_block_sheet.dart`
+ones just described; one more, `log_activity_sheet.dart`'s "Set X before
+saving" (`_LogActivitySheetState._save()`), has the *exact* same bug,
+shown while that sheet is open. The other two (`goal_edit_sheet.dart`'s
+and `add_block_sheet.dart`'s own "Create a category/goal first") are
+genuinely fine — both fire from the *opening* function, before any sheet
+exists, onto the plain screen behind, nothing to be occluded by.
+`GoalEditSheet` itself has no validation-blocking save path to audit
+(a blank name silently becomes "Untitled goal" there — intentional,
+unrelated to this bug).
+
+**Fix**: new shared `lib/shared/widgets/inline_form_error.dart`
+(`InlineFormError`) — a flat, bordered, accent-colored banner shown
+*inside* the sheet's own layout instead of a `SnackBar`, so it can never
+be occluded by the sheet that's asking for it. Wired into both
+`add_block_sheet.dart` and `log_activity_sheet.dart`: each gained a
+local `String? _errorMessage` field, `_save()`'s failure paths now
+`setState` it instead of calling `showSnackBar`, the banner renders
+right below the header when set, and it's cleared as soon as the
+relevant field changes (name typed, goal picked, day/start/end changed)
+rather than lingering after the user's already fixed it.
+
+### Tests
+
+Six existing validation tests (four in `log_activity_sheet` coverage,
+two in `add_block_sheet`) each gained `expect(find.byType(SnackBar),
+findsNothing);` right next to their existing "error text is showing"
+assertion — locks in *which* mechanism is used, not just that some text
+exists somewhere in the tree, so a regression back to `showSnackBar`
+would fail immediately. One new test reproduces the exact bug report:
+open the add-block sheet, pick a goal but leave the name blank (real
+"unsaved changes", nothing to do with the name itself), tap outside,
+tap SAVE in the prompt, and assert the inline error shows, no `SnackBar`
+exists, and nothing was written to either block provider. 151 → 158;
+`flutter analyze` clean.
+
+### Platform verification — incomplete, stated plainly
+
+Live-verified the sheet's layout and the direct in-sheet "save" tap
+path earlier this session (see the two rounds above) — that part is
+solid. This round's specific fix — the nested goal-picker's own
+`showModalBottomSheet<String>`, and the inline error banner rendering
+where a `SnackBar` used to be invisible — was **not** successfully
+click-verified live: repeated attempts to tap the picker's one list row
+this session landed inconsistently (sometimes the row itself, sometimes
+the dimmed barrier above or below it, closing the picker or the whole
+sheet instead), and time was cut short rather than continuing to guess
+coordinates. Confidence here rests on `flutter analyze` being clean and
+the automated suite — which uses semantic finders immune to this exact
+class of problem — covering the precise reported scenario end to end,
+not on a live tap-through. Worth a real device/simulator check next
+session before calling this fully closed.
+
+## Day view: Plan and Actual merged into one column (sixth session)
+
+Ask, verbatim: "make plan and actual on the same view, plan remains
+with dashed lines and actual full colored." Previously the Day view's
+timeline (`time_body_grid.dart`) ran Plan and Actual as two side-by-side
+lanes, each half the available width when both were shown (toggled by
+the header's "Day | Plan + actual" segmented control,
+`dayLayerProvider`/`DayLayer`). Now there's a single full-width column:
+planned blocks (`PlanBlockWidget` — already just a `DashedRectBorder`
+outline with no fill, unchanged) paint first, actual/tracked blocks
+(`ActualBlockWidget` — solid category-tint fill, unchanged) paint after
+and on top, so for the same time slot the dashed plan outline still
+shows around/behind a solid actual block rather than the two competing
+for space. The "Day | Plan + actual" toggle keeps its two options and
+labels — it now means "show the dashed plan overlay or not" rather than
+"one lane or two," which is a smaller change in meaning than it sounds
+given the width was already the only thing that varied.
+
+- **`time_body_grid.dart`**: `laneWidth`/`planLeft`/`actualLeft` collapsed
+  into a single `columnLeft`/`columnWidth`; the vertical 1px lane-divider
+  `Container` is gone (nothing to divide any more); the two separate
+  empty-space tap-target `GestureDetector`s (one per lane) collapsed into
+  one covering the merged column. `kGutterWidth` moved here from the
+  now-deleted `column_headers.dart` (its only other consumer).
+- **`_handleLaneTap` → `_handleEmptySpaceTap`**: dropped the `isPlan`
+  parameter and always opens the add-block sheet with `isPlan: false`
+  (an actual entry). **Real consequence, not an oversight**: this was
+  the *only* call site in the whole app that ever passed `isPlan: true`
+  — manually creating a one-off planned block (as opposed to one a
+  goal's own schedule auto-generates) is no longer reachable from any UI
+  in the app. `add_block_sheet.dart`'s `isPlan` plumbing itself is left
+  intact (still correctly writes to `plannedBlocksRepositoryProvider` if
+  ever called with `true` again) — not deleted, since removing the
+  planned-block data model/repository path entirely is a bigger, separate
+  decision than "merge the two lanes visually," and this way it's a
+  one-line revert if manual plan creation turns out to be wanted back.
+- **`column_headers.dart` deleted** — its "PLAN" / "ACTUAL" header cells
+  don't make sense once there's one column; `ColumnHeaders` is no longer
+  in `day_view_screen.dart`'s widget tree. `LegendRow` (the "planned Xh /
+  tracked Xh" totals row, with its own dashed-vs-filled swatch pair)
+  already explained the plan/actual visual language independently and is
+  untouched.
+- Doc comments updated in `time_body_grid.dart` and `day_view_providers.dart`
+  (`DayLayer`'s own doc comment) to describe the merged-column model
+  instead of "two lanes side by side."
+
+### Tests
+
+All 158 pre-existing tests passed **unmodified** — confirmed by grepping
+first (via a research pass) that nothing in `test/widget_test.dart`
+asserted lane count, lane position, or the literal `'PLAN'`/`'ACTUAL'`
+header text tied to `column_headers.dart` (a few unrelated tests use
+`'PLANNED'`/`'ACTUAL'` as section headers inside the *Goals* detail
+sheet — a different, untouched widget). No new tests added this round —
+the change is layout/positioning plus one default-value change
+(`isPlan: false`), and the existing add-block-sheet test suite (which
+opens the sheet via the same timeline tap this round touched) already
+exercises that path without asserting which lane a tap "belongs to."
+
+### Platform verification — live, partial
+
+Rebuilt and reinstalled; confirmed live: the Day view now shows one
+full-width column, no "PLAN"/"ACTUAL" header split, and tapping empty
+timeline space opens "New actual activity" as before (via the merged
+tap target). Did **not** get a live-verified screenshot of a dashed
+planned outline overlapping a solid actual block specifically — the
+test-dummy account's only goal ("walking") had a 30m weekly plan not
+scheduled for the day being viewed, and time wasn't spent hunting for a
+day/account with an overlapping pair. `PlanBlockWidget` itself is
+byte-for-byte unchanged (same `DashedRectBorder` styling it already
+had), only its position moved from a half-width lane to the full
+column, so this is a low-risk gap — but stating it plainly rather than
+implying a dashed-over-solid overlap was actually seen on screen this
+round.
+
+## Day view: multi-day timeline, date picker, Week tab removed (sixth session)
+
+Ask, verbatim: "clicking on the day in Day view, there should be a pop
+up calendar to choose any day you want to review. The Day vs Plan +
+actual toggle is meaningless now, it should always display both. There
+should be a toggle Day, three day, working wee, Week. The week view
+should be removed fully." Four parts, planned via `EnterPlanMode`
+(2 Explore agents + 1 Plan agent, one clarifying question) before any
+code changed, plan approved, then implemented in full:
+
+1. **Date picker**: tapping the date/range title in `DayHeaderBar` opens
+   a stock `showDatePicker` (Material, undecorated to match — no custom
+   theming precedent existed elsewhere in the app to break); picking a
+   date sets `selectedDateProvider` directly, which re-derives whichever
+   view mode is active around the new date.
+2. **The "Day | Plan + actual" toggle is gone** — `DayLayer`/
+   `dayLayerProvider` deleted outright. Both are always shown now
+   (already true visually since the Plan/Actual merge in the previous
+   round; this just removed the now-meaningless control).
+3. **New Day / 3 Day / Working week / Week mode switcher** — genuinely
+   new: `lib/state/day_view_providers.dart` gained `enum DayViewMode`,
+   `windowSizeFor` (1/3/5/7 days), `dayViewModeProvider`,
+   `visibleDatesProvider` (3 Day anchors at the selected date; Working
+   week/Week always anchor at `weekStartFor(selectedDate)`, so which
+   weekday is selected doesn't shift the window — matches how a normal
+   calendar app's week view behaves), and `stepDayViewWindow` (steps by
+   the current mode's whole window size, shared by the header arrows and
+   the timeline's own swipe). `lib/state/goals_providers.dart` gained
+   `DayBlocks` + `visibleDayBlocksProvider`, looping
+   `generateGoalPlannedBlocksForDate` per visible date directly —
+   deliberately **not** routing through the existing
+   `goalGeneratedBlocksThisWeekProvider`, which is fixed to one
+   Monday-anchored week and would silently drop a goal's generated
+   blocks for the half of a 3-Day window that crosses into the next
+   ISO week. `time_body_grid.dart` was rewritten to loop N day-columns
+   via a new shared `columnLayoutsFor` helper (also used by a new sibling
+   widget, `day_column_header_row.dart`, so the per-column date labels
+   above the grid can never drift out of pixel alignment with the grid
+   itself); the "jump to first event" auto-scroll is restricted to Day
+   mode only (one outlier day's early block yanking the shared scroll
+   position for every column in a multi-day view would read as a bug).
+   `add_block_sheet.dart` gained a required `date` param so tapping
+   empty space in any column saves to *that* column's date, not
+   `selectedDateProvider`'s.
+4. **Week tab removed fully** — `lib/features/week_view/` deleted
+   (`week_view_screen.dart` + its two row/bar widgets). Its **Capacity**
+   sub-page would otherwise have been orphaned; asked the user directly
+   what should happen to it via `AskUserQuestion` — answer: **"move it
+   under account."** Moved to `lib/features/account/capacity_screen.dart`
+   (import paths updated, doc comments no longer mention Week), with a
+   plain-text "capacity" link added to the Account tab's Details view
+   (mirrors the Goals screen's existing "categories" link — bare
+   `GestureDetector`-wrapped text, no border, distinct from the bordered
+   SIGN OUT button). `lib/state/week_view_providers.dart` **stays** (it
+   now backs Capacity, not a tab) with `weekTotalsProvider` deleted (its
+   only consumer was the deleted screen's totals row).  `root_shell.dart`
+   goes from 4 tabs to 3 (Day, Goals, Account); every `currentTabIndexProvider`
+   swipe-clamp bound (`goals_screen.dart`, `account_screen.dart`) moved
+   from `.clamp(0, 3)` to `.clamp(0, 2)`.
+
+### A real bug found and fixed during live verification, not by inspection
+
+Both `flutter analyze` and the full test suite (159 tests, including 4
+new ones for this round — date-picker jump, mode-switch column counts,
+per-column tap saves to the right date, and a direct
+`visibleDayBlocksProvider`-vs-`dayViewPlannedBlocksProvider`/
+`trackedBlocksProvider` equivalence check for Day mode) were clean
+*before* ever touching the Simulator. Building and running it live
+anyway (this session got CocoaPods working via Homebrew's `pod`, just
+not on this shell's default `PATH` — `export PATH="/opt/homebrew/bin:$PATH"`
+fixes it) turned up two real bugs neither `flutter analyze` nor the test
+suite's default 800×600 viewport could have caught, since a real phone
+is much narrower:
+
+- The header's mode switcher (`Day | 3 Day | Working week | Week`) sat
+  inline next to the date/arrows/"+ LOG" and overflowed off the right
+  edge of an actual phone width (iPhone 17 Simulator, 402pt), even
+  though it fit fine in the wider test harness. Fixed by moving it to
+  its own full-width row below the arrows/date/"+ LOG" row, and giving
+  `SegmentedControl` a new `stretch` option (each option becomes an
+  `Expanded` sharing the row evenly, versus its default intrinsic
+  sizing) — used here, not by the Account tab's own unrelated segmented
+  control, which stays inline as before.
+- A narrow multi-day column (5–7 columns on a 402pt phone, ~55–70pt
+  each) made a block's title/source text wrap onto more lines than the
+  block's minimum 44px height allows, tripping a genuine `RenderFlex`
+  overflow assertion — this is the "narrow-column readability" risk the
+  planning pass had already flagged as a known open question, and it
+  turned out to be a real crash, not just a cosmetic squeeze. Fixed with
+  `maxLines: 1` + `TextOverflow.ellipsis` on both text lines in
+  `ActualBlockWidget` and `PlanBlockWidget` (tried `clipBehavior` on a
+  `Flex`/`ClipRect` first — doesn't work, Flutter's overflow assertion
+  fires during the `RenderFlex`'s own layout regardless of clip
+  settings, before painting/clipping ever happens; the actual fix has to
+  keep the content within its bounds, not just hide the overflow).
+
+Both were caught by literally attaching to a booted Simulator and
+looking, not by code review — reinforcing this repo's own
+`CLAUDE.md` guidance to prefer live verification over static checks
+alone.
+
+### Platform verification — live, on the iOS Simulator (iPhone 17)
+
+All confirmed on-device after the two fixes above: tapping the date
+opens the picker and jumping to a picked date updates the Day view
+correctly; Day/3 Day/Working week/Week render exactly 1/3/5/7 columns
+with correct per-column date labels and no overflow; a real tracked
+block ("kill", "walking" — this session's own real signed-in account
+data) renders correctly ellipsized in a narrow Week-mode column instead
+of overflowing; the Account tab's new "capacity" link opens the
+relocated Capacity screen showing real per-day/per-goal data, and
+"close" returns to Account (not a dangling reference to the deleted
+Week screen); the bottom tab bar shows exactly Day/Goals/Account, no
+Week. Not separately re-verified live: the per-column empty-space tap
+creating a block dated to that specific column (covered by a widget
+test instead, `visibleDayBlocksProvider` in `test/state/
+goals_providers_test.dart` and the new "non-first day-column" test in
+`test/widget_test.dart`).
+
+**Uncommitted** — the sixth session's thirteenth batch. Ask before
+committing, per this repo's `CLAUDE.md` (prior approval doesn't carry
+forward).
 
 ## Password reset + required email verification (sixth session)
 

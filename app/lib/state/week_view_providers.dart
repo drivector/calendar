@@ -9,8 +9,10 @@ import 'derived_providers.dart';
 
 /// Live per-day breakdown for the week containing [selectedDateProvider] —
 /// derived from the same planned/tracked block data the Day view uses, so
-/// navigating to a different week shows that week's real activity (or an
-/// honest empty day for one with nothing logged).
+/// looking at a different week's Capacity page shows that week's real
+/// activity (or an honest empty day for one with nothing logged). Backs
+/// the Capacity page (`features/account/capacity_screen.dart`) — there is
+/// no "Week view" tab any more.
 final weekDaySummariesProvider = Provider<List<WeekDaySummary>>((ref) {
   final selectedDate = ref.watch(selectedDateProvider);
   final weekStart = weekStartFor(selectedDate);
@@ -63,16 +65,9 @@ final weekDaySummariesProvider = Provider<List<WeekDaySummary>>((ref) {
   });
 });
 
-final weekTotalsProvider = Provider<(double planned, double tracked)>((ref) {
-  final days = ref.watch(weekDaySummariesProvider);
-  final planned = days.fold<double>(0, (t, d) => t + d.totalPlannedHours);
-  final tracked = days.fold<double>(0, (t, d) => t + d.totalActualHours);
-  return (planned, tracked);
-});
-
 /// Each day of the week, reduced to planned-vs-available against a fixed
-/// capacity window — the same per-day planned/actual totals the rest of the
-/// Week view already shows, just paired with how much open room is left.
+/// capacity window — the same per-day planned/actual totals from
+/// [weekDaySummariesProvider], just paired with how much open room is left.
 final weekDayCapacityProvider = Provider<List<DayCapacity>>((ref) {
   final days = ref.watch(weekDaySummariesProvider);
   return [

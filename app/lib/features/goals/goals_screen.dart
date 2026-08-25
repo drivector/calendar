@@ -33,7 +33,7 @@ class GoalsScreen extends ConsumerWidget {
     final allTracked = ref.watch(allTrackedBlocksProvider);
 
     void stepTab(int delta) {
-      final next = (ref.read(currentTabIndexProvider) + delta).clamp(0, 3);
+      final next = (ref.read(currentTabIndexProvider) + delta).clamp(0, 2);
       ref.read(currentTabIndexProvider.notifier).state = next;
     }
 
