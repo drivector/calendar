@@ -7,9 +7,10 @@ import '../../../theme/app_colors.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../theme/app_text_styles.dart';
 
-/// A planned block: 1px dashed outline in its category color, 4px padding,
-/// its label. When [onConfirm] is set (nothing was tracked against this
-/// plan), an inline "Confirm" affordance accepts the plan as actual.
+/// A planned block: a rounded 1px dashed outline in its category color,
+/// unfilled so a solid actual block for the same slot reads clearly on top
+/// of it. When [onConfirm] is set (nothing was tracked against this plan),
+/// an inline "Confirm" affordance accepts the plan as actual.
 class PlanBlockWidget extends StatelessWidget {
   const PlanBlockWidget({
     super.key,

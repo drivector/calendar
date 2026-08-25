@@ -9,9 +9,12 @@ class AppTabBarItem {
   final String label;
 }
 
-/// The 4-cell "DAY | WEEK | GOALS | + LOG" bottom bar: 2px top rule, 1px
-/// right divider between cells, active tab in the accent, inactive at 40%
-/// ink. Every cell keeps a >=44pt tap target regardless of its visual size.
+/// The bottom tab bar: a white surface separated from the content by a
+/// hairline, active tab in Outlook blue, inactive in secondary ink. Every
+/// cell keeps a >=44pt tap target regardless of its visual size.
+///
+/// No per-cell dividers — Outlook's bottom bar separates tabs by spacing
+/// and colour, not rules.
 class AppTabBar extends StatelessWidget {
   const AppTabBar({
     super.key,
@@ -27,9 +30,9 @@ class AppTabBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: BoxDecoration(
-        color: AppColors.bg,
-        border: Border(top: BorderSide(color: AppColors.text, width: 2)),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.divider)),
       ),
       child: SafeArea(
         top: false,
@@ -37,29 +40,26 @@ class AppTabBar extends StatelessWidget {
           children: [
             for (var i = 0; i < items.length; i++)
               Expanded(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    border: i < items.length - 1
-                        ? Border(right: BorderSide(color: AppColors.divider))
-                        : null,
-                  ),
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => onChanged(i),
-                    child: Container(
-                      constraints: const BoxConstraints(minHeight: 44),
-                      alignment: Alignment.center,
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 9,
-                        horizontal: 8,
-                      ),
-                      child: Text(
-                        items[i].label.toUpperCase(),
-                        style: AppTextStyles.tabLabel(
-                          color: i == currentIndex
-                              ? AppColors.accent
-                              : AppColors.ink(0.4),
-                        ),
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onChanged(i),
+                  child: Container(
+                    constraints: const BoxConstraints(minHeight: 44),
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 9,
+                      horizontal: 8,
+                    ),
+                    child: Text(
+                      items[i].label,
+                      style: AppTextStyles.tabLabel(
+                        color: i == currentIndex
+                            ? AppColors.accent
+                            : AppColors.textSecondary,
+                      ).copyWith(
+                        fontWeight: i == currentIndex
+                            ? FontWeight.w600
+                            : FontWeight.w500,
                       ),
                     ),
                   ),

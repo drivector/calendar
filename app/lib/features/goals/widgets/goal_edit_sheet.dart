@@ -12,6 +12,7 @@ import '../../../state/categories_providers.dart';
 import '../../../state/day_view_providers.dart';
 import '../../../state/goals_providers.dart';
 import '../../../theme/app_colors.dart';
+import '../../../theme/app_shapes.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../utils/duration_format.dart';
@@ -74,7 +75,7 @@ Future<void> showGoalEditSheet(
 
   return showModalBottomSheet<void>(
     context: context,
-    backgroundColor: AppColors.bg,
+    backgroundColor: AppColors.surface,
     isScrollControlled: true,
     // isDismissible stays true (the default) — a barrier tap calls
     // Navigator.maybePop, which does respect the PopScope guard below, so
@@ -510,11 +511,14 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
       child: Container(
         constraints: const BoxConstraints(minHeight: 44),
         alignment: Alignment.center,
-        color: AppColors.accent,
+        decoration: const BoxDecoration(
+          color: AppColors.accent,
+          borderRadius: AppShapes.small,
+        ),
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s3),
         child: Text(
-          isLastStep ? (_isEditing ? 'SAVE CHANGES' : 'CREATE GOAL') : 'NEXT',
-          style: AppTextStyles.small(color: AppColors.bg),
+          isLastStep ? (_isEditing ? 'Save changes' : 'Create goal') : 'Next',
+          style: AppTextStyles.small(color: AppColors.surface),
         ),
       ),
     );
@@ -536,10 +540,12 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
                     constraints: const BoxConstraints(minHeight: 44),
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      border: Border.all(color: AppColors.text),
+                      color: AppColors.surface,
+                      border: Border.all(color: AppColors.neutral500),
+                      borderRadius: AppShapes.small,
                     ),
                     child: Text(
-                      'BACK',
+                      'Back',
                       style: AppTextStyles.small(color: AppColors.text),
                     ),
                   ),
@@ -561,7 +567,7 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
               constraints: const BoxConstraints(minHeight: 44),
               alignment: Alignment.centerLeft,
               child: Text(
-                'DELETE GOAL',
+                'Delete goal',
                 style: AppTextStyles.small(color: AppColors.accent),
               ),
             ),
@@ -598,8 +604,9 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
         ),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: AppColors.bg,
-            border: Border(top: BorderSide(color: AppColors.text, width: 2)),
+            color: AppColors.surface,
+            border: Border(top: BorderSide(color: AppColors.divider)),
+            borderRadius: AppShapes.sheetTop,
           ),
           child: SafeArea(
             top: false,
@@ -679,13 +686,12 @@ class _UnsavedChangesDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: AppColors.bg,
-      shape: const RoundedRectangleBorder(),
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(borderRadius: AppShapes.medium),
+      elevation: 8,
       insetPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.s6),
       child: DecoratedBox(
-        decoration: BoxDecoration(
-          border: Border.all(color: AppColors.text, width: 2),
-        ),
+        decoration: const BoxDecoration(borderRadius: AppShapes.medium),
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.s3),
           child: Column(
@@ -706,13 +712,16 @@ class _UnsavedChangesDialog extends StatelessWidget {
                   width: double.infinity,
                   constraints: const BoxConstraints(minHeight: 44),
                   alignment: Alignment.centerLeft,
-                  color: AppColors.accent,
+                  decoration: const BoxDecoration(
+                    color: AppColors.accent,
+                    borderRadius: AppShapes.small,
+                  ),
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.s3,
                   ),
                   child: Text(
-                    'SAVE',
-                    style: AppTextStyles.small(color: AppColors.bg),
+                    'Save',
+                    style: AppTextStyles.small(color: AppColors.surface),
                   ),
                 ),
               ),
@@ -731,7 +740,7 @@ class _UnsavedChangesDialog extends StatelessWidget {
                     horizontal: AppSpacing.s3,
                   ),
                   child: Text(
-                    'DISCARD',
+                    'Discard',
                     style: AppTextStyles.small(color: AppColors.accent),
                   ),
                 ),
@@ -745,7 +754,7 @@ class _UnsavedChangesDialog extends StatelessWidget {
                   constraints: const BoxConstraints(minHeight: 44),
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    'KEEP EDITING',
+                    'Keep editing',
                     style: AppTextStyles.small(color: AppColors.text),
                   ),
                 ),
@@ -885,7 +894,7 @@ class _DateField extends StatelessWidget {
             alignment: Alignment.centerLeft,
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s2),
             decoration: BoxDecoration(
-              border: Border.all(color: AppColors.divider),
+              border: Border.all(color: AppColors.neutral500), borderRadius: AppShapes.small,
             ),
             child: Text(
               DateFormat('d MMM y').format(value),
@@ -1077,7 +1086,7 @@ class _ClockChip extends StatelessWidget {
       child: Container(
         constraints: const BoxConstraints(minHeight: 32),
         alignment: Alignment.center,
-        decoration: BoxDecoration(border: Border.all(color: AppColors.divider)),
+        decoration: BoxDecoration(border: Border.all(color: AppColors.neutral500), borderRadius: AppShapes.small),
         child: Text(label, style: AppTextStyles.mono(color: AppColors.text)),
       ),
     );

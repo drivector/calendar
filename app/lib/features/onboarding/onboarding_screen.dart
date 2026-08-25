@@ -68,7 +68,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             style: AppTextStyles.mono(),
           ),
           const SizedBox(height: AppSpacing.s6),
-          Text('PICK A CATEGORY TO GET STARTED', style: AppTextStyles.kicker()),
+          Text('Pick a category to get started', style: AppTextStyles.kicker()),
           const SizedBox(height: AppSpacing.s2),
           for (final category in categories)
             _CategoryOption(

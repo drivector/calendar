@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../state/auth_providers.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_shapes.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 
@@ -221,13 +222,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               width: double.infinity,
               constraints: const BoxConstraints(minHeight: 44),
               alignment: Alignment.center,
-              color: AppColors.accent,
+              decoration: const BoxDecoration(
+                color: AppColors.accent,
+                borderRadius: AppShapes.small,
+              ),
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s3),
               child: Text(
                 _submitting
-                    ? 'PLEASE WAIT'
-                    : (_isSignUp ? 'CREATE ACCOUNT' : 'SIGN IN'),
-                style: AppTextStyles.small(color: AppColors.bg),
+                    ? 'Please wait'
+                    : (_isSignUp ? 'Create account' : 'Sign in'),
+                style: AppTextStyles.small(color: AppColors.surface),
               ),
             ),
           ),

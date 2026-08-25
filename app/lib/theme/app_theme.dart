@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'app_colors.dart';
+import 'app_shapes.dart';
 import 'app_text_styles.dart';
 
 /// Minimal [ThemeData] so Material widgets used later (e.g. a [TextField] in
 /// the Log screen) inherit sane defaults. Day-view widgets reference
-/// [AppColors]/[AppSpacing]/[AppTextStyles] directly rather than through a
-/// [ThemeExtension] — there's no dark mode or multi-brand requirement yet.
+/// [AppColors]/[AppSpacing]/[AppShapes]/[AppTextStyles] directly rather than
+/// through a [ThemeExtension] — there's no dark mode or multi-brand
+/// requirement yet.
 ThemeData buildAppTheme() {
   return ThemeData(
     useMaterial3: true,
@@ -17,10 +18,10 @@ ThemeData buildAppTheme() {
       brightness: Brightness.light,
       surface: AppColors.bg,
     ),
-    textTheme: GoogleFonts.archivoTextTheme().apply(
-      bodyColor: AppColors.text,
-      displayColor: AppColors.text,
-    ),
+    // No `fontFamily`/`textTheme` override — Flutter's default resolves to
+    // the platform system font (SF Pro on iOS/macOS), which is what
+    // AppTextStyles builds on too. See its own doc comment for why Segoe UI
+    // isn't used here.
     textSelectionTheme: TextSelectionThemeData(
       cursorColor: AppColors.accent,
       selectionColor: AppColors.accent.withValues(alpha: 0.3),
@@ -36,10 +37,10 @@ ThemeData buildAppTheme() {
     // overlay directly.
     snackBarTheme: SnackBarThemeData(
       backgroundColor: AppColors.text,
-      contentTextStyle: AppTextStyles.label(color: AppColors.bg),
+      contentTextStyle: AppTextStyles.label(color: AppColors.surface),
       behavior: SnackBarBehavior.floating,
-      elevation: 0,
-      shape: const RoundedRectangleBorder(),
+      elevation: 4,
+      shape: const RoundedRectangleBorder(borderRadius: AppShapes.small),
     ),
   );
 }

@@ -23,6 +23,7 @@ import 'package:calendar_tracker/models/category.dart';
 import 'package:calendar_tracker/models/clock_time.dart';
 import 'package:calendar_tracker/models/goal.dart';
 import 'package:calendar_tracker/models/planned_block.dart';
+import 'package:calendar_tracker/shared/widgets/app_tab_bar.dart';
 import 'package:calendar_tracker/shared/widgets/dashed_border.dart';
 import 'package:calendar_tracker/shared/widgets/step_arrow_button.dart';
 import 'package:calendar_tracker/state/auth_providers.dart';
@@ -135,9 +136,31 @@ Future<List<Override>> _signedInOnboardedNoActivityOverrides() async {
 /// test that needs a field past step 1 has to walk there first.
 Future<void> _goalSheetNext(WidgetTester tester, [int times = 1]) async {
   for (var i = 0; i < times; i++) {
-    await tester.tap(find.text('NEXT'));
+    await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
   }
+}
+
+/// Taps a bottom tab by its label, scoped to [AppTabBar].
+///
+/// Scoped rather than a bare `find.text` because tab labels are sentence
+/// case since the Outlook restyle, and "Day" now also appears on the Day
+/// view's own view-mode button — a bare finder matches both.
+Future<void> _tapTab(WidgetTester tester, String label) async {
+  await tester.tap(
+    find.descendant(of: find.byType(AppTabBar), matching: find.text(label)),
+  );
+  await tester.pumpAndSettle();
+}
+
+/// The Day view's mode switcher is a single button (showing the current
+/// mode) that opens a dropdown menu of the other options — tap the button,
+/// then the target option's menu item.
+Future<void> _selectDayViewMode(WidgetTester tester, String label) async {
+  await tester.tap(find.byType(PopupMenuButton<DayViewMode>));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(label).last);
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -294,24 +317,21 @@ void main() {
       // already named by the header above.
       expect(find.text('THU 20'), findsNothing);
 
-      await tester.tap(find.text('3 Day'));
-      await tester.pumpAndSettle();
+      await _selectDayViewMode(tester, '3 Day');
       expect(tester.takeException(), isNull);
       expect(find.text('THU 20'), findsOneWidget);
       expect(find.text('FRI 21'), findsOneWidget);
       expect(find.text('SAT 22'), findsOneWidget);
       expect(find.text('SUN 23'), findsNothing);
 
-      await tester.tap(find.text('Working week'));
-      await tester.pumpAndSettle();
+      await _selectDayViewMode(tester, 'Working week');
       expect(tester.takeException(), isNull);
       // Anchored at the Monday of the selected day's week (17 Aug), 5 days.
       expect(find.text('MON 17'), findsOneWidget);
       expect(find.text('FRI 21'), findsOneWidget);
       expect(find.text('SAT 22'), findsNothing);
 
-      await tester.tap(find.text('Week'));
-      await tester.pumpAndSettle();
+      await _selectDayViewMode(tester, 'Week');
       expect(tester.takeException(), isNull);
       expect(find.text('MON 17'), findsOneWidget);
       expect(find.text('SUN 23'), findsOneWidget);
@@ -335,8 +355,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('3 Day'));
-      await tester.pumpAndSettle();
+      await _selectDayViewMode(tester, '3 Day');
 
       // 3-Day mode starting on mockDay (20 Aug): columns are 20/21/22 Aug —
       // tap into the third column (22 Aug). The fixture has no blocks at
@@ -387,9 +406,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    for (final tab in ['GOALS', 'ACCOUNT', 'DAY']) {
-      await tester.tap(find.text(tab));
-      await tester.pumpAndSettle();
+    for (final tab in ['Goals', 'Account', 'Day']) {
+      await _tapTab(tester, tab);
       expect(tester.takeException(), isNull, reason: 'after tapping $tab');
     }
   });
@@ -407,8 +425,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('GOALS'));
-    await tester.pumpAndSettle();
+    await _tapTab(tester, 'Goals');
     expect(container.read(currentTabIndexProvider), 1);
 
     // Goals has no competing horizontal gesture (unlike Day, which uses
@@ -436,8 +453,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('ACCOUNT'));
-      await tester.pumpAndSettle();
+      await _tapTab(tester, 'Account');
       expect(container.read(currentTabIndexProvider), 2);
 
       await tester.fling(
@@ -465,8 +481,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('ACCOUNT'));
-    await tester.pumpAndSettle();
+    await _tapTab(tester, 'Account');
     expect(container.read(currentTabIndexProvider), 2);
 
     // Account is already the last tab — swiping further "next" should
@@ -493,8 +508,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('ACCOUNT'));
-      await tester.pumpAndSettle();
+      await _tapTab(tester, 'Account');
 
       await tester.tap(find.text('capacity'));
       await tester.pumpAndSettle();
@@ -552,8 +566,7 @@ void main() {
           );
       await tester.pump();
 
-      await tester.tap(find.text('ACCOUNT'));
-      await tester.pumpAndSettle();
+      await _tapTab(tester, 'Account');
       await tester.tap(find.text('capacity'));
       await tester.pumpAndSettle();
 
@@ -573,8 +586,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('GOALS'));
-    await tester.pumpAndSettle();
+    await _tapTab(tester, 'Goals');
 
     expect(tester.takeException(), isNull);
     expect(find.text('Walking'), findsOneWidget);
@@ -630,8 +642,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('GOALS'));
-      await tester.pumpAndSettle();
+      await _tapTab(tester, 'Goals');
 
       // Only Walking has anything pending — Deep work's planned blocks are
       // all already covered.
@@ -676,8 +687,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('ACCOUNT'));
-      await tester.pumpAndSettle();
+      await _tapTab(tester, 'Account');
       await tester.tap(find.text('Activities'));
       await tester.pumpAndSettle();
 
@@ -722,8 +732,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('ACCOUNT'));
-      await tester.pumpAndSettle();
+      await _tapTab(tester, 'Account');
       await tester.tap(find.text('Activities'));
       await tester.pumpAndSettle();
 
@@ -742,8 +751,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('ACCOUNT'));
-    await tester.pumpAndSettle();
+    await _tapTab(tester, 'Account');
     await tester.tap(find.text('Activities'));
     await tester.pumpAndSettle();
 
@@ -808,8 +816,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('ACCOUNT'));
-      await tester.pumpAndSettle();
+      await _tapTab(tester, 'Account');
       await tester.tap(find.text('Activities'));
       await tester.pumpAndSettle();
 
@@ -839,7 +846,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('+ LOG'));
+    await tester.tap(find.text('+ Log'));
     await tester.pumpAndSettle();
 
     // Day defaults to whatever the app is currently showing (mockDay, a
@@ -874,8 +881,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('GOALS'));
-    await tester.pumpAndSettle();
+    await _tapTab(tester, 'Goals');
 
     await tester.tap(find.text('Walking'));
     await tester.pumpAndSettle();
@@ -906,8 +912,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('GOALS'));
-    await tester.pumpAndSettle();
+    await _tapTab(tester, 'Goals');
 
     await tester.tap(find.text('Walking'));
     await tester.pumpAndSettle();
@@ -981,8 +986,7 @@ void main() {
     // shows the original mock day untouched.
     await tester.tapAt(const Offset(200, 50));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('DAY'));
-    await tester.pumpAndSettle();
+    await _tapTab(tester, 'Day');
 
     expect(find.text('20 Aug'), findsOneWidget);
   });
@@ -998,8 +1002,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('GOALS'));
-      await tester.pumpAndSettle();
+      await _tapTab(tester, 'Goals');
 
       await tester.tap(find.text('Walking'));
       await tester.pumpAndSettle();
@@ -1066,8 +1069,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('GOALS'));
-      await tester.pumpAndSettle();
+      await _tapTab(tester, 'Goals');
       await tester.tap(find.text('Walking')); // ongoing, per mock_goals.dart
       await tester.pumpAndSettle();
 
@@ -1091,8 +1093,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('GOALS'));
-      await tester.pumpAndSettle();
+      await _tapTab(tester, 'Goals');
       // Walking: 1h Mon-Fri, 2h30 Sat-Sun, per mock_goals.dart.
       await tester.tap(find.text('Walking'));
       await tester.pumpAndSettle();
@@ -1156,8 +1157,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('GOALS'));
-    await tester.pumpAndSettle();
+    await _tapTab(tester, 'Goals');
 
     await tester.tap(find.text('Walking'));
     await tester.pumpAndSettle();
@@ -1167,9 +1167,9 @@ void main() {
 
     expect(find.text('Edit goal'), findsOneWidget);
 
-    await tester.ensureVisible(find.text('DELETE GOAL'));
+    await tester.ensureVisible(find.text('Delete goal'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('DELETE GOAL'));
+    await tester.tap(find.text('Delete goal'));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
@@ -1187,8 +1187,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('GOALS'));
-      await tester.pumpAndSettle();
+      await _tapTab(tester, 'Goals');
       await tester.tap(find.text('Walking'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('EDIT'));
@@ -1216,8 +1215,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('GOALS'));
-      await tester.pumpAndSettle();
+      await _tapTab(tester, 'Goals');
       await tester.tap(find.text('Walking'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('EDIT'));
@@ -1236,7 +1234,7 @@ void main() {
 
       expect(find.text('Save changes?'), findsOneWidget);
 
-      await tester.tap(find.text('KEEP EDITING'));
+      await tester.tap(find.text('Keep editing'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
@@ -1258,8 +1256,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('GOALS'));
-      await tester.pumpAndSettle();
+      await _tapTab(tester, 'Goals');
       await tester.tap(find.text('Walking'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('EDIT'));
@@ -1275,7 +1272,7 @@ void main() {
 
       await tester.tap(find.text('close'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('DISCARD'));
+      await tester.tap(find.text('Discard'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
@@ -1297,8 +1294,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('GOALS'));
-      await tester.pumpAndSettle();
+      await _tapTab(tester, 'Goals');
       await tester.tap(find.text('Walking'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('EDIT'));
@@ -1314,7 +1310,7 @@ void main() {
 
       await tester.tap(find.text('close'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('SAVE'));
+      await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
@@ -1336,9 +1332,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('GOALS'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('+ NEW GOAL'));
+      await _tapTab(tester, 'Goals');
+      await tester.tap(find.text('+ New goal'));
       await tester.pumpAndSettle();
       await _goalSheetNext(tester); // step 1 (Category) -> step 2 (Name & dates)
 
@@ -1357,7 +1352,7 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('Save changes?'), findsOneWidget);
 
-      await tester.tap(find.text('KEEP EDITING'));
+      await tester.tap(find.text('Keep editing'));
       await tester.pumpAndSettle();
 
       expect(find.text('Edit goal'), findsNothing); // still "New goal"
@@ -1404,8 +1399,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('GOALS'));
-      await tester.pumpAndSettle();
+      await _tapTab(tester, 'Goals');
 
       await tester.tap(find.text('Work'));
       await tester.pumpAndSettle();
@@ -1443,10 +1437,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('GOALS'));
-    await tester.pumpAndSettle();
+    await _tapTab(tester, 'Goals');
 
-    await tester.tap(find.text('+ NEW GOAL'));
+    await tester.tap(find.text('+ New goal'));
     await tester.pumpAndSettle();
 
     expect(find.text('New goal'), findsOneWidget);
@@ -1496,14 +1489,14 @@ void main() {
     // Monday's total and its one entry both now read "45m".
     expect(find.text('45m'), findsNWidgets(2));
 
-    await tester.ensureVisible(find.text('NEXT'));
+    await tester.ensureVisible(find.text('Next'));
     await tester.pumpAndSettle();
     await _goalSheetNext(tester);
 
     // Step 4: Reminders — submit without touching it.
-    await tester.ensureVisible(find.text('CREATE GOAL'));
+    await tester.ensureVisible(find.text('Create goal'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('CREATE GOAL'));
+    await tester.tap(find.text('Create goal'));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
@@ -1524,9 +1517,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('GOALS'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('+ NEW GOAL'));
+    await _tapTab(tester, 'Goals');
+    await tester.tap(find.text('+ New goal'));
     await tester.pumpAndSettle();
 
     // Step 1: Category -> Step 2: Name & dates.
@@ -1549,9 +1541,9 @@ void main() {
     await tester.tap(find.text('15 min before'));
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('CREATE GOAL'));
+    await tester.ensureVisible(find.text('Create goal'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('CREATE GOAL'));
+    await tester.tap(find.text('Create goal'));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
@@ -1572,10 +1564,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('GOALS'));
-      await tester.pumpAndSettle();
+      await _tapTab(tester, 'Goals');
 
-      await tester.tap(find.text('+ NEW GOAL'));
+      await tester.tap(find.text('+ New goal'));
       await tester.pumpAndSettle();
       // Schedule is step 3 (Category -> Name & dates -> Schedule).
       await _goalSheetNext(tester, 2);
@@ -1637,10 +1628,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('GOALS'));
-      await tester.pumpAndSettle();
+      await _tapTab(tester, 'Goals');
 
-      await tester.tap(find.text('+ NEW GOAL'));
+      await tester.tap(find.text('+ New goal'));
       await tester.pumpAndSettle();
       // Schedule is step 3 (Category -> Name & dates -> Schedule).
       await _goalSheetNext(tester, 2);
@@ -1710,10 +1700,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('GOALS'));
-      await tester.pumpAndSettle();
+      await _tapTab(tester, 'Goals');
 
-      await tester.tap(find.text('+ NEW GOAL'));
+      await tester.tap(find.text('+ New goal'));
       await tester.pumpAndSettle();
       await _goalSheetNext(tester); // step 1 (Category) -> step 2 (Name & dates)
 
@@ -1725,9 +1714,9 @@ void main() {
       await tester.pumpAndSettle();
       await _goalSheetNext(tester, 2); // -> step 3 (Schedule) -> step 4 (Reminders)
 
-      await tester.ensureVisible(find.text('CREATE GOAL'));
+      await tester.ensureVisible(find.text('Create goal'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('CREATE GOAL'));
+      await tester.tap(find.text('Create goal'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
@@ -1735,8 +1724,7 @@ void main() {
       // Back on the Day tab automatically (creating a goal doesn't navigate,
       // but the app opens on Day and the sheet closes onto whatever's behind
       // it — Goals in this case, so switch to Day explicitly).
-      await tester.tap(find.text('DAY'));
-      await tester.pumpAndSettle();
+      await _tapTab(tester, 'Day');
 
       // The new goal is a duration-mode target with no fixed time — a plain
       // duration has nowhere real to be placed, so it must not appear on the
@@ -1762,10 +1750,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('GOALS'));
-      await tester.pumpAndSettle();
+      await _tapTab(tester, 'Goals');
 
-      await tester.tap(find.text('+ NEW GOAL'));
+      await tester.tap(find.text('+ New goal'));
       await tester.pumpAndSettle();
       await _goalSheetNext(tester); // step 1 (Category) -> step 2 (Name & dates)
 
@@ -1777,9 +1764,9 @@ void main() {
       await tester.pumpAndSettle();
       await _goalSheetNext(tester, 2); // -> step 3 (Schedule) -> step 4 (Reminders)
 
-      await tester.ensureVisible(find.text('CREATE GOAL'));
+      await tester.ensureVisible(find.text('Create goal'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('CREATE GOAL'));
+      await tester.tap(find.text('Create goal'));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Piano'));
@@ -1818,10 +1805,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('GOALS'));
-    await tester.pumpAndSettle();
+    await _tapTab(tester, 'Goals');
 
-    await tester.tap(find.text('+ NEW GOAL'));
+    await tester.tap(find.text('+ New goal'));
     await tester.pumpAndSettle();
     // Schedule is step 3 (Category -> Name & dates -> Schedule).
     await _goalSheetNext(tester, 2);
@@ -1868,16 +1854,16 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('+ LOG'));
+      await tester.tap(find.text('+ Log'));
       await tester.pumpAndSettle();
 
       // Day defaults, but activity/start/end/goal are all still unset.
       await tester.enterText(find.byType(TextField).first, 'Forgot the rest');
       await tester.pumpAndSettle();
 
-      await tester.ensureVisible(find.text('SAVE ENTRY'));
+      await tester.ensureVisible(find.text('Save entry'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('SAVE ENTRY'));
+      await tester.tap(find.text('Save entry'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
@@ -1911,7 +1897,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('+ LOG'));
+    await tester.tap(find.text('+ Log'));
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField).first, 'Sunday walk');
@@ -1922,9 +1908,9 @@ void main() {
     // activity, and time all filled in, goal chip never tapped.
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('SAVE ENTRY'));
+    await tester.ensureVisible(find.text('Save entry'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('SAVE ENTRY'));
+    await tester.tap(find.text('Save entry'));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
@@ -1952,7 +1938,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('+ LOG'));
+    await tester.tap(find.text('+ Log'));
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField).first, 'No time set');
@@ -1967,9 +1953,9 @@ void main() {
     // Deliberately no start/end.
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('SAVE ENTRY'));
+    await tester.ensureVisible(find.text('Save entry'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('SAVE ENTRY'));
+    await tester.tap(find.text('Save entry'));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
@@ -1999,7 +1985,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('+ LOG'));
+    await tester.tap(find.text('+ Log'));
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField).first, 'Recovered entry');
@@ -2008,9 +1994,9 @@ void main() {
       ..setEnd(const TimeOfDay(hour: 18, minute: 15));
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('SAVE ENTRY'));
+    await tester.ensureVisible(find.text('Save entry'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('SAVE ENTRY'));
+    await tester.tap(find.text('Save entry'));
     await tester.pumpAndSettle();
 
     // First attempt fails (no goal) — same as the test above.
@@ -2027,9 +2013,9 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('SAVE ENTRY'));
+    await tester.ensureVisible(find.text('Save entry'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('SAVE ENTRY'));
+    await tester.tap(find.text('Save entry'));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
@@ -2060,7 +2046,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('+ LOG'));
+      await tester.tap(find.text('+ Log'));
       await tester.pumpAndSettle();
 
       // No text entered in the Activity field at all.
@@ -2070,9 +2056,9 @@ void main() {
         ..setGoal('goal-walking');
       await tester.pumpAndSettle();
 
-      await tester.ensureVisible(find.text('SAVE ENTRY'));
+      await tester.ensureVisible(find.text('Save entry'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('SAVE ENTRY'));
+      await tester.tap(find.text('Save entry'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
@@ -2094,7 +2080,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('+ LOG'));
+      await tester.tap(find.text('+ Log'));
       await tester.pumpAndSettle();
 
       // Scoped to the sheet — the Day view's drift footer also shows
@@ -2111,7 +2097,7 @@ void main() {
       await tester.tap(find.text('close'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('+ LOG'));
+      await tester.tap(find.text('+ Log'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
@@ -2134,7 +2120,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('+ LOG'));
+    await tester.tap(find.text('+ Log'));
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField).first, 'Evening walk');
@@ -2144,9 +2130,9 @@ void main() {
       ..setGoal('goal-walking');
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('SAVE ENTRY'));
+    await tester.ensureVisible(find.text('Save entry'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('SAVE ENTRY'));
+    await tester.tap(find.text('Save entry'));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
@@ -2176,7 +2162,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('+ LOG'));
+      await tester.tap(find.text('+ Log'));
       await tester.pumpAndSettle();
 
       await tester.enterText(find.byType(TextField).first, 'Evening walk');
@@ -2187,9 +2173,9 @@ void main() {
         ..setNote('felt great, new personal best pace');
       await tester.pumpAndSettle();
 
-      await tester.ensureVisible(find.text('SAVE ENTRY'));
+      await tester.ensureVisible(find.text('Save entry'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('SAVE ENTRY'));
+      await tester.tap(find.text('Save entry'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
@@ -2200,8 +2186,7 @@ void main() {
 
       // The Day view's block only shows title + source, not the note — the
       // Activities list is where the note itself renders.
-      await tester.tap(find.text('ACCOUNT'));
-      await tester.pumpAndSettle();
+      await _tapTab(tester, 'Account');
       await tester.tap(find.text('Activities'));
       await tester.pumpAndSettle();
       expect(find.text('felt great, new personal best pace'), findsOneWidget);
@@ -2224,7 +2209,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('+ LOG'));
+      await tester.tap(find.text('+ Log'));
       await tester.pumpAndSettle();
 
       await tester.enterText(find.byType(TextField).first, 'Quiet walk');
@@ -2234,9 +2219,9 @@ void main() {
         ..setGoal('goal-walking');
       await tester.pumpAndSettle();
 
-      await tester.ensureVisible(find.text('SAVE ENTRY'));
+      await tester.ensureVisible(find.text('Save entry'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('SAVE ENTRY'));
+      await tester.tap(find.text('Save entry'));
       await tester.pumpAndSettle();
 
       final tracked = container
@@ -2263,7 +2248,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('+ LOG'));
+      await tester.tap(find.text('+ Log'));
       await tester.pumpAndSettle();
 
       // mockDay is 20 Aug 2026 — log this one for the day before instead.
@@ -2277,9 +2262,9 @@ void main() {
 
       expect(find.text('Wed, 19 Aug 2026'), findsOneWidget);
 
-      await tester.ensureVisible(find.text('SAVE ENTRY'));
+      await tester.ensureVisible(find.text('Save entry'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('SAVE ENTRY'));
+      await tester.tap(find.text('Save entry'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
@@ -2295,8 +2280,7 @@ void main() {
       // 19th) doesn't render there — the Activities list shows every day,
       // so the entry does show up there, filed under the 19th's own
       // section, not the 20th's.
-      await tester.tap(find.text('ACCOUNT'));
-      await tester.pumpAndSettle();
+      await _tapTab(tester, 'Account');
       await tester.tap(find.text('Activities'));
       await tester.pumpAndSettle();
       expect(find.text('WEDNESDAY, 19 AUG'), findsOneWidget);
@@ -2358,8 +2342,7 @@ void main() {
       // The new 1.5h planned block is on top of whatever was already planned.
       expect(walking.plannedHours, greaterThanOrEqualTo(1.5));
 
-      await tester.tap(find.text('GOALS'));
-      await tester.pumpAndSettle();
+      await _tapTab(tester, 'Goals');
 
       expect(tester.takeException(), isNull);
       expect(find.textContaining('planned'), findsWidgets);
@@ -2377,8 +2360,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('GOALS'));
-      await tester.pumpAndSettle();
+      await _tapTab(tester, 'Goals');
 
       await tester.tap(find.text('categories'));
       await tester.pumpAndSettle();
@@ -2386,11 +2368,11 @@ void main() {
       expect(find.byType(CategoriesScreen), findsOneWidget);
       expect(find.text('Walking'), findsOneWidget);
 
-      await tester.tap(find.text('+ NEW CATEGORY'));
+      await tester.tap(find.text('+ New category'));
       await tester.pumpAndSettle();
 
       await tester.enterText(find.byType(TextField), 'Reading');
-      await tester.tap(find.text('CREATE CATEGORY'));
+      await tester.tap(find.text('Create category'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
@@ -2402,17 +2384,15 @@ void main() {
       // Logging is goal-first now — the bare category alone isn't enough to
       // log against; there needs to be a goal for it too. Logging itself now
       // lives on the Day tab, not Account.
-      await tester.tap(find.text('DAY'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('+ LOG'));
+      await _tapTab(tester, 'Day');
+      await tester.tap(find.text('+ Log'));
       await tester.pumpAndSettle();
       expect(find.text('reading'), findsNothing);
       await tester.tap(find.text('close'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('GOALS'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('+ NEW GOAL'));
+      await _tapTab(tester, 'Goals');
+      await tester.tap(find.text('+ New goal'));
       await tester.pumpAndSettle();
 
       // Step 1: Category.
@@ -2435,14 +2415,13 @@ void main() {
       await tester.pumpAndSettle();
       await _goalSheetNext(tester, 2); // -> step 3 (Schedule) -> step 4 (Reminders)
 
-      await tester.ensureVisible(find.text('CREATE GOAL'));
+      await tester.ensureVisible(find.text('Create goal'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('CREATE GOAL'));
+      await tester.tap(find.text('Create goal'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('DAY'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('+ LOG'));
+      await _tapTab(tester, 'Day');
+      await tester.tap(find.text('+ Log'));
       await tester.pumpAndSettle();
 
       expect(find.text('reading'), findsOneWidget); // now selectable, by goal
@@ -2491,8 +2470,7 @@ void main() {
       isFalse,
     );
 
-    await tester.tap(find.text('GOALS'));
-    await tester.pumpAndSettle();
+    await _tapTab(tester, 'Goals');
 
     expect(tester.takeException(), isNull);
     expect(find.text('Next month challenge'), findsNothing);
@@ -2523,14 +2501,13 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('GOALS'));
-      await tester.pumpAndSettle();
+      await _tapTab(tester, 'Goals');
 
-      await tester.tap(find.text('+ NEW GOAL'));
+      await tester.tap(find.text('+ New goal'));
       await tester.pumpAndSettle();
 
       expect(find.text('Create a category first'), findsOneWidget);
-      expect(find.text('CREATE GOAL'), findsNothing);
+      expect(find.text('Create goal'), findsNothing);
     },
   );
 
@@ -2633,7 +2610,7 @@ void main() {
       // next to the title, to keep the sheet as short as possible.
       expect(find.text('save'), findsOneWidget);
       expect(find.text('ADD PLAN'), findsNothing);
-      expect(find.text('SAVE ACTIVITY'), findsNothing);
+      expect(find.text('Save activity'), findsNothing);
     },
   );
 
@@ -2800,7 +2777,7 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('Save this activity?'), findsOneWidget);
 
-      await tester.tap(find.text('CANCEL'));
+      await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
 
       expect(find.text('save'), findsNothing);
@@ -2852,7 +2829,7 @@ void main() {
 
       expect(find.text('Save this activity?'), findsOneWidget);
 
-      await tester.tap(find.text('SAVE'));
+      await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
@@ -2903,7 +2880,7 @@ void main() {
 
       expect(find.text('Save this activity?'), findsOneWidget);
 
-      await tester.tap(find.text('SAVE'));
+      await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
@@ -2991,8 +2968,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('GOALS'));
-      await tester.pumpAndSettle();
+      await _tapTab(tester, 'Goals');
       await tester.tap(find.text('Walking'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('EDIT'));
@@ -3018,9 +2994,9 @@ void main() {
         reason: 'the stored 30-minute lead time should open pre-selected',
       );
 
-      await tester.ensureVisible(find.text('SAVE CHANGES'));
+      await tester.ensureVisible(find.text('Save changes'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('SAVE CHANGES'));
+      await tester.tap(find.text('Save changes'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
@@ -3045,8 +3021,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('GOALS'));
-    await tester.pumpAndSettle();
+    await _tapTab(tester, 'Goals');
     await tester.tap(find.text('categories'));
     await tester.pumpAndSettle();
 
@@ -3056,7 +3031,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField), 'Strolling');
-    await tester.tap(find.text('SAVE CHANGES'));
+    await tester.tap(find.text('Save changes'));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
@@ -3080,17 +3055,16 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('GOALS'));
-      await tester.pumpAndSettle();
+      await _tapTab(tester, 'Goals');
       await tester.tap(find.text('categories'));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Walking'));
       await tester.pumpAndSettle();
 
-      await tester.ensureVisible(find.text('DELETE CATEGORY'));
+      await tester.ensureVisible(find.text('Delete category'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('DELETE CATEGORY'));
+      await tester.tap(find.text('Delete category'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
@@ -3100,8 +3074,7 @@ void main() {
       // now-deleted category — it must render, not throw.
       await tester.tap(find.text('close'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('DAY'));
-      await tester.pumpAndSettle();
+      await _tapTab(tester, 'Day');
 
       expect(tester.takeException(), isNull);
     },
@@ -3118,8 +3091,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('ACCOUNT'));
-    await tester.pumpAndSettle();
+    await _tapTab(tester, 'Account');
 
     expect(find.text('test@example.com'), findsOneWidget);
   });
@@ -3135,14 +3107,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('ACCOUNT'));
-    await tester.pumpAndSettle();
+    await _tapTab(tester, 'Account');
 
-    await tester.tap(find.text('SIGN OUT'));
+    await tester.tap(find.text('Sign out'));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(find.text('SIGN IN'), findsOneWidget);
+    expect(find.text('Sign in'), findsOneWidget);
     expect(find.byType(RootShell), findsNothing);
   });
 }

@@ -12,6 +12,7 @@ import '../../../state/day_view_providers.dart';
 import '../../../state/goals_providers.dart';
 import '../../../state/log_entry_providers.dart';
 import '../../../theme/app_colors.dart';
+import '../../../theme/app_shapes.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../utils/duration_format.dart';
@@ -23,7 +24,7 @@ import '../../../utils/duration_format.dart';
 Future<void> showLogActivitySheet(BuildContext context, WidgetRef ref) {
   return showModalBottomSheet<void>(
     context: context,
-    backgroundColor: AppColors.bg,
+    backgroundColor: AppColors.surface,
     isScrollControlled: true,
     builder: (context) => LogActivitySheet(ref: ref),
   );
@@ -155,8 +156,9 @@ class _LogActivitySheetState extends ConsumerState<LogActivitySheet> {
       ),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: AppColors.bg,
-          border: Border(top: BorderSide(color: AppColors.text, width: 2)),
+          color: AppColors.surface,
+          border: Border(top: BorderSide(color: AppColors.divider)),
+            borderRadius: AppShapes.sheetTop,
         ),
         child: SafeArea(
           top: false,
@@ -305,13 +307,16 @@ class _LogActivitySheetState extends ConsumerState<LogActivitySheet> {
                       width: double.infinity,
                       constraints: const BoxConstraints(minHeight: 44),
                       alignment: Alignment.centerLeft,
-                      color: AppColors.accent,
+                      decoration: const BoxDecoration(
+                        color: AppColors.accent,
+                        borderRadius: AppShapes.small,
+                      ),
                       padding: const EdgeInsets.symmetric(
                         horizontal: AppSpacing.s3,
                       ),
                       child: Text(
-                        'SAVE ENTRY',
-                        style: AppTextStyles.small(color: AppColors.bg),
+                        'Save entry',
+                        style: AppTextStyles.small(color: AppColors.surface),
                       ),
                     ),
                   ),
@@ -371,7 +376,7 @@ class _TimeField extends StatelessWidget {
             alignment: Alignment.centerLeft,
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s2),
             decoration: BoxDecoration(
-              border: Border.all(color: AppColors.divider),
+              border: Border.all(color: AppColors.neutral500), borderRadius: AppShapes.small,
             ),
             child: Text(
               value == null

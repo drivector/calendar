@@ -6,11 +6,13 @@ import '../../../models/tracked_block.dart';
 import '../../../shared/widgets/dashed_border.dart';
 import '../../../theme/app_category_colors.dart';
 import '../../../theme/app_colors.dart';
+import '../../../theme/app_shapes.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../theme/app_text_styles.dart';
 
-/// A tracked block: 15%-tint fill, 3px solid left border in the category
-/// color, title plus a monospace source line. Tapping opens a detail sheet.
+/// A tracked block, styled like an Outlook calendar event chip: rounded,
+/// a pale category tint, a solid category bar down the left edge, subject
+/// on top and a quieter source line beneath. Tapping opens a detail sheet.
 /// When [TrackedBlock.plannedBlockId] links this entry back to a planned
 /// block (logged by hand against an existing plan, or created by the
 /// goal list's "complete" button), a dashed outline wraps the whole block
@@ -34,6 +36,7 @@ class ActualBlockWidget extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppCategoryColors.blockFill(category.color),
         border: Border(left: BorderSide(color: category.color, width: 3)),
+        borderRadius: AppShapes.small,
       ),
       padding: const EdgeInsets.all(AppSpacing.s1),
       // maxLines/ellipsis on both lines — a narrow multi-day column
@@ -46,7 +49,9 @@ class ActualBlockWidget extends StatelessWidget {
         children: [
           Text(
             block.title,
-            style: AppTextStyles.label(),
+            // Outlook sets an event's subject a notch heavier than body
+            // text, with the secondary line beneath it staying quiet.
+            style: AppTextStyles.label().copyWith(fontWeight: FontWeight.w600),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -77,7 +82,7 @@ void _showDetailSheet(
 ) {
   showModalBottomSheet<void>(
     context: context,
-    backgroundColor: AppColors.bg,
+    backgroundColor: AppColors.surface,
     builder: (context) {
       return Padding(
         padding: const EdgeInsets.all(AppSpacing.s4),

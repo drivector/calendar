@@ -6,6 +6,7 @@ import '../../shared/widgets/segmented_control.dart';
 import '../../state/auth_providers.dart';
 import '../../state/root_shell_providers.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_shapes.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 import '../log_activity/widgets/activities_list.dart';
@@ -45,9 +46,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
           children: [
             DecoratedBox(
               decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(color: AppColors.text, width: 2),
-                ),
+                border: Border(bottom: BorderSide(color: AppColors.divider)),
               ),
               child: Padding(
                 padding: const EdgeInsets.symmetric(
@@ -120,10 +119,10 @@ class _AccountDetails extends ConsumerWidget {
               alignment: Alignment.center,
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s2),
               decoration: BoxDecoration(
-                border: Border.all(color: AppColors.text, width: 1.5),
+                border: Border.all(color: AppColors.neutral500), borderRadius: AppShapes.small,
               ),
               child: Text(
-                'SIGN OUT',
+                'Sign out',
                 style: AppTextStyles.small(color: AppColors.text),
               ),
             ),

@@ -239,11 +239,13 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
       top: startMinute * _pxPerMinute,
       left: left,
       width: width,
-      // 44px minimum — short blocks (e.g. a 30-minute manual entry) need
+      // 52px minimum — short blocks (e.g. a 30-minute manual entry) need
       // room for two lines of text without overflowing; the original mock
       // data happened to always be >=40 minutes, which is why this only
-      // surfaced once a shorter block was added.
-      height: (durationMinutes * _pxPerMinute).clamp(44.0, double.infinity),
+      // surfaced once a shorter block was added. Raised from 44 when the
+      // Outlook restyle grew the type ramp (label 12→14, mono 11→12): the
+      // two lines plus padding no longer fit the old minimum.
+      height: (durationMinutes * _pxPerMinute).clamp(52.0, double.infinity),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(2, 0, 2, 2),
         child: child,
@@ -283,7 +285,11 @@ class _HourGridLine extends StatelessWidget {
               child: Container(
                 height: 1,
                 margin: const EdgeInsets.only(top: 5),
-                color: hour % 6 == 0 ? AppColors.divider : AppColors.ink(0.08),
+                // Outlook's grid is near-invisible: a hairline per hour,
+                // a touch stronger every 6 to keep the day scannable.
+                color: hour % 6 == 0
+                    ? AppColors.neutral500
+                    : AppColors.neutral400,
               ),
             ),
           ],

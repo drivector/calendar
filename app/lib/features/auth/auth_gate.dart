@@ -11,6 +11,7 @@ import '../../state/categories_providers.dart';
 import '../../state/goal_reminder_providers.dart';
 import '../../state/goals_providers.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_shapes.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 import '../onboarding/onboarding_screen.dart';
@@ -146,11 +147,14 @@ class _UnverifiedEmailGateState extends ConsumerState<_UnverifiedEmailGate> {
               width: double.infinity,
               constraints: const BoxConstraints(minHeight: 44),
               alignment: Alignment.center,
-              color: AppColors.accent,
+              decoration: const BoxDecoration(
+                color: AppColors.accent,
+                borderRadius: AppShapes.small,
+              ),
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s3),
               child: Text(
-                _busy ? 'PLEASE WAIT' : "I'VE VERIFIED — CONTINUE",
-                style: AppTextStyles.small(color: AppColors.bg),
+                _busy ? 'Please wait' : "I've verified — continue",
+                style: AppTextStyles.small(color: AppColors.surface),
               ),
             ),
           ),

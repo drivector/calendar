@@ -14,6 +14,7 @@ import '../../../state/categories_providers.dart';
 import '../../../state/day_view_providers.dart';
 import '../../../state/goals_providers.dart';
 import '../../../theme/app_colors.dart';
+import '../../../theme/app_shapes.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../utils/duration_format.dart';
@@ -32,7 +33,7 @@ Future<void> showGoalDetailSheet(
 ) {
   return showModalBottomSheet<void>(
     context: context,
-    backgroundColor: AppColors.bg,
+    backgroundColor: AppColors.surface,
     isScrollControlled: true,
     builder: (context) => GoalDetailSheet(goalId: goalId, ref: ref),
   );
@@ -147,8 +148,9 @@ class _GoalDetailSheetState extends ConsumerState<GoalDetailSheet> {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: AppColors.bg,
-        border: Border(top: BorderSide(color: AppColors.text, width: 2)),
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.divider)),
+            borderRadius: AppShapes.sheetTop,
       ),
       child: SafeArea(
         top: false,

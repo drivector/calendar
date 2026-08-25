@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../theme/app_colors.dart';
+import '../../theme/app_shapes.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 
@@ -44,7 +45,11 @@ class DateField extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: 44),
         alignment: Alignment.centerLeft,
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s2),
-        decoration: BoxDecoration(border: Border.all(color: AppColors.divider)),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          border: Border.all(color: AppColors.neutral500),
+          borderRadius: AppShapes.small,
+        ),
         child: Text(
           value == null ? 'set day' : DateFormat('EEE, d MMM y').format(value!),
           style: AppTextStyles.label(),

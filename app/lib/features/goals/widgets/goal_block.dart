@@ -6,6 +6,7 @@ import '../../../models/goal_progress.dart';
 import '../../../state/categories_providers.dart';
 import '../../../theme/app_category_colors.dart';
 import '../../../theme/app_colors.dart';
+import '../../../theme/app_shapes.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../utils/duration_format.dart';
@@ -26,10 +27,21 @@ class GoalBlock extends ConsumerWidget {
         ? '/ ${formatDuration(goal.targetForWeekday(DateTime.monday))} per day'
         : '/ varies by day';
 
+    // A white Fluent card lifted off the canvas, with the category colour
+    // as a bar down its leading edge — the same anatomy as an Outlook
+    // calendar chip, at list scale.
     return Container(
-      padding: const EdgeInsets.only(left: AppSpacing.s3),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.s3,
+        AppSpacing.s2,
+        AppSpacing.s3,
+        AppSpacing.s2,
+      ),
       decoration: BoxDecoration(
+        color: AppColors.surface,
         border: Border(left: BorderSide(color: category.color, width: 3)),
+        borderRadius: AppShapes.medium,
+        boxShadow: AppShapes.shadow2,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -101,7 +113,7 @@ class CompleteGoalButton extends StatelessWidget {
         height: 32,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          border: Border.all(color: AppColors.text, width: 1.5),
+          border: Border.all(color: AppColors.neutral500), borderRadius: AppShapes.small,
         ),
         child: Text(
           '✓',
@@ -130,17 +142,34 @@ class GoalProgressBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 14,
+      height: 8,
       child: Stack(
+        clipBehavior: Clip.none,
         children: [
+          // Only the track and fill are clipped to the rounded pill —
+          // Fluent progress bars are slim and fully rounded, not the
+          // chunky square meter the flat system used. The pace marker
+          // below deliberately overhangs the bar, so it stays outside
+          // this clip or it would be cut off.
           Positioned.fill(
-            child: ColoredBox(color: AppCategoryColors.blockFill(category)),
-          ),
-          Positioned.fill(
-            child: FractionallySizedBox(
-              alignment: Alignment.centerLeft,
-              widthFactor: progress.completionFraction,
-              child: ColoredBox(color: category),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: ColoredBox(
+                      color: AppCategoryColors.blockFill(category),
+                    ),
+                  ),
+                  Positioned.fill(
+                    child: FractionallySizedBox(
+                      alignment: Alignment.centerLeft,
+                      widthFactor: progress.completionFraction,
+                      child: ColoredBox(color: category),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           Positioned(

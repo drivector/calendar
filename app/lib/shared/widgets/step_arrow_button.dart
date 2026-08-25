@@ -1,14 +1,14 @@
 import 'package:flutter/widgets.dart';
 
 import '../../theme/app_colors.dart';
+import '../../theme/app_shapes.dart';
 
 enum StepDirection { previous, next }
 
-/// A flat, bordered "‹"/"›" button — same visual language as the goal
-/// sheet's +/- steppers, reused here for day/week navigation. The chevron
-/// is accent-colored (the border stays neutral) to tie the control to the
-/// app's one accent color without needing a filled/colored background,
-/// which the flat design system doesn't otherwise use for buttons.
+/// A subtle "‹"/"›" navigation button — same visual language as the goal
+/// sheet's +/- steppers, reused here for day/week navigation. Outlook keeps
+/// these quiet: a hairline-bordered white square with a neutral chevron,
+/// rather than a filled or accented control.
 class StepArrowButton extends StatelessWidget {
   const StepArrowButton({
     super.key,
@@ -29,15 +29,17 @@ class StepArrowButton extends StatelessWidget {
         height: 32,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          border: Border.all(color: AppColors.text, width: 1.5),
+          color: AppColors.surface,
+          border: Border.all(color: AppColors.neutral500),
+          borderRadius: AppShapes.small,
         ),
         child: Text(
           direction == StepDirection.previous ? '‹' : '›',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
             height: 1,
-            color: AppColors.accent,
+            color: AppColors.textSecondary,
           ),
         ),
       ),

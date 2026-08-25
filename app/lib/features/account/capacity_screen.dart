@@ -46,9 +46,7 @@ class CapacityScreen extends ConsumerWidget {
           children: [
             DecoratedBox(
               decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(color: AppColors.text, width: 2),
-                ),
+                border: Border(bottom: BorderSide(color: AppColors.divider)),
               ),
               child: Padding(
                 padding: const EdgeInsets.symmetric(

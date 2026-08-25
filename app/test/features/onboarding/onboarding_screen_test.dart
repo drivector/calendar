@@ -108,7 +108,7 @@ void main() {
 
       // GoalEditSheet is a 4-step wizard now (Category → Name & dates →
       // Schedule → Reminders) — step 1 is already pre-scoped to Exercise.
-      await tester.tap(find.text('NEXT'));
+      await tester.tap(find.text('Next'));
       await tester.pumpAndSettle();
 
       final nameField = find.descendant(
@@ -118,14 +118,14 @@ void main() {
       await tester.enterText(nameField, 'Running');
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('NEXT'));
+      await tester.tap(find.text('Next'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('NEXT'));
+      await tester.tap(find.text('Next'));
       await tester.pumpAndSettle();
 
-      await tester.ensureVisible(find.text('CREATE GOAL'));
+      await tester.ensureVisible(find.text('Create goal'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('CREATE GOAL'));
+      await tester.tap(find.text('Create goal'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);

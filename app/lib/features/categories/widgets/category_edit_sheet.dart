@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/category.dart';
 import '../../../state/categories_providers.dart';
 import '../../../theme/app_colors.dart';
+import '../../../theme/app_shapes.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../theme/app_text_styles.dart';
 
@@ -16,7 +17,7 @@ Future<void> showCategoryEditSheet(
 }) {
   return showModalBottomSheet<void>(
     context: context,
-    backgroundColor: AppColors.bg,
+    backgroundColor: AppColors.surface,
     isScrollControlled: true,
     builder: (context) => _CategoryEditSheet(existing: existing, ref: ref),
   );
@@ -73,8 +74,9 @@ class _CategoryEditSheetState extends State<_CategoryEditSheet> {
       ),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: AppColors.bg,
-          border: Border(top: BorderSide(color: AppColors.text, width: 2)),
+          color: AppColors.surface,
+          border: Border(top: BorderSide(color: AppColors.divider)),
+            borderRadius: AppShapes.sheetTop,
         ),
         child: SafeArea(
           top: false,
@@ -133,13 +135,16 @@ class _CategoryEditSheetState extends State<_CategoryEditSheet> {
                     width: double.infinity,
                     constraints: const BoxConstraints(minHeight: 44),
                     alignment: Alignment.centerLeft,
-                    color: AppColors.accent,
+                    decoration: const BoxDecoration(
+                      color: AppColors.accent,
+                      borderRadius: AppShapes.small,
+                    ),
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.s3,
                     ),
                     child: Text(
-                      _isEditing ? 'SAVE CHANGES' : 'CREATE CATEGORY',
-                      style: AppTextStyles.small(color: AppColors.bg),
+                      _isEditing ? 'Save changes' : 'Create category',
+                      style: AppTextStyles.small(color: AppColors.surface),
                     ),
                   ),
                 ),
@@ -153,7 +158,7 @@ class _CategoryEditSheetState extends State<_CategoryEditSheet> {
                       constraints: const BoxConstraints(minHeight: 44),
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        'DELETE CATEGORY',
+                        'Delete category',
                         style: AppTextStyles.small(color: AppColors.accent),
                       ),
                     ),

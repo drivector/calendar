@@ -43,16 +43,19 @@ Category resolveCategory(List<Category> categories, String id) {
   return _unknownCategory;
 }
 
-/// A curated palette at the design system's fixed lightness/chroma
-/// (`oklch(0.58 0.19 <hue>)`) — new categories pick from these rather than
-/// a free-form color picker, keeping every category visually consistent
-/// with the existing ones.
+/// Outlook's calendar-category palette — new categories pick from these
+/// rather than a free-form color picker, keeping every category consistent
+/// with the built-in ones (see `theme/app_category_colors.dart`).
+///
+/// Deliberately no longer starts with `AppColors.accent`: with the accent
+/// now being Outlook blue, a pinned-accent entry would have duplicated the
+/// blue below.
 const categoryColorPalette = [
-  AppColors.accent, // pinned red, hue ~15
-  Color(0xFFCD4B00), // orange, hue 50
-  Color(0xFF009520), // green, hue 145
-  Color(0xFF0097A6), // teal, hue 200
-  Color(0xFF0278E7), // blue, hue 255
-  Color(0xFF8E57D8), // purple, hue 300
-  Color(0xFFA94BBE), // magenta, hue 320
+  Color(0xFF0078D4), // blue
+  Color(0xFF107C10), // green
+  Color(0xFFD83B01), // orange
+  Color(0xFF5C2E91), // purple
+  Color(0xFFD13438), // red
+  Color(0xFF008272), // teal
+  Color(0xFFC19C00), // gold
 ];

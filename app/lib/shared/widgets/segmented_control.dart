@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../../theme/app_colors.dart';
+import '../../theme/app_shapes.dart';
 import '../../theme/app_text_styles.dart';
 
 class SegmentedOption<T> {
@@ -10,8 +11,9 @@ class SegmentedOption<T> {
   final String label;
 }
 
-/// The "Day | Plan + actual" style control: 1px ink border, active option
-/// filled ink with a white label, flush 3-line padding.
+/// A Fluent-style segmented control: a rounded neutral track with the
+/// active segment lifted onto a white, subtly-elevated pill — the same
+/// treatment Outlook uses for its own inline view switches.
 class SegmentedControl<T> extends StatelessWidget {
   const SegmentedControl({
     super.key,
@@ -33,15 +35,19 @@ class SegmentedControl<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
+    return Container(
+      padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
-        border: Border.all(color: AppColors.text, width: 1),
+        color: AppColors.neutral300,
+        border: Border.all(color: AppColors.divider),
+        borderRadius: AppShapes.medium,
       ),
       child: Row(
         mainAxisSize: stretch ? MainAxisSize.max : MainAxisSize.min,
         children: [
           for (var i = 0; i < options.length; i++) ...[
-            if (i > 0) Container(width: 1, height: 24, color: AppColors.text),
+            // No divider rules between segments — the raised active pill
+            // is what separates them in Fluent.
             if (stretch)
               Expanded(
                 child: _SegmentedOptionButton(
@@ -82,8 +88,12 @@ class _SegmentedOptionButton<T> extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: ColoredBox(
-        color: active ? AppColors.text : const Color(0x00000000),
+      child: Container(
+        decoration: BoxDecoration(
+          color: active ? AppColors.surface : null,
+          borderRadius: AppShapes.small,
+          boxShadow: active ? AppShapes.shadow2 : null,
+        ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           child: Text(
@@ -92,7 +102,7 @@ class _SegmentedOptionButton<T> extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: AppTextStyles.small(
-              color: active ? AppColors.bg : AppColors.text,
+              color: active ? AppColors.accent : AppColors.textSecondary,
             ),
           ),
         ),

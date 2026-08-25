@@ -1,6 +1,6 @@
 import 'package:flutter/widgets.dart';
 
-import '../../theme/app_colors.dart';
+import '../../theme/app_shapes.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 
@@ -10,6 +10,9 @@ import '../../theme/app_text_styles.dart';
 /// sheet is open, the SnackBar still "shows" (present in the widget tree)
 /// but renders behind the sheet, invisible. This is always visible, since
 /// it's part of the sheet's own content, not a separate overlay racing it.
+/// Fluent `dangerForeground1`.
+const _errorRed = Color(0xFFB10E1C);
+
 class InlineFormError extends StatelessWidget {
   const InlineFormError(this.message, {super.key});
 
@@ -23,11 +26,15 @@ class InlineFormError extends StatelessWidget {
         horizontal: AppSpacing.s2,
         vertical: AppSpacing.s2,
       ),
+      // Fluent's error styling is a red-tinted surface with a matching
+      // stroke, not the brand colour — an error shouldn't read as the same
+      // signal as a primary action now that the accent is blue.
       decoration: BoxDecoration(
-        color: AppColors.accent100,
-        border: Border.all(color: AppColors.accent, width: 1.5),
+        color: const Color(0xFFFDF3F4),
+        border: Border.all(color: _errorRed),
+        borderRadius: AppShapes.small,
       ),
-      child: Text(message, style: AppTextStyles.mono(color: AppColors.accent)),
+      child: Text(message, style: AppTextStyles.label(color: _errorRed)),
     );
   }
 }

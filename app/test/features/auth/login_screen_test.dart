@@ -30,7 +30,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('SIGN IN'), findsOneWidget);
+    expect(find.text('Sign in'), findsOneWidget);
     expect(find.byType(RootShell), findsNothing);
   });
 
@@ -52,7 +52,7 @@ void main() {
 
       expect(find.byType(OnboardingScreen), findsOneWidget);
       expect(find.byType(RootShell), findsNothing);
-      expect(find.text('SIGN IN'), findsNothing);
+      expect(find.text('Sign in'), findsNothing);
     },
   );
 
@@ -117,7 +117,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('SIGN IN'));
+    await tester.tap(find.text('Sign in'));
     await tester.pumpAndSettle();
 
     expect(find.text('Enter an email and password.'), findsOneWidget);
@@ -141,7 +141,7 @@ void main() {
     await tester.tap(find.text("don't have an account? create one"));
     await tester.pumpAndSettle();
 
-    expect(find.text('CREATE ACCOUNT'), findsOneWidget);
+    expect(find.text('Create account'), findsOneWidget);
     expect(find.text('already have an account? sign in'), findsOneWidget);
   });
 
@@ -163,7 +163,7 @@ void main() {
 
     await tester.enterText(find.byType(TextField).first, 'me@example.com');
     await tester.enterText(find.byType(TextField).last, 'wrongpassword');
-    await tester.tap(find.text('SIGN IN'));
+    await tester.tap(find.text('Sign in'));
     await tester.pumpAndSettle();
 
     expect(find.text('Email or password is incorrect.'), findsOneWidget);
@@ -187,7 +187,7 @@ void main() {
 
       await tester.enterText(find.byType(TextField).first, 'me@example.com');
       await tester.enterText(find.byType(TextField).last, 'correcthorse');
-      await tester.tap(find.text('SIGN IN'));
+      await tester.tap(find.text('Sign in'));
       await tester.pumpAndSettle();
 
       // A first sign-in has no goals yet, so it lands on onboarding, not
@@ -358,7 +358,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField).first, 'me@example.com');
       await tester.enterText(find.byType(TextField).last, 'correcthorse');
-      await tester.tap(find.text('CREATE ACCOUNT'));
+      await tester.tap(find.text('Create account'));
       await tester.pumpAndSettle();
 
       expect(
@@ -389,7 +389,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField).first, 'me@example.com');
       await tester.enterText(find.byType(TextField).last, 'correcthorse');
-      await tester.tap(find.text('CREATE ACCOUNT'));
+      await tester.tap(find.text('Create account'));
       await tester.pumpAndSettle();
 
       expect(
@@ -474,7 +474,7 @@ void main() {
       await tester.tap(find.text('sign out'));
       await tester.pumpAndSettle();
 
-      expect(find.text('SIGN IN'), findsOneWidget);
+      expect(find.text('Sign in'), findsOneWidget);
       expect(find.text('Verify your email'), findsNothing);
     },
   );
@@ -507,7 +507,7 @@ void main() {
         'newbie@example.com',
       );
       await tester.enterText(find.byType(TextField).last, 'correcthorse');
-      await tester.tap(find.text('CREATE ACCOUNT'));
+      await tester.tap(find.text('Create account'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
@@ -536,7 +536,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text("I'VE VERIFIED — CONTINUE"));
+      await tester.tap(find.text("I've verified — continue"));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
@@ -576,7 +576,7 @@ void main() {
       // currentUser does.
       mockAuth.mockUser = MockUser(uid: 'u7', isEmailVerified: true);
 
-      await tester.tap(find.text("I'VE VERIFIED — CONTINUE"));
+      await tester.tap(find.text("I've verified — continue"));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);

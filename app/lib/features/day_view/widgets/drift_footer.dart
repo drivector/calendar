@@ -18,7 +18,7 @@ class DriftFooter extends ConsumerWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: AppColors.text, width: 2)),
+        border: Border(top: BorderSide(color: AppColors.divider)),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(

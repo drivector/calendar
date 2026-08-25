@@ -174,9 +174,12 @@ may have moved on since this was written.
 A Flutter time-tracking calendar app ("Calendar Tracker" / Firebase project name
 "TrackMyDay"), built from a design handoff at
 `design_handoff_time_tracking_calendar/README.md`. Targets macOS + iOS first,
-Android + Windows planned later. Modernist design system: flat, 0 border-radius,
-Archivo font (mono via IBM Plex Mono equivalent — actually Menlo/SF Mono
-fallback), red accent `#ec3013`, OKLCH-derived category hues.
+Android + Windows planned later. **Outlook / Fluent 2 design system**: rounded
+corners + soft elevation, Outlook blue accent `#0F6CBD`, platform system font
+(SF Pro), Outlook's own category palette — see **Outlook restyle** below and
+the Design system section of `CLAUDE.md`. (Through the twelfth batch this was
+instead a flat, 0-border-radius "Modernist" system in Archivo + monospace with
+a red accent; earlier dated sections below still describe that.)
 
 Repo root: `/Users/alexandrospanagiotidis/DriVector/Calendar/`
 Flutter app: `/Users/alexandrospanagiotidis/DriVector/Calendar/app/`
@@ -1583,6 +1586,91 @@ had), only its position moved from a half-width lane to the full
 column, so this is a low-risk gap — but stating it plainly rather than
 implying a dashed-over-solid overlap was actually seen on screen this
 round.
+
+## Outlook restyle: the whole app leaves the Modernist system (sixth session)
+
+Ask, verbatim: "change the look and feel to match calendar outlook app".
+Scoped via `AskUserQuestion` to the **whole app** (not just Day view),
+covering rounded corners + soft shadows, colour palette, event-block
+styling, and typography. Two further decisions the user made:
+
+- **Typography → the platform system font** (SF Pro on iOS/macOS), not a
+  Segoe UI substitute. Segoe isn't available off Windows or on Google
+  Fonts, and the system face is what Outlook-for-iOS largely renders in.
+  `google_fonts` is **removed from `pubspec.yaml`** — it was used in only
+  two files, both under `lib/theme/`.
+- **Planned blocks keep the dashed outline** (now rounded) rather than
+  adopting Outlook's striped "tentative meeting" treatment, so the
+  plan-vs-actual distinction reads exactly as it did before.
+
+Planned via `EnterPlanMode` first — see
+`~/.claude/plans/idempotent-shimmying-giraffe.md` for the full plan.
+
+### Why it was tractable
+
+Two things made a whole-app restyle much less risky than it sounds, and
+both are worth knowing before the next visual change:
+
+1. **Styling was already centralised.** Every screen goes through
+   `AppColors`/`AppTextStyles`/`AppSpacing`/`AppCategoryColors`. There were
+   essentially **no hardcoded radii or shadows** anywhere in `lib/` — the
+   flat look came from token *values* plus `Border.all(...)` with no
+   `borderRadius`. Retuning the tokens did most of the work.
+2. **The test suite's visual assertions are radius-agnostic** — they check
+   `border, isNotNull`, `decoration.color, isNotNull`, and tap-target sizes
+   (`Size(32,32)`, `minHeight: 44`), never a radius or a colour value. They
+   held throughout as a structural regression net.
+
+### What changed
+
+- **New `lib/theme/app_shapes.dart`** — the file that didn't exist before:
+  `AppShapes.small/medium/large/sheetTop` radii plus Fluent's `shadow2`
+  (resting cards) and `shadow8` (flyouts/sheets).
+- **`app_colors.dart`** — same token *names*, new values: accent
+  `#0F6CBD`, `bg` `#FAF9F8` canvas, `surface` white, `text` `#242424`, new
+  `textSecondary` `#616161`, and `divider` down from a heavy 40%-ink rule
+  to a `#E0E0E0` hairline.
+- **`app_text_styles.dart`** — every public method kept (including
+  `mono()`/`monoLarge()`, which now just mean "secondary annotation text"),
+  so ~100 call sites needed no edits; only the private helper changed, to
+  a no-`fontFamily` system-font style on Fluent's ramp.
+- **`app_category_colors.dart` + `categoryColorPalette`** — Outlook's own
+  palette. **Watch out:** `meetings` used to be pinned to `AppColors.accent`
+  and so did `categoryColorPalette[0]`; with the accent now blue, both
+  would have collided with the blue category, so both are unpinned.
+- **Widgets** — every `BoxDecoration` gained a radius; 2px black rules
+  became 1px hairlines; cards/flyouts gained elevation. Goal rows are now
+  white elevated cards; progress bars are slim rounded pills; the
+  segmented control is a Fluent track with a raised active pill; "+ Log"
+  and the wizard's primary action are filled blue buttons.
+- **Copy is sentence case** now ("Save changes", "+ New goal", "Sign in",
+  tab labels) — Outlook doesn't SHOUT. `AppTextStyles.kicker()` section
+  headers stay uppercase.
+- **`dashed_border.dart`** gained a `radius` (default 4) and strokes an
+  **RRect** instead of a `Rect`, so planned blocks dash around rounded
+  corners.
+
+### Two real regressions the restyle caused, both caught by the suite
+
+1. **Event blocks overflowed by 3px.** The type ramp grew (`label` 12→14,
+   `mono` 11→12), so two lines no longer fit `_timedPositioned`'s 44px
+   minimum block height. Raised to **52px** in `time_body_grid.dart`.
+2. **~60 test call sites broke on the sentence-case copy.** Fixed
+   mechanically, but the tab labels needed more than a rename: "Day" is now
+   *both* a tab and the Day view's own view-mode button, so a bare
+   `find.text('Day')` is ambiguous. `test/widget_test.dart` gained a
+   **`_tapTab` helper** that scopes to `AppTabBar` — use it rather than a
+   bare finder for tabs.
+
+### Verification
+
+`flutter analyze` + `flutter test` (160 tests) clean after each of the four
+passes (tokens → shared widgets → features → docs). Live-verified on the
+iOS Simulator across Day view, Goals, and the goal-edit wizard.
+
+**`CLAUDE.md`'s Design system section was rewritten** as part of this —
+it previously mandated "flat, zero border-radius, no shadows", which would
+have had every future session fighting this change.
 
 ## Day view: multi-day timeline, date picker, Week tab removed (sixth session)
 

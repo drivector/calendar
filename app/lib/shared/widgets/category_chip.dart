@@ -1,11 +1,13 @@
 import 'package:flutter/widgets.dart';
 
 import '../../theme/app_colors.dart';
+import '../../theme/app_shapes.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 
-/// Unselected: 1px 30%-ink border, mono label, small category swatch.
-/// Selected: solid category fill, white label and swatch.
+/// A pill-shaped category filter, Outlook-style. Unselected: hairline
+/// border with a small round category swatch. Selected: solid category
+/// fill, white label and swatch.
 class CategoryChip extends StatelessWidget {
   const CategoryChip({
     super.key,
@@ -22,7 +24,7 @@ class CategoryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final foreground = selected ? AppColors.bg : AppColors.text;
+    final foreground = selected ? AppColors.surface : AppColors.text;
 
     return GestureDetector(
       onTap: onTap,
@@ -36,7 +38,10 @@ class CategoryChip extends StatelessWidget {
         ),
         decoration: BoxDecoration(
           color: selected ? color : null,
-          border: selected ? null : Border.all(color: AppColors.ink(0.3)),
+          border: Border.all(
+            color: selected ? color : AppColors.neutral500,
+          ),
+          borderRadius: AppShapes.medium,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -44,7 +49,10 @@ class CategoryChip extends StatelessWidget {
             Container(
               width: 8,
               height: 8,
-              color: selected ? AppColors.bg : color,
+              decoration: BoxDecoration(
+                color: selected ? AppColors.surface : color,
+                shape: BoxShape.circle,
+              ),
             ),
             const SizedBox(width: AppSpacing.s1),
             Text(label, style: AppTextStyles.mono(color: foreground)),

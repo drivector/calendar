@@ -1,21 +1,27 @@
 import 'package:flutter/widgets.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'app_colors.dart';
 
-/// Text styles ported from the handoff's type hierarchy. The wireframe's
-/// literal 9px/10px sizes are wireframe-only (see the handoff README) — real
-/// UI type uses an 11px minimum for labels, per that same section.
+/// Fluent 2 / Outlook type ramp, rendered in the **platform system font**
+/// (SF Pro on iOS/macOS) — Segoe UI isn't available off Windows and isn't
+/// on Google Fonts, and the system face is what Outlook itself renders
+/// much of its iOS UI in.
+///
+/// Every method name here predates the Outlook restyle and is kept
+/// deliberately, including [mono]/[monoLarge] — those no longer use a
+/// monospace face (Outlook has none), but they still mean "secondary
+/// annotation text", so the ~100 call sites didn't need touching.
 class AppTextStyles {
   AppTextStyles._();
 
-  static TextStyle _archivo({
+  /// No `fontFamily` — Flutter falls through to the platform default.
+  static TextStyle _system({
     required double fontSize,
     required FontWeight fontWeight,
     double? letterSpacing,
     Color color = AppColors.text,
   }) {
-    return GoogleFonts.archivo(
+    return TextStyle(
       fontSize: fontSize,
       fontWeight: fontWeight,
       letterSpacing: letterSpacing,
@@ -23,60 +29,55 @@ class AppTextStyles {
     );
   }
 
-  static TextStyle _mono({
-    required double fontSize,
-    Color color = AppColors.text,
-  }) {
-    return TextStyle(
-      fontFamily: 'monospace',
-      fontFamilyFallback: const ['Menlo', 'SF Mono', 'Courier'],
-      fontSize: fontSize,
-      color: color,
-    );
-  }
-
-  /// Uppercase section/field caption, e.g. "THURSDAY", "PLAN", "ACTUAL".
-  static TextStyle kicker({Color? color}) => _archivo(
-    fontSize: 11,
+  /// Section/field caption, e.g. "THURSDAY", "EMAIL". Call sites still
+  /// uppercase these themselves; the wide tracking the flat system used is
+  /// gone, since Outlook doesn't letterspace.
+  static TextStyle kicker({Color? color}) => _system(
+    fontSize: 12,
     fontWeight: FontWeight.w600,
-    letterSpacing: 1.1, // ~.1em at 11px
-    color: color ?? AppColors.ink(0.5),
+    color: color ?? AppColors.textSecondary,
   );
 
-  /// Screen/day title, e.g. "20 Aug".
-  static TextStyle title({Color? color}) => _archivo(
+  /// Fluent `subtitle2` — screen/day titles, e.g. "20 Aug".
+  static TextStyle title({Color? color}) => _system(
     fontSize: 16,
     fontWeight: FontWeight.w600,
     color: color ?? AppColors.text,
   );
 
-  /// Block / row label, e.g. "Walk 45 m".
-  static TextStyle label({Color? color}) => _archivo(
-    fontSize: 12,
-    fontWeight: FontWeight.w500,
+  /// Fluent `body1` — block/row labels, e.g. an event subject.
+  static TextStyle label({Color? color}) => _system(
+    fontSize: 14,
+    fontWeight: FontWeight.w400,
     color: color ?? AppColors.text,
   );
 
-  /// Segmented-control / tag text.
-  static TextStyle small({Color? color}) => _archivo(
-    fontSize: 11,
+  /// Fluent `caption1 strong` — segmented controls, tags, small buttons.
+  static TextStyle small({Color? color}) => _system(
+    fontSize: 12,
     fontWeight: FontWeight.w600,
     color: color ?? AppColors.text,
   );
 
-  /// Monospace annotation — hour gutter, source line, drift figures.
-  static TextStyle mono({Color? color}) =>
-      _mono(fontSize: 11, color: color ?? AppColors.ink(0.5));
+  /// Secondary annotation — hour gutter, an event's source line, drift
+  /// figures. Formerly monospace; now just quieter body text.
+  static TextStyle mono({Color? color}) => _system(
+    fontSize: 12,
+    fontWeight: FontWeight.w400,
+    color: color ?? AppColors.textSecondary,
+  );
 
-  /// Larger monospace, e.g. computed duration in the log form.
-  static TextStyle monoLarge({Color? color}) =>
-      _mono(fontSize: 16, color: color ?? AppColors.text);
+  /// Larger secondary figure, e.g. the computed duration in the log form.
+  static TextStyle monoLarge({Color? color}) => _system(
+    fontSize: 16,
+    fontWeight: FontWeight.w400,
+    color: color ?? AppColors.text,
+  );
 
   /// Bottom tab bar label.
-  static TextStyle tabLabel({Color? color}) => _archivo(
-    fontSize: 11,
-    fontWeight: FontWeight.w600,
-    letterSpacing: 0.66, // ~.06em at 11px
-    color: color ?? AppColors.ink(0.4),
+  static TextStyle tabLabel({Color? color}) => _system(
+    fontSize: 12,
+    fontWeight: FontWeight.w500,
+    color: color ?? AppColors.textSecondary,
   );
 }
