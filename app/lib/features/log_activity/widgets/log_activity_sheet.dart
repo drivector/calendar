@@ -34,7 +34,15 @@ Future<void> showLogActivitySheet(
     backgroundColor: AppColors.surface,
     isScrollControlled: true,
     builder: (context) => LogActivitySheet(ref: ref, existing: existing),
-  );
+  ).then((_) {
+    // Belt-and-braces reset: _close/_save/_delete already reset the draft
+    // on their own way out, but a scrim tap or drag-to-dismiss bypasses
+    // all three, leaving a stale date (or other fields) behind for the
+    // *next* open to silently pick up instead of defaulting to today. See
+    // `if (draftLogEntryProvider.date == null)` below — this reset is
+    // what makes that guard actually see a fresh draft every time.
+    ref.read(draftLogEntryProvider.notifier).reset();
+  });
 }
 
 class LogActivitySheet extends ConsumerStatefulWidget {

@@ -1,7 +1,11 @@
 # Track My Day (formerly "Calendar Tracker") — session handoff
 
-Updated 2026-08-25 (sixth session — eighteen batches pushed, all clean,
-see **Git status**; the fifth pushed batch also **deployed live
+Updated 2026-08-25 (sixth session — nineteen batches pushed, all clean,
+plus a twentieth batch **done but not yet committed** (two bug fixes —
+stale "+ Log" date default, goal schedule overnight-range confirmation —
+see **Edge-case unit tests + two new bug fixes: stale "+ Log" date, goal
+schedule overnight ranges** and **Git status**); the fifth pushed batch
+also **deployed live
 Firestore rules changes to production**) — the app's user-visible
 name changed from **"Calendar Tracker" to "Track My Day"** partway
 through this session (see **App renamed**, near the end) — this doc's
@@ -305,7 +309,8 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
 `AsyncLoading`. Widget tests don't need this explicitly since
 `pumpAndSettle()` flushes it.
 
-## Git status — sixth session's first eighteen batches pushed, all clean
+## Git status — sixth session's first nineteen batches pushed, all
+clean; a twentieth batch is done but uncommitted
 
 - The Firebase Auth/Firestore backend, the fourth session's UX fixes/CI,
   the entire fifth session (week nav, Activities tab, onboarding, cap
@@ -454,6 +459,23 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
   `test/widget_test.dart`. `flutter analyze` + `flutter test` (168/168)
   clean; live Simulator verification only partial (see that section's
   own **Verification** for why).
+- The sixth session's **nineteenth batch — pushed as `7a71925`**: new
+  `test/models/tracked_block_test.dart`, 7 unit tests for
+  `trackedBlockWasPlanned()`'s edge cases — see **Edge-case unit tests +
+  two new bug fixes: stale "+ Log" date, goal schedule overnight ranges**
+  for the full writeup (covers this batch too). `flutter analyze` +
+  `flutter test` (175/175) clean.
+- The sixth session's **twentieth batch — done, not yet committed**: the
+  stale "+ Log" date-default bug fix and the goal schedule
+  overnight-range confirmation dialog — see the same section above for
+  the full writeup. Touched: new `lib/models/clock_time.dart`
+  (`isOvernightRange`), `lib/shared/widgets/confirm_delete_dialog.dart`
+  (generalized into `showConfirmDialog`),
+  `lib/features/log_activity/widgets/log_activity_sheet.dart`,
+  `lib/features/goals/widgets/goal_edit_sheet.dart`, new
+  `test/models/clock_time_test.dart`, `test/widget_test.dart`. `flutter
+  analyze` + `flutter test` (182/182) clean; both bugs live-verified on
+  the iOS Simulator (see that section's own **Verification**).
 - A stray duplicate clone of this repo that existed briefly at
   `/Users/alexandrospanagiotidis/DriVector/Calendar/calendar/` (see the
   sign-up bug section for how it got there) has been **deleted** — it had
@@ -1877,6 +1899,89 @@ segmented control) — so the confirm-dialog/soft-delete/dashed-outline
 flows themselves were **not** re-confirmed by eye this round, only by
 the widget-tree test suite above. Worth a real look next session before
 trusting this further.
+
+## Edge-case unit tests + two new bug fixes: stale "+ Log" date, goal schedule overnight ranges (sixth session)
+
+Three follow-ups in one round, after asking for a review of the previous
+batch's own test coverage.
+
+- **`test/models/tracked_block_test.dart`** (new, pushed separately as
+  `7a71925`, ahead of the rest of this round) — 7 direct unit tests for
+  `trackedBlockWasPlanned()`'s edge cases (boundary-touching intervals,
+  category mismatches, multiple planned blocks where only one overlaps)
+  that the previous batch's single widget-level happy-path test didn't
+  cover. Matches this repo's own `test/models/` convention for testing
+  pure logic directly rather than only through a full widget pump.
+- **Bug: "+ Log" could default to a stale date, not today.** Reported,
+  verbatim: "clicking +log button goes to wednesday, while the current
+  date is tuesday." Root cause: `showLogActivitySheet`'s "default to
+  today" logic only fires when the draft's `date` is still `null`, and
+  that draft was only ever reset by the sheet's own "close" link — a
+  scrim tap or drag-to-dismiss on the modal bypasses that link entirely,
+  leaving whatever date was last set (including one picked for a one-off
+  entry) to leak into the *next* open instead of re-defaulting. Fixed by
+  chaining `.then((_) => ref.read(draftLogEntryProvider.notifier)
+  .reset())` onto the `showModalBottomSheet` future in
+  `log_activity_sheet.dart`, so the draft resets on every dismissal path,
+  not just the three that already called `reset()` themselves
+  (`_close`/`_save`/`_delete`). New widget test simulates the exact bug:
+  dirties the draft's date, dismisses via the modal barrier (not
+  "close"), reopens, and asserts it's back to the app's currently
+  selected day.
+- **Bug: a goal's time-range schedule entries accepted end-before-start
+  with no warning.** Reported, verbatim: "it allows me to set a range for
+  a goal to end before the start date, and it thinks it goes to the next
+  day, it should pop up verification." Root cause:
+  `ClockTime.difference`/`ClockRange.duration`
+  (`lib/models/clock_time.dart`) deliberately wrap past midnight — by
+  design, and also reused legitimately by the Day view's add-block sheet
+  and by Log activity for real overnight entries (a night shift) — but
+  the goal edit sheet's own time-range pickers (`_addTimeRangeEntry`,
+  `_editRangeStart`, `_editRangeEnd` in `goal_edit_sheet.dart`) never
+  checked ordering before accepting a pick, silently turning a mistaken
+  end time into a ~20-hour entry. Fixed with a new confirmation step,
+  scoped to just the goal edit sheet — the overnight-wrap behavior itself
+  stays untouched everywhere else, since it's legitimate there:
+  - New pure function `isOvernightRange(ClockTime, ClockTime)`
+    (`lib/models/clock_time.dart`) — true when the end isn't after the
+    start. Direct unit tests added in `test/models/clock_time_test.dart`
+    (also covers `ClockTime.difference`'s own wrap-around).
+  - **Generalized `confirm_delete_dialog.dart`** into a reusable
+    `showConfirmDialog(context, {title, message, confirmLabel})`, with
+    `showConfirmDeleteDialog` now a thin wrapper over it (`confirmLabel:
+    'Delete'`) — this is the second place in the app that needed a
+    "confirm before proceeding" dialog with the same styling, so
+    generalizing it beat a second copy.
+  - `goal_edit_sheet.dart`'s three time-range entry points now call a new
+    `_confirmIfOvernight(start, end)` before applying a pick — shows
+    "End before start? End time (HH:MM) isn't after start time (HH:MM) —
+    this will be treated as spanning into the next day." with
+    Continue/Cancel; declining leaves the entry exactly as it was.
+
+### Verification
+
+`flutter analyze` clean. `flutter test`: 182/182 (7 new
+`trackedBlockWasPlanned` unit tests, 1 new widget test for the stale-date
+fix, 6 new `isOvernightRange`/`ClockTime.difference` unit tests). This
+round is also the first time this session's Simulator flakiness actually
+resolved — a fresh `flutter run` (full restart, not hot reload — a prior
+hot-reloaded session had left the Goals list and the Day view's selected
+date in a stale, misleading state that a restart cleared up) let every
+flow get watched directly: the stale-date bug reproduced live exactly as
+reported (header said Tuesday, "+ Log" showed Wednesday) and was
+confirmed fixed after the code change; the goal schedule's new
+overnight-confirmation dialog was exercised on a real goal
+("Job"/09:00–18:00) via both Cancel (entry unchanged) and Continue (entry
+became 09:00–06:00, 21h, correctly wrapped) and reverted back afterward.
+This same live session also finally re-confirmed the *previous* batch's
+delete-confirm/soft-delete list flow end-to-end (confirm dialog text,
+Cancel leaves the entry, Delete removes it while siblings survive) —
+resolving that batch's own "worth a real look next session" flag. The
+Simulator's tap-coordinate calibration remained finicky throughout (a
+recurring, already-documented environment limitation) — several taps
+landed on the wrong element before the right one was found by
+screenshot-and-retry — but every flow was eventually driven successfully
+by real taps, not simulated.
 
 ## Day view: multi-day timeline, date picker, Week tab removed (sixth session)
 

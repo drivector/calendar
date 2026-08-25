@@ -31,3 +31,13 @@ class ClockRange {
 
   Duration get duration => end.difference(start);
 }
+
+/// Whether [end] is not after [start] — i.e. treating it as the end of a
+/// same-day range would only work by wrapping into the next day (matching
+/// [ClockTime.difference]'s own wrap-around). A Day-view block or a
+/// logged activity can legitimately span midnight (a night shift), but a
+/// goal's own schedule entry isn't expected to — see `GoalEditSheet`'s
+/// overnight-confirmation prompt, which uses this to decide when to ask
+/// before silently accepting one.
+bool isOvernightRange(ClockTime start, ClockTime end) =>
+    end.minutesSinceMidnight <= start.minutesSinceMidnight;

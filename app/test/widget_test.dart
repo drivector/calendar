@@ -2402,6 +2402,54 @@ void main() {
     },
   );
 
+  testWidgets(
+    'Log activity: dismissing the sheet via the barrier (not the close '
+    "link) still resets the draft — the next open defaults to today's "
+    'date, not a stale leftover one',
+    (WidgetTester tester) async {
+      final container = ProviderContainer(overrides: await _signedInOverrides());
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('+ Log'));
+      await tester.pumpAndSettle();
+
+      // Defaults to the app's currently selected day (mockDay: 20 Aug).
+      expect(find.text('Thu, 20 Aug 2026'), findsOneWidget);
+
+      // Simulate the draft having drifted away from that default (e.g. the
+      // user picked a different day for a one-off entry), then dismiss via
+      // the modal barrier rather than the "close" link — the bug this
+      // guards against was that only "close" reset the draft, so a scrim
+      // tap or drag-to-dismiss left this leftover date for the next open.
+      container.read(draftLogEntryProvider.notifier).setDate(
+        DateTime(2026, 8, 17),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Mon, 17 Aug 2026'), findsOneWidget);
+
+      // A tap near the very top of the screen lands on the modal barrier
+      // above the sheet, not on the sheet's own content (same trick used
+      // for the add-block sheet's own barrier-tap tests).
+      await tester.tapAt(const Offset(200, 10));
+      await tester.pumpAndSettle();
+      expect(find.byType(LogActivitySheet), findsNothing);
+
+      await tester.tap(find.text('+ Log'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Thu, 20 Aug 2026'), findsOneWidget);
+      expect(find.text('Mon, 17 Aug 2026'), findsNothing);
+    },
+  );
+
   testWidgets('Log activity: saving actually creates a tracked block', (
     WidgetTester tester,
   ) async {

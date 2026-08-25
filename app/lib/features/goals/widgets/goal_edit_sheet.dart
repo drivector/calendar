@@ -8,6 +8,7 @@ import '../../../models/clock_time.dart';
 import '../../../models/goal.dart';
 import '../../../models/goal_progress.dart';
 import '../../../shared/widgets/category_chip.dart';
+import '../../../shared/widgets/confirm_delete_dialog.dart';
 import '../../../state/categories_providers.dart';
 import '../../../state/day_view_providers.dart';
 import '../../../state/goals_providers.dart';
@@ -221,6 +222,28 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
     });
   }
 
+  // A goal's own time-range entries aren't expected to span midnight the
+  // way a Day-view block or a night-shift log entry legitimately can — so
+  // unlike those (see `add_block_sheet.dart`/`log_activity_sheet.dart`,
+  // which silently treat end-not-after-start as "crosses into tomorrow"),
+  // here it almost always means the user picked the wrong time. Confirm
+  // before accepting one rather than silently applying the wrap-around
+  // `ClockRange.duration` still falls back to for it.
+  Future<bool> _confirmIfOvernight(TimeOfDay start, TimeOfDay end) async {
+    final startClock = ClockTime(start.hour, start.minute);
+    final endClock = ClockTime(end.hour, end.minute);
+    if (!isOvernightRange(startClock, endClock)) return true;
+    return showConfirmDialog(
+      context,
+      title: 'End before start?',
+      message:
+          'End time (${endClock.format()}) isn\'t after start time '
+          '(${startClock.format()}) — this will be treated as spanning '
+          'into the next day.',
+      confirmLabel: 'Continue',
+    );
+  }
+
   Future<void> _addTimeRangeEntry(int weekday) async {
     final start = await showTimePicker(
       context: context,
@@ -234,7 +257,8 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
       context: context,
       initialTime: suggestedEnd,
     );
-    if (end == null) return;
+    if (end == null || !mounted) return;
+    if (!await _confirmIfOvernight(start, end) || !mounted) return;
     setState(() {
       _schedule[weekday]!.add(
         DayScheduleEntry.timeRange(
@@ -272,7 +296,9 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
         minute: current.start.minute,
       ),
     );
-    if (picked == null) return;
+    if (picked == null || !mounted) return;
+    final end = TimeOfDay(hour: current.end.hour, minute: current.end.minute);
+    if (!await _confirmIfOvernight(picked, end) || !mounted) return;
     setState(() {
       _schedule[weekday]![index] = DayScheduleEntry.timeRange(
         ClockRange(ClockTime(picked.hour, picked.minute), current.end),
@@ -289,7 +315,12 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
         minute: current.end.minute,
       ),
     );
-    if (picked == null) return;
+    if (picked == null || !mounted) return;
+    final start = TimeOfDay(
+      hour: current.start.hour,
+      minute: current.start.minute,
+    );
+    if (!await _confirmIfOvernight(start, picked) || !mounted) return;
     setState(() {
       _schedule[weekday]![index] = DayScheduleEntry.timeRange(
         ClockRange(current.start, ClockTime(picked.hour, picked.minute)),

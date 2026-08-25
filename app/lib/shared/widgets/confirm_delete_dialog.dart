@@ -6,28 +6,53 @@ import '../../theme/app_shapes.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 
-/// Asks "are you sure?" before a destructive action — unlike this app's
-/// existing "Delete goal"/"Delete category" rows (which act immediately,
-/// with no prompt), deleting an *activity* asks first. Returns `true` only
-/// if the user tapped Delete; `false` for Cancel or dismissing the dialog
-/// any other way (barrier tap, back gesture).
-Future<bool> showConfirmDeleteDialog(
+/// Asks "are you sure?" before a consequential action — an accent-filled
+/// button labelled [confirmLabel] plus a bordered "Cancel". Returns `true`
+/// only if the confirm button was tapped; `false` for Cancel or dismissing
+/// the dialog any other way (barrier tap, back gesture).
+Future<bool> showConfirmDialog(
   BuildContext context, {
   required String title,
   required String message,
+  required String confirmLabel,
 }) async {
   final confirmed = await showDialog<bool>(
     context: context,
-    builder: (context) => _ConfirmDeleteDialog(title: title, message: message),
+    builder: (context) => _ConfirmDialog(
+      title: title,
+      message: message,
+      confirmLabel: confirmLabel,
+    ),
   );
   return confirmed ?? false;
 }
 
-class _ConfirmDeleteDialog extends StatelessWidget {
-  const _ConfirmDeleteDialog({required this.title, required this.message});
+/// Delete-specific convenience wrapper — unlike this app's existing
+/// "Delete goal"/"Delete category" rows (which act immediately, with no
+/// prompt), deleting an *activity* asks first.
+Future<bool> showConfirmDeleteDialog(
+  BuildContext context, {
+  required String title,
+  required String message,
+}) {
+  return showConfirmDialog(
+    context,
+    title: title,
+    message: message,
+    confirmLabel: 'Delete',
+  );
+}
+
+class _ConfirmDialog extends StatelessWidget {
+  const _ConfirmDialog({
+    required this.title,
+    required this.message,
+    required this.confirmLabel,
+  });
 
   final String title;
   final String message;
+  final String confirmLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -63,7 +88,7 @@ class _ConfirmDeleteDialog extends StatelessWidget {
                     horizontal: AppSpacing.s3,
                   ),
                   child: Text(
-                    'Delete',
+                    confirmLabel,
                     style: AppTextStyles.small(color: AppColors.surface),
                   ),
                 ),
