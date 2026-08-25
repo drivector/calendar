@@ -14,6 +14,12 @@ class CategoryDrift {
 List<CategoryDrift> computeDrift({
   required List<PlannedBlock> planned,
   required List<TrackedBlock> tracked,
+  // A goal's plain-duration schedule entries ("piano, 15 min, any time")
+  // have no fixed clock time, so they never become a [PlannedBlock] (see
+  // `generateGoalPlannedBlocksForDate`) — without this, that time would
+  // silently never count as planned anywhere. Keyed by categoryId, same as
+  // [plannedTotals] below, so the two merge directly.
+  Map<String, Duration> untimedPlannedByCategory = const {},
 }) {
   final plannedTotals = <String, Duration>{};
   for (final block in planned) {
@@ -21,6 +27,13 @@ List<CategoryDrift> computeDrift({
       block.categoryId,
       (total) => total + block.duration,
       ifAbsent: () => block.duration,
+    );
+  }
+  for (final entry in untimedPlannedByCategory.entries) {
+    plannedTotals.update(
+      entry.key,
+      (total) => total + entry.value,
+      ifAbsent: () => entry.value,
     );
   }
 

@@ -10,9 +10,10 @@ import 'planned_block.dart';
 ///
 /// Only time-range entries generate a block, at their exact clock time — a
 /// plain-duration entry ("piano, 15 min, any time") has no real time to
-/// place it at, so it's left off the calendar entirely and only counts
-/// toward the goal's weekly target, not toward what's "planned" for any
-/// particular day.
+/// place it at, so it's left off the calendar entirely. It still counts
+/// toward what's "planned" for the day, just not as a drawable block — see
+/// [untimedPlannedDurationByCategoryForDate], its counterpart for exactly
+/// that remaining time.
 List<PlannedBlock> generateGoalPlannedBlocksForDate({
   required List<Goal> goals,
   required DateTime date,
@@ -60,4 +61,34 @@ List<PlannedBlock> generateGoalPlannedBlocksForDate({
   }
 
   return generated;
+}
+
+/// The other half of a day's planned time — every active goal's
+/// plain-duration schedule entries for [date]'s weekday, summed per
+/// category, since none of them generate a block (see
+/// [generateGoalPlannedBlocksForDate]'s own doc comment for why). Feeds the
+/// "planned" total and per-category drift so a goal like "walking, 30 min,
+/// any time" still reads as planned even though it has no fixed slot on the
+/// calendar — a category with only time-range entries simply doesn't
+/// appear in the returned map.
+Map<String, Duration> untimedPlannedDurationByCategoryForDate({
+  required List<Goal> goals,
+  required DateTime date,
+}) {
+  final day = DateTime(date.year, date.month, date.day);
+  final weekday = day.weekday;
+
+  final totals = <String, Duration>{};
+  for (final goal in goals) {
+    if (!goal.isActiveOn(day)) continue;
+    for (final entry in goal.entriesForWeekday(weekday)) {
+      if (entry.isTimeRange) continue;
+      totals.update(
+        goal.categoryId,
+        (total) => total + entry.effectiveDuration,
+        ifAbsent: () => entry.effectiveDuration,
+      );
+    }
+  }
+  return totals;
 }

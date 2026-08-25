@@ -12,6 +12,7 @@ import 'package:calendar_tracker/features/account/account_screen.dart';
 import 'package:calendar_tracker/features/categories/categories_screen.dart';
 import 'package:calendar_tracker/features/day_view/widgets/actual_block_widget.dart';
 import 'package:calendar_tracker/features/day_view/widgets/day_header_bar.dart';
+import 'package:calendar_tracker/features/day_view/widgets/plan_block_widget.dart';
 import 'package:calendar_tracker/features/day_view/widgets/time_body_grid.dart';
 import 'package:calendar_tracker/features/goals/goals_screen.dart';
 import 'package:calendar_tracker/features/goals/widgets/goal_block.dart';
@@ -266,6 +267,55 @@ void main() {
       expect(
         find.descendant(of: fuzzy, matching: find.byType(DashedRectBorder)),
         findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    "Day view: an actual block is inset from its column's left edge — a "
+    "planned block for the same time isn't fully covered by it",
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: await _signedInOverrides(),
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // mock_day_20aug.dart: 'actual-walk' carries plannedBlockId
+      // 'plan-walk' — both occupy the same day-column, at overlapping
+      // times.
+      final plan = find.byWidgetPredicate(
+        (w) => w is PlanBlockWidget && w.block.id == 'plan-walk',
+      );
+      final actual = find.byWidgetPredicate(
+        (w) => w is ActualBlockWidget && w.block.id == 'actual-walk',
+      );
+      await tester.ensureVisible(plan);
+      await tester.ensureVisible(actual);
+      expect(plan, findsOneWidget);
+      expect(actual, findsOneWidget);
+
+      final planPositioned = tester.widget<Positioned>(
+        find.ancestor(of: plan, matching: find.byType(Positioned)).first,
+      );
+      final actualPositioned = tester.widget<Positioned>(
+        find.ancestor(of: actual, matching: find.byType(Positioned)).first,
+      );
+
+      // Planned still spans the column's full width, from its own left
+      // edge — only the actual block is inset, by a tenth of that same
+      // column width, so a tenth of the planned block stays visible
+      // rather than being fully covered.
+      const inset = 0.1;
+      expect(
+        actualPositioned.left,
+        closeTo(planPositioned.left! + planPositioned.width! * inset, 0.01),
+      );
+      expect(
+        actualPositioned.width,
+        closeTo(planPositioned.width! * (1 - inset), 0.01),
       );
     },
   );
@@ -2694,6 +2744,34 @@ void main() {
   );
 
   testWidgets(
+    "Day view: a goal's own schedule counts as planned even with no "
+    'manually-created planned block and nothing tracked yet — both the '
+    'legend total and the drift footer reflect it',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: await _signedInOnboardedNoActivityOverrides(),
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // _signedInOnboardedNoActivityOverrides seeds exactly one goal
+      // ("Test goal", category "Work") with a plain 30m/day schedule and
+      // zero planned/tracked blocks of any kind — so this total can only
+      // be coming from the goal's own schedule, not a manual block.
+      expect(tester.takeException(), isNull);
+      expect(find.text('planned 30m'), findsOneWidget);
+      expect(find.text('tracked 0m'), findsOneWidget);
+
+      // Drift footer: nothing tracked against a 30m target reads as −30m,
+      // under the category name (lowercased), not the goal's own name.
+      expect(find.text('work'), findsOneWidget);
+      expect(find.text('−30m'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'Categories: a new category needs a goal of its own before it shows up as a Log activity chip',
     (WidgetTester tester) async {
       await tester.pumpWidget(
@@ -2768,7 +2846,17 @@ void main() {
       await tester.tap(find.text('+ Log'));
       await tester.pumpAndSettle();
 
-      expect(find.text('reading'), findsOneWidget); // now selectable, by goal
+      // Scoped to the sheet — the new goal's own default schedule now also
+      // gives it a nonzero planned total, so "reading" (lowercased) shows a
+      // second time in the still-mounted Day view's own DRIFT TODAY footer
+      // behind the sheet.
+      expect(
+        find.descendant(
+          of: find.byType(LogActivitySheet),
+          matching: find.text('reading'),
+        ),
+        findsOneWidget, // now selectable, by goal
+      );
     },
   );
 
@@ -2955,6 +3043,70 @@ void main() {
       expect(find.text('save'), findsOneWidget);
       expect(find.text('ADD PLAN'), findsNothing);
       expect(find.text('Save activity'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'Day view: tapping an existing planned block also opens the add-actual '
+    "sheet, prefilled with that plan's own title, time, and goal",
+    (WidgetTester tester) async {
+      final container = ProviderContainer(
+        overrides: await _signedInOnboardedNoActivityOverrides(),
+      );
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await container.read(plannedBlocksRepositoryProvider).upsert(
+        PlannedBlock(
+          id: 'plan-lunch-test',
+          start: DateTime(2026, 8, 20, 12, 0),
+          end: DateTime(2026, 8, 20, 12, 30),
+          title: 'Team sync',
+          categoryId: 'cat-1',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final planBlock = find.byWidgetPredicate(
+        (w) => w is PlanBlockWidget && w.block.id == 'plan-lunch-test',
+      );
+      await tester.ensureVisible(planBlock);
+      await tester.tap(planBlock);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('New actual activity'), findsOneWidget);
+      // Prefilled from the plan, not blank — title, a 30m duration derived
+      // from the plan's own start/end, and the goal backing its category.
+      // Scoped to the sheet since the still-mounted planned block behind
+      // it also shows its own "Team sync" title text.
+      final sheet = find.byType(BottomSheet);
+      expect(
+        find.descendant(of: sheet, matching: find.text('Team sync')),
+        findsOneWidget,
+      );
+      expect(find.text('· 30m'), findsOneWidget);
+      expect(find.text('test goal'), findsOneWidget); // dropdown lowercases
+      expect(find.text('set goal'), findsNothing);
+
+      await tester.ensureVisible(find.text('save'));
+      await tester.tap(find.text('save'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      final created = container
+          .read(allTrackedBlocksProvider)
+          .where((b) => b.categoryId == 'cat-1');
+      expect(created, hasLength(1));
+      expect(created.single.title, 'Team sync');
+      expect(created.single.start, DateTime(2026, 8, 20, 12, 0));
+      expect(created.single.end, DateTime(2026, 8, 20, 12, 30));
     },
   );
 

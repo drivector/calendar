@@ -1,7 +1,11 @@
 # Track My Day (formerly "Calendar Tracker") — session handoff
 
 Updated 2026-08-25 (sixth session — twenty batches pushed, all clean,
-see **Git status**; the fifth pushed batch also **deployed live
+plus a twenty-first batch **done but not yet committed** (tap a planned
+block to log it, the planned/drift wiring fix, and the actual-block
+inset — see **Day view: tap a planned block to log it, planned/drift
+wiring fix, actual-block inset** and **Git status**); the fifth pushed
+batch also **deployed live
 Firestore rules changes to production**) — the app's user-visible
 name changed from **"Calendar Tracker" to "Track My Day"** partway
 through this session (see **App renamed**, near the end) — this doc's
@@ -305,7 +309,8 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
 `AsyncLoading`. Widget tests don't need this explicitly since
 `pumpAndSettle()` flushes it.
 
-## Git status — sixth session's first twenty batches pushed, all clean
+## Git status — sixth session's first twenty batches pushed, all clean;
+a twenty-first batch is done but uncommitted
 
 - The Firebase Auth/Firestore backend, the fourth session's UX fixes/CI,
   the entire fifth session (week nav, Activities tab, onboarding, cap
@@ -471,6 +476,18 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
   `test/models/clock_time_test.dart`, `test/widget_test.dart`. `flutter
   analyze` + `flutter test` (182/182) clean; both bugs live-verified on
   the iOS Simulator (see that section's own **Verification**).
+- The sixth session's **twenty-first batch — done, not yet committed**:
+  tapping a planned block to log it, the planned/drift wiring fix, and
+  the actual-block inset — see **Day view: tap a planned block to log
+  it, planned/drift wiring fix, actual-block inset** for the full
+  writeup. Touched: `lib/features/day_view/widgets/add_block_sheet.dart`,
+  `lib/features/day_view/widgets/time_body_grid.dart`,
+  `lib/models/drift.dart`, `lib/models/goal_planned_blocks.dart`,
+  `lib/state/derived_providers.dart`, `test/models/drift_test.dart`,
+  `test/models/goal_planned_blocks_test.dart`, `test/widget_test.dart`.
+  `flutter analyze` + `flutter test` (192/192) clean; all three
+  live-verified on the iOS Simulator, including against the real
+  account's own data.
 - A stray duplicate clone of this repo that existed briefly at
   `/Users/alexandrospanagiotidis/DriVector/Calendar/calendar/` (see the
   sign-up bug section for how it got there) has been **deleted** — it had
@@ -1894,6 +1911,72 @@ segmented control) — so the confirm-dialog/soft-delete/dashed-outline
 flows themselves were **not** re-confirmed by eye this round, only by
 the widget-tree test suite above. Worth a real look next session before
 trusting this further.
+
+## Day view: tap a planned block to log it, planned/drift wiring fix, actual-block inset (sixth session)
+
+Three related follow-ups in one round, all in the Day view.
+
+- **Tapping a planned block now opens the same add-actual sheet an
+  empty-space tap does**, prefilled from the plan itself (title, time,
+  and the goal backing its category) — previously it did nothing at all;
+  the dashed `PlanBlockWidget` had no tap handler of its own, and (despite
+  the doc comment above the empty-space `GestureDetector` assuming a tap
+  would "fall through" to it) empirically it didn't in practice, so
+  tapping a plan was just dead space. `showAddBlockSheet`
+  (`add_block_sheet.dart`) gained optional `initialEnd`/`initialTitle`/
+  `initialGoalId`; `time_body_grid.dart` wraps each planned block in a
+  `GestureDetector` that calls it with the plan's own values, so logging
+  what was already planned doesn't mean retyping it.
+- **Bug: the "planned" total and drift footer silently ignored every
+  goal-generated planned block.** Reported as "for the job appears there
+  is no planned goal at all" — Job has a full 09:00–18:00 weekday
+  schedule and was clearly happening (a matching actual block every day),
+  but the Day view's own "planned Xm" legend and "DRIFT TODAY" section
+  both read `plannedBlocksProvider`, which only ever summed *manually*
+  created `PlannedBlock` Firestore documents — never the ones a goal's
+  own recurring schedule generates (`generateGoalPlannedBlocksForDate`,
+  which **is** correctly wired into the timeline grid itself via
+  `visibleDayBlocksProvider`, just not into these two stats). There was
+  even an already-correct, unused provider for this,
+  `dayViewPlannedBlocksProvider`, sitting orphaned in
+  `goals_providers.dart`. Fixed by pointing `driftProvider`/
+  `dayTotalsProvider` (`derived_providers.dart`) at it instead.
+- **Extended that same fix to a goal's plain-duration entries too** — "piano,
+  15 min, any time" has no fixed clock slot so it never generates a block
+  at all (by design), which meant that time never counted as "planned"
+  anywhere, block-based fix or not. New
+  `untimedPlannedDurationByCategoryForDate` (`goal_planned_blocks.dart`)
+  sums those separately, per category; `computeDrift` (`drift.dart`)
+  gained an `untimedPlannedByCategory` param to merge it in. Live-verified
+  against the real account: "planned 0m" → "planned 10h 30m", and DRIFT
+  TODAY now shows real per-category numbers ("exercise +30m", "art −15m")
+  — Job itself correctly *disappeared* from the drift list once its
+  tracked time exactly matched its now-correctly-counted planned time
+  (drift only lists what's actually off).
+- **Actual blocks no longer fully cover a planned block for the same
+  time.** Reported: "the actual activities should never reach the left
+  border, but are 10% far from it" so an overlap "appear[s] like it has
+  overlap." Previously Plan and Actual shared the exact same slot, so a
+  same-time actual block painted on top completely hid the dashed plan
+  underneath — visually indistinguishable from "never planned." Planned
+  blocks still span the day-column's full width from its left edge;
+  actual blocks are now inset by a new `_actualBlockInset = 0.1` (10% of
+  the column width) and narrowed to match, in `time_body_grid.dart`, so a
+  planned block for the same time now always shows a visible sliver on
+  the left rather than disappearing underneath.
+
+### Verification
+
+`flutter analyze` clean. `flutter test`: 192/192 (new tests: tapping a
+planned block opens the sheet prefilled and saving creates a matching
+tracked block; `untimedPlannedDurationByCategoryForDate` unit tests;
+`computeDrift`'s new param unit tests; a Day-view widget test proving a
+goal with only a recurring schedule and zero manual blocks still shows
+correctly in the legend/drift; and a layout test asserting the exact 10%
+inset via the rendered `Positioned` geometry). All three fixes
+live-verified on the iOS Simulator against the real signed-in account —
+including the planned/drift wiring fix, confirmed directly against the
+real account's own Job/walking/piano data (not just mock fixtures).
 
 ## Edge-case unit tests + two new bug fixes: stale "+ Log" date, goal schedule overnight ranges (sixth session)
 

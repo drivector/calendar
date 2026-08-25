@@ -201,4 +201,118 @@ void main() {
       expect(blocks.single.end, DateTime(2026, 8, 20, 12, 0));
     });
   });
+
+  group('untimedPlannedDurationByCategoryForDate', () {
+    test('sums a plain-duration entry into its category', () {
+      final piano = Goal(
+        id: 'goal-piano',
+        name: 'Piano',
+        categoryId: 'piano',
+        scheduleByWeekday: _uniform(const Duration(minutes: 15)),
+        startDate: _ongoingStart,
+        endDate: _ongoingEnd,
+      );
+
+      final totals = untimedPlannedDurationByCategoryForDate(
+        goals: [piano],
+        date: DateTime(2026, 8, 20),
+      );
+
+      expect(totals, {'piano': const Duration(minutes: 15)});
+    });
+
+    test('a time-range entry contributes nothing here — it already has a block', () {
+      final work = Goal(
+        id: 'goal-work',
+        name: 'Work',
+        categoryId: 'work',
+        startDate: _ongoingStart,
+        endDate: _ongoingEnd,
+        scheduleByWeekday: {
+          for (var weekday = 1; weekday <= 5; weekday++)
+            weekday: [
+              const DayScheduleEntry.timeRange(
+                ClockRange(ClockTime(9, 0), ClockTime(18, 0)),
+              ),
+            ],
+        },
+      );
+
+      final totals = untimedPlannedDurationByCategoryForDate(
+        goals: [work],
+        date: DateTime(2026, 8, 20), // a Thursday
+      );
+
+      expect(totals, isEmpty);
+    });
+
+    test('a day mixing a time range and extra duration counts only the duration part here', () {
+      final work = Goal(
+        id: 'goal-work',
+        name: 'Work',
+        categoryId: 'work',
+        startDate: _ongoingStart,
+        endDate: _ongoingEnd,
+        scheduleByWeekday: {
+          DateTime.thursday: [
+            const DayScheduleEntry.timeRange(
+              ClockRange(ClockTime(9, 0), ClockTime(12, 0)),
+            ),
+            const DayScheduleEntry.duration(Duration(minutes: 30)),
+          ],
+        },
+      );
+
+      final totals = untimedPlannedDurationByCategoryForDate(
+        goals: [work],
+        date: DateTime(2026, 8, 20),
+      );
+
+      expect(totals, {'work': const Duration(minutes: 30)});
+    });
+
+    test('two goals sharing a category sum together', () {
+      final morningWalk = Goal(
+        id: 'goal-walk-1',
+        name: 'Morning walk',
+        categoryId: 'walking',
+        scheduleByWeekday: _uniform(const Duration(minutes: 20)),
+        startDate: _ongoingStart,
+        endDate: _ongoingEnd,
+      );
+      final eveningWalk = Goal(
+        id: 'goal-walk-2',
+        name: 'Evening walk',
+        categoryId: 'walking',
+        scheduleByWeekday: _uniform(const Duration(minutes: 25)),
+        startDate: _ongoingStart,
+        endDate: _ongoingEnd,
+      );
+
+      final totals = untimedPlannedDurationByCategoryForDate(
+        goals: [morningWalk, eveningWalk],
+        date: DateTime(2026, 8, 20),
+      );
+
+      expect(totals, {'walking': const Duration(minutes: 45)});
+    });
+
+    test('a goal outside its active date range contributes nothing', () {
+      final challenge = Goal(
+        id: 'goal-challenge',
+        name: 'August challenge',
+        categoryId: 'reading',
+        scheduleByWeekday: _uniform(const Duration(minutes: 30)),
+        startDate: DateTime(2026, 8, 1),
+        endDate: DateTime(2026, 8, 15),
+      );
+
+      final totals = untimedPlannedDurationByCategoryForDate(
+        goals: [challenge],
+        date: DateTime(2026, 8, 20), // after the challenge ended
+      );
+
+      expect(totals, isEmpty);
+    });
+  });
 }

@@ -17,6 +17,12 @@ import 'plan_block_widget.dart';
 /// Left gutter reserved for the hour labels ("06", "07", ...).
 const kGutterWidth = 38.0;
 
+/// How far an actual block's own left edge sits from its day-column's left
+/// edge, as a fraction of the column's width — planned blocks still span
+/// the full column, so this sliver is what keeps a planned block visible
+/// (not fully covered) when an actual block overlaps it in time.
+const _actualBlockInset = 0.1;
+
 /// One day-column's horizontal slot within the timeline — shared by
 /// [TimeBodyGrid] and the per-column date-label header above it so the two
 /// can never drift out of pixel alignment with each other.
@@ -144,6 +150,7 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
     final dates = ref.watch(visibleDatesProvider);
     final dayBlocks = ref.watch(visibleDayBlocksProvider);
     final categories = ref.watch(categoriesProvider);
+    final goals = ref.watch(goalsProvider);
 
     return DateSwipeNav(
       onPrevious: () => stepDayViewWindow(ref, forward: false),
@@ -186,11 +193,31 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
                         end: block.end,
                         left: layouts[i].left,
                         width: layouts[i].width,
-                        child: PlanBlockWidget(
-                          block: block,
-                          category: resolveCategory(
-                            categories,
-                            block.categoryId,
+                        // Opens the same add-actual sheet an empty-space
+                        // tap does, prefilled from the plan itself (time,
+                        // title, goal) — logging what was already planned
+                        // shouldn't mean retyping it.
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => showAddBlockSheet(
+                            context,
+                            ref,
+                            isPlan: false,
+                            date: dates[i],
+                            initialStart: TimeOfDay.fromDateTime(block.start),
+                            initialEnd: TimeOfDay.fromDateTime(block.end),
+                            initialTitle: block.title,
+                            initialGoalId: goalForCategory(
+                              goals,
+                              block.categoryId,
+                            )?.id,
+                          ),
+                          child: PlanBlockWidget(
+                            block: block,
+                            category: resolveCategory(
+                              categories,
+                              block.categoryId,
+                            ),
                           ),
                         ),
                       ),
@@ -198,8 +225,15 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
                       _timedPositioned(
                         start: block.start,
                         end: block.end,
-                        left: layouts[i].left,
-                        width: layouts[i].width,
+                        // Inset from the column's own left edge — rather
+                        // than fully covering a planned block for the same
+                        // time (see the comment above), an actual block
+                        // now always leaves a sliver of it showing on the
+                        // left, so an overlap between the two reads as an
+                        // overlap instead of the planned block just
+                        // disappearing underneath.
+                        left: layouts[i].left + layouts[i].width * _actualBlockInset,
+                        width: layouts[i].width * (1 - _actualBlockInset),
                         child: ActualBlockWidget(
                           block: block,
                           category: resolveCategory(

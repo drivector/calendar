@@ -37,6 +37,9 @@ Future<void> showAddBlockSheet(
   required bool isPlan,
   required TimeOfDay initialStart,
   required DateTime date,
+  TimeOfDay? initialEnd,
+  String? initialTitle,
+  String? initialGoalId,
 }) {
   // Nothing to file a block under yet — a brand-new account starts with no
   // goals, so tell the user to create one first rather than opening a form
@@ -64,6 +67,9 @@ Future<void> showAddBlockSheet(
       initialStart: initialStart,
       date: date,
       ref: ref,
+      initialEnd: initialEnd,
+      initialTitle: initialTitle,
+      initialGoalId: initialGoalId,
     ),
   );
 }
@@ -74,6 +80,9 @@ class _AddBlockSheet extends StatefulWidget {
     required this.initialStart,
     required this.date,
     required this.ref,
+    this.initialEnd,
+    this.initialTitle,
+    this.initialGoalId,
   });
 
   final bool isPlan;
@@ -81,18 +90,29 @@ class _AddBlockSheet extends StatefulWidget {
   final DateTime date;
   final WidgetRef ref;
 
+  // Set when opening from an existing planned block (tapping it in the Day
+  // view) rather than empty space — prefills the form with that plan's own
+  // details instead of leaving it blank, since the whole point of tapping
+  // a plan is to log the activity it already describes.
+  final TimeOfDay? initialEnd;
+  final String? initialTitle;
+  final String? initialGoalId;
+
   @override
   State<_AddBlockSheet> createState() => _AddBlockSheetState();
 }
 
 class _AddBlockSheetState extends State<_AddBlockSheet> {
-  late final _titleController = TextEditingController();
+  late final _titleController = TextEditingController(
+    text: widget.initialTitle ?? '',
+  );
   late TimeOfDay _start = widget.initialStart;
-  late TimeOfDay _end = addMinutes(widget.initialStart, 30);
+  late TimeOfDay _end = widget.initialEnd ?? addMinutes(widget.initialStart, 30);
   // No default — an eligible goal always exists (the sheet never opens
   // otherwise, see showAddBlockSheet), but which one is the entry actually
-  // for is a real choice, not something to guess by picking the first.
-  String? _goalId;
+  // for is a real choice, not something to guess by picking the first —
+  // unless opened from a plan that already names one.
+  late String? _goalId = widget.initialGoalId;
 
   // Shown inline rather than as a SnackBar — see InlineFormError's own doc
   // comment for why a SnackBar doesn't work while this sheet is open.

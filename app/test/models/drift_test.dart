@@ -53,4 +53,52 @@ void main() {
     expect(drift.single.categoryId, 'meetings');
     expect(drift.single.delta, const Duration(minutes: 40));
   });
+
+  test(
+    'untimedPlannedByCategory counts even with no block and no tracked time — '
+    'a goal that has never been logged still shows as behind',
+    () {
+      final drift = computeDrift(
+        planned: const [],
+        tracked: const [],
+        untimedPlannedByCategory: const {'piano': Duration(minutes: 15)},
+      );
+
+      expect(drift.single.categoryId, 'piano');
+      expect(drift.single.delta, const Duration(minutes: -15));
+    },
+  );
+
+  test('untimedPlannedByCategory adds on top of a block-based planned total', () {
+    final planned = [
+      PlannedBlock(
+        id: 'p1',
+        start: at(9, 0),
+        end: at(12, 0),
+        title: 'Work 3 h',
+        categoryId: 'work',
+      ),
+    ];
+    final tracked = [
+      TrackedBlock(
+        id: 't1',
+        start: at(9, 0),
+        end: at(12, 0),
+        title: 'Work 3 h',
+        categoryId: 'work',
+        sourceId: 'manual',
+      ),
+    ];
+
+    final drift = computeDrift(
+      planned: planned,
+      tracked: tracked,
+      untimedPlannedByCategory: const {'work': Duration(minutes: 30)},
+    );
+
+    // The 3h block is fully covered by tracked time, but the extra 30m of
+    // untimed planned duration for the same category still isn't.
+    expect(drift.single.categoryId, 'work');
+    expect(drift.single.delta, const Duration(minutes: -30));
+  });
 }
