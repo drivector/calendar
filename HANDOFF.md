@@ -402,7 +402,7 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
   most of `lib/features/`/`lib/shared/widgets/` touched; `google_fonts`
   dropped from `pubspec.yaml`. `CLAUDE.md`'s Design system section was
   rewritten as part of this batch, not left describing the old system.
-- The sixth session's **sixteenth batch — pushed as `TBD`**: collapsed
+- The sixth session's **sixteenth batch — pushed as `9cba9c3`**: collapsed
   the Day view header from two rows to one (the view-mode dropdown now
   sits next to "+ Log", both flush right, via an `Expanded` date block
   that ellipsizes instead of overflowing — the same "Working week" +
