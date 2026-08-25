@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../models/activity_log.dart';
 import '../../../models/goal.dart';
 import '../../../models/tracked_block.dart';
+import '../../../shared/widgets/confirm_delete_dialog.dart';
 import '../../../state/categories_providers.dart';
 import '../../../state/day_view_providers.dart';
 import '../../../state/goals_providers.dart';
@@ -48,9 +49,16 @@ class ActivitiesList extends ConsumerWidget {
                           showGoalDetailSheet(context, ref, goal.id),
                       onEdit: () =>
                           showLogActivitySheet(context, ref, existing: block),
-                      onDelete: () => ref
-                          .read(trackedBlocksRepositoryProvider)
-                          .remove(block.id),
+                      onDelete: () async {
+                        final confirmed = await showConfirmDeleteDialog(
+                          context,
+                          title: 'Delete activity?',
+                          message:
+                              'This removes "${block.title}" from your activity log.',
+                        );
+                        if (!confirmed) return;
+                        await softDeleteTrackedBlock(ref, block);
+                      },
                     ),
                   const SizedBox(height: AppSpacing.s3),
                 ],

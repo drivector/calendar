@@ -5,6 +5,7 @@ import '../../../data/mock/mock_categories.dart';
 import '../../../models/goal.dart';
 import '../../../models/tracked_block.dart';
 import '../../../shared/widgets/category_chip.dart';
+import '../../../shared/widgets/confirm_delete_dialog.dart';
 import '../../../shared/widgets/date_field.dart';
 import '../../../shared/widgets/inline_form_error.dart';
 import '../../../state/categories_providers.dart';
@@ -196,11 +197,18 @@ class _LogActivitySheetState extends ConsumerState<LogActivitySheet> {
     Navigator.of(context).pop();
   }
 
-  void _delete() {
-    widget.ref
-        .read(trackedBlocksRepositoryProvider)
-        .remove(widget.existing!.id);
+  Future<void> _delete() async {
+    final existing = widget.existing!;
+    final confirmed = await showConfirmDeleteDialog(
+      context,
+      title: 'Delete activity?',
+      message: 'This removes "${existing.title}" from your activity log.',
+    );
+    if (!confirmed || !mounted) return;
+
+    await softDeleteTrackedBlock(widget.ref, existing);
     widget.ref.read(draftLogEntryProvider.notifier).reset();
+    if (!mounted) return;
     Navigator.of(context).pop();
   }
 

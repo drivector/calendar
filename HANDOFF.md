@@ -1,8 +1,11 @@
 # Track My Day (formerly "Calendar Tracker") — session handoff
 
 Updated 2026-08-25 (sixth session — seventeen batches pushed, all clean,
-see **Git status**; the fifth pushed batch also **deployed live Firestore
-rules changes to production**) — the app's user-visible
+plus an **eighteenth batch done but not yet committed** — delete
+confirmation, soft delete, and a dashed-outline fuzzy-match fix, see
+**Delete confirmation, soft delete, and a dashed-outline fuzzy-match
+fix** and **Git status**; the fifth pushed batch also **deployed live
+Firestore rules changes to production**) — the app's user-visible
 name changed from **"Calendar Tracker" to "Track My Day"** partway
 through this session (see **App renamed**, near the end) — this doc's
 own title reflects that now, but earlier dated sections below still say
@@ -305,7 +308,8 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
 `AsyncLoading`. Widget tests don't need this explicitly since
 `pumpAndSettle()` flushes it.
 
-## Git status — sixth session's first seventeen batches pushed, all clean
+## Git status — sixth session's first seventeen batches pushed, all
+clean; an eighteenth batch is done but uncommitted
 
 - The Firebase Auth/Firestore backend, the fourth session's UX fixes/CI,
   the entire fifth session (week nav, Activities tab, onboarding, cap
@@ -440,6 +444,20 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
   `lib/features/log_activity/widgets/activities_list.dart`,
   `test/widget_test.dart`. Live-verified on the iOS Simulator against
   the real signed-in account.
+- The sixth session's **eighteenth batch — done, not yet committed**:
+  delete confirmation + soft delete for Activities, plus the
+  dashed-outline fuzzy-match fix — see **Delete confirmation, soft
+  delete, and a dashed-outline fuzzy-match fix** for the full writeup.
+  Touched: `lib/models/tracked_block.dart`, new
+  `lib/shared/widgets/confirm_delete_dialog.dart`,
+  `lib/state/day_view_providers.dart`,
+  `lib/features/log_activity/widgets/log_activity_sheet.dart`,
+  `lib/features/log_activity/widgets/activities_list.dart`,
+  `lib/features/day_view/widgets/actual_block_widget.dart`,
+  `lib/features/day_view/widgets/time_body_grid.dart`,
+  `test/widget_test.dart`. `flutter analyze` + `flutter test` (168/168)
+  clean; live Simulator verification only partial (see that section's
+  own **Verification** for why).
 - A stray duplicate clone of this repo that existed briefly at
   `/Users/alexandrospanagiotidis/DriVector/Calendar/calendar/` (see the
   sign-up bug section for how it got there) has been **deleted** — it had
@@ -1792,6 +1810,77 @@ signed-in account: every row's edit link opens fully prefilled (title,
 times, and the correct goal chip pre-selected in green), Delete activity
 is present once editing, and the goal-name link still independently opens
 the goal detail sheet with no interference from the new links.
+
+## Delete confirmation, soft delete, and a dashed-outline fuzzy-match fix (sixth session)
+
+Ask, verbatim: "when delete, it should request pop up to confirm. also
+delete should not be physical delete in DB, it should have a status." A
+mid-turn interruption in the same round also reported a real bug: "the
+actual activities do not have dashed border if it was previously
+planned" — addressed together since both touch the same delete/tracked-
+block code paths.
+
+- **New `lib/shared/widgets/confirm_delete_dialog.dart`** —
+  `showConfirmDeleteDialog(context, {title, message})`, styled like the
+  existing `_UnsavedActivityDialog` (`AppShapes.medium`, accent-filled
+  "Delete" button, bordered "Cancel"). Returns `true` only if Delete was
+  tapped; `false` for Cancel or any other dismissal. **This is new
+  behavior for this app** — the existing "Delete goal"/"Delete category"
+  rows still act immediately with no prompt (per the previous batch's
+  writeup); only activity delete now confirms, since that's what was
+  asked for specifically, not a blanket policy change.
+- **Soft delete**: `TrackedBlock` gained a `TrackedBlockStatus { active,
+  deleted }` field (`lib/models/tracked_block.dart`), serialized as a
+  plain string, defaulting to `active` via `orElse` in `fromMap` so every
+  pre-existing Firestore document (none of which have this field) reads
+  as active rather than crashing or needing a migration. Deleting now
+  calls a new `softDeleteTrackedBlock(ref, block)`
+  (`lib/state/day_view_providers.dart`), which flips the status and
+  upserts — the document itself is never removed.
+  `allTrackedBlocksProvider` — already the single point every screen
+  reads tracked blocks through (Day view, Goals, Activities, Capacity) —
+  now filters out `status: deleted`, so the one filter change makes a
+  soft-deleted entry disappear everywhere at once with no other file
+  touched.
+- **Both delete paths wired the same way**: the Activities list's direct
+  "delete" link (`activities_list.dart`) and the edit sheet's own "Delete
+  activity" row (`log_activity_sheet.dart`, now `async`) both show the
+  confirm dialog first and call `softDeleteTrackedBlock` only if
+  confirmed.
+- **Dashed-outline bug fix**: the "this was planned" dashed outline on an
+  actual block (added in the fourteenth batch) only ever fired via the
+  explicit `TrackedBlock.plannedBlockId` link — set solely by the Goals
+  list's "Complete" button. An activity logged by hand that happens to
+  match a plan by category and overlapping time never got that link, so
+  the dashed-outline feature silently almost never fired for real manual
+  logging, which is most of how activity actually gets logged. Fixed with
+  a new pure function, `trackedBlockWasPlanned(TrackedBlock, List
+  <PlannedBlock>)` (`lib/models/tracked_block.dart`) — true if
+  `plannedBlockId` is set OR any planned block shares the tracked block's
+  category and overlaps its time range. `ActualBlockWidget` now takes a
+  `required bool wasPlanned` computed by its one call site in
+  `time_body_grid.dart`, instead of checking `plannedBlockId` internally.
+
+### Verification
+
+`flutter analyze` clean. `flutter test`: 168/168 (5 new — sheet-based
+delete confirm+cancel+soft-delete with a raw-stream check that the
+Firestore document survives with `status: deleted`, list-based delete's
+own confirm/cancel/soft-delete equivalents, and a fuzzy-match dashed-
+outline test using a manually-upserted planned+tracked block pair with no
+`plannedBlockId`). Live-verified only partially: a fresh `flutter run`
+build launched cleanly on the iOS Simulator against the real
+`test-dummy@example.com` account with no crash, and basic navigation
+(Goals tab, Account tab, the "+ Log" sheet opening/closing) worked: but
+this session hit the environment's known Simulator tap-coordinate
+unreliability hard enough to also block text-field focus/typing
+entirely (typing into the sign-in email field produced no visible text
+after several retries at recalibrated coordinates, following an
+accidental sign-out caused by a mis-landed tap on the Account screen's
+segmented control) — so the confirm-dialog/soft-delete/dashed-outline
+flows themselves were **not** re-confirmed by eye this round, only by
+the widget-tree test suite above. Worth a real look next session before
+trusting this further.
 
 ## Day view: multi-day timeline, date picker, Week tab removed (sixth session)
 

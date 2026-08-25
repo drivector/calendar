@@ -206,6 +206,10 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
                             categories,
                             block.categoryId,
                           ),
+                          wasPlanned: trackedBlockWasPlanned(
+                            block,
+                            dayBlocks[i].planned,
+                          ),
                         ),
                       ),
                   ],

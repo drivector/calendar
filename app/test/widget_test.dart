@@ -24,6 +24,7 @@ import 'package:calendar_tracker/models/category.dart';
 import 'package:calendar_tracker/models/clock_time.dart';
 import 'package:calendar_tracker/models/goal.dart';
 import 'package:calendar_tracker/models/planned_block.dart';
+import 'package:calendar_tracker/models/tracked_block.dart';
 import 'package:calendar_tracker/shared/widgets/app_tab_bar.dart';
 import 'package:calendar_tracker/shared/widgets/dashed_border.dart';
 import 'package:calendar_tracker/shared/widgets/step_arrow_button.dart';
@@ -217,6 +218,54 @@ void main() {
           matching: find.byType(DashedRectBorder),
         ),
         findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'Day view: a manually-logged entry with no plannedBlockId still gets '
+    "the dashed outline when it overlaps a planned block's own category "
+    'and time',
+    (WidgetTester tester) async {
+      final container = ProviderContainer(overrides: await _signedInOverrides());
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await container.read(plannedBlocksRepositoryProvider).upsert(
+        PlannedBlock(
+          id: 'test-fuzzy-plan',
+          start: DateTime(2026, 8, 20, 16, 0),
+          end: DateTime(2026, 8, 20, 16, 30),
+          title: 'Test plan',
+          categoryId: walkingCategoryId,
+        ),
+      );
+      await container.read(trackedBlocksRepositoryProvider).upsert(
+        TrackedBlock(
+          id: 'test-fuzzy-actual',
+          start: DateTime(2026, 8, 20, 16, 5),
+          end: DateTime(2026, 8, 20, 16, 25),
+          title: 'Test actual',
+          categoryId: walkingCategoryId,
+          sourceId: 'manual',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final fuzzy = find.byWidgetPredicate(
+        (w) => w is ActualBlockWidget && w.block.id == 'test-fuzzy-actual',
+      );
+      await tester.ensureVisible(fuzzy);
+      expect(fuzzy, findsOneWidget);
+      expect(
+        find.descendant(of: fuzzy, matching: find.byType(DashedRectBorder)),
+        findsOneWidget,
       );
     },
   );
@@ -801,6 +850,70 @@ void main() {
   );
 
   testWidgets(
+    "Activities: the edit sheet's own Delete activity row also confirms "
+    'before soft-deleting',
+    (WidgetTester tester) async {
+      final container = ProviderContainer(overrides: await _signedInOverrides());
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _tapTab(tester, 'Account');
+      await tester.tap(find.text('Activities'));
+      await tester.pumpAndSettle();
+
+      final row = find.byKey(const ValueKey('actual-walk'));
+      await tester.ensureVisible(row);
+      await tester.tap(find.descendant(of: row, matching: find.text('edit')));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Delete activity'));
+      await tester.tap(find.text('Delete activity'));
+      await tester.pumpAndSettle();
+
+      // Cancel first — the entry must survive untouched.
+      expect(find.text('Delete activity?'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Edit activity'), findsOneWidget);
+      expect(
+        container
+            .read(allTrackedBlocksProvider)
+            .where((b) => b.id == 'actual-walk'),
+        isNotEmpty,
+      );
+
+      // Now confirm — the entry disappears and the document is soft-deleted.
+      await tester.ensureVisible(find.text('Delete activity'));
+      await tester.tap(find.text('Delete activity'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Edit activity'), findsNothing);
+      expect(
+        container
+            .read(allTrackedBlocksProvider)
+            .where((b) => b.id == 'actual-walk'),
+        isEmpty,
+      );
+      final raw = container.read(allTrackedBlocksStreamProvider).value!;
+      expect(
+        raw.firstWhere((b) => b.id == 'actual-walk').status,
+        TrackedBlockStatus.deleted,
+      );
+    },
+  );
+
+  testWidgets(
     'Activities: tapping delete on a row removes just that entry',
     (WidgetTester tester) async {
       final container = ProviderContainer(overrides: await _signedInOverrides());
@@ -827,6 +940,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      expect(find.text('Delete activity?'), findsOneWidget);
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+
       expect(tester.takeException(), isNull);
       expect(
         container
@@ -837,6 +954,86 @@ void main() {
       expect(find.text('Walk 48 m'), findsNothing);
       // A different row on the same day survives untouched.
       expect(find.text('Deep work 1 h 45'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Activities: cancelling the delete confirmation leaves the entry untouched',
+    (WidgetTester tester) async {
+      final container = ProviderContainer(overrides: await _signedInOverrides());
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _tapTab(tester, 'Account');
+      await tester.tap(find.text('Activities'));
+      await tester.pumpAndSettle();
+
+      final row = find.byKey(const ValueKey('actual-walk'));
+      await tester.ensureVisible(row);
+      await tester.tap(
+        find.descendant(of: row, matching: find.text('delete')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Delete activity?'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        container
+            .read(allTrackedBlocksProvider)
+            .where((b) => b.id == 'actual-walk'),
+        isNotEmpty,
+      );
+      expect(find.text('Walk 48 m'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Activities: deleting an activity soft-deletes it — the Firestore document survives with status "deleted"',
+    (WidgetTester tester) async {
+      final container = ProviderContainer(overrides: await _signedInOverrides());
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _tapTab(tester, 'Account');
+      await tester.tap(find.text('Activities'));
+      await tester.pumpAndSettle();
+
+      final row = find.byKey(const ValueKey('actual-walk'));
+      await tester.ensureVisible(row);
+      await tester.tap(
+        find.descendant(of: row, matching: find.text('delete')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+
+      // Filtered provider treats it as gone...
+      expect(
+        container
+            .read(allTrackedBlocksProvider)
+            .where((b) => b.id == 'actual-walk'),
+        isEmpty,
+      );
+      // ...but the unfiltered stream shows the document is still there,
+      // just flagged deleted rather than physically removed.
+      final raw = container.read(allTrackedBlocksStreamProvider).value!;
+      final deleted = raw.firstWhere((b) => b.id == 'actual-walk');
+      expect(deleted.status, TrackedBlockStatus.deleted);
     },
   );
 

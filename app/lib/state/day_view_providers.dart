@@ -99,9 +99,26 @@ final allPlannedBlocksProvider = Provider<List<PlannedBlock>>((ref) {
   return ref.watch(allPlannedBlocksStreamProvider).valueOrNull ?? [];
 });
 
+/// Excludes soft-deleted blocks — the single point every screen reads
+/// tracked blocks through, so deleting an activity (see
+/// `softDeleteTrackedBlock` below) disappears everywhere at once without
+/// each of Day view/Goals/Activities/Capacity needing its own filter.
 final allTrackedBlocksProvider = Provider<List<TrackedBlock>>((ref) {
-  return ref.watch(allTrackedBlocksStreamProvider).valueOrNull ?? [];
+  return (ref.watch(allTrackedBlocksStreamProvider).valueOrNull ?? [])
+      .where((b) => b.status != TrackedBlockStatus.deleted)
+      .toList();
 });
+
+/// Deletes an activity without physically removing its Firestore document
+/// — flips it to [TrackedBlockStatus.deleted] instead, which
+/// [allTrackedBlocksProvider] then filters out everywhere. Confirm before
+/// calling this; it doesn't ask on its own (see
+/// `showConfirmDeleteDialog`, used by both places in the UI that call it).
+Future<void> softDeleteTrackedBlock(WidgetRef ref, TrackedBlock block) {
+  return ref
+      .read(trackedBlocksRepositoryProvider)
+      .upsert(block.copyWithStatus(TrackedBlockStatus.deleted));
+}
 
 final plannedBlocksProvider = Provider<List<PlannedBlock>>((ref) {
   final selectedDate = ref.watch(selectedDateProvider);
