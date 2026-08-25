@@ -18,26 +18,34 @@ import '../../../theme/app_text_styles.dart';
 import '../../../utils/duration_format.dart';
 
 /// The manual-entry form (screen 5, "Log activity") — the "+ LOG" action
-/// on the Activities screen. Saving creates a real [TrackedBlock] for the
-/// currently selected day and closes the sheet; the new entry shows up in
-/// the Activities list immediately, since both read the same live provider.
-Future<void> showLogActivitySheet(BuildContext context, WidgetRef ref) {
+/// on the Activities screen, and also how an existing entry there gets
+/// edited. Pass [existing] to edit that block in place (with a delete
+/// option); omit it to create a new one. Saving writes a real
+/// [TrackedBlock] and closes the sheet; the change shows up in the
+/// Activities list immediately, since both read the same live provider.
+Future<void> showLogActivitySheet(
+  BuildContext context,
+  WidgetRef ref, {
+  TrackedBlock? existing,
+}) {
   return showModalBottomSheet<void>(
     context: context,
     backgroundColor: AppColors.surface,
     isScrollControlled: true,
-    builder: (context) => LogActivitySheet(ref: ref),
+    builder: (context) => LogActivitySheet(ref: ref, existing: existing),
   );
 }
 
 class LogActivitySheet extends ConsumerStatefulWidget {
-  const LogActivitySheet({super.key, required this.ref});
+  const LogActivitySheet({super.key, required this.ref, this.existing});
 
   // The WidgetRef the sheet was opened from — read-only in here (see the
   // Riverpod gotcha this project follows: a borrowed ref must use .read(),
   // never .watch(), inside this widget's own build). Reactive state below
   // goes through this state's own [ref] instead.
   final WidgetRef ref;
+
+  final TrackedBlock? existing;
 
   @override
   ConsumerState<LogActivitySheet> createState() => _LogActivitySheetState();
@@ -48,22 +56,68 @@ class _LogActivitySheetState extends ConsumerState<LogActivitySheet> {
   // comment for why a SnackBar doesn't work while this sheet is open.
   String? _errorMessage;
 
+  // The Activity/Note fields are plain TextFields driven by onChanged into
+  // the draft provider, with no controller of their own — fine for a
+  // fresh, blank create, but an edit needs to *display* the existing
+  // title/note, and an uncontrolled TextField has no way to be told what
+  // text to start with. These controllers are that: seeded from
+  // [widget.existing] synchronously in initState (a TextEditingController
+  // isn't a provider, so this doesn't hit the "no provider writes in
+  // initState" rule the draft prefill below does).
+  late final _activityController = TextEditingController(
+    text: widget.existing?.title ?? '',
+  );
+  late final _noteController = TextEditingController(
+    text: widget.existing?.note ?? '',
+  );
+
+  bool get _isEditing => widget.existing != null;
+
   @override
   void initState() {
     super.initState();
-    // Defaults to whatever day the app is currently showing — the draft
-    // always starts empty on a fresh open (both _close and _save reset it),
-    // so this only ever fires once per open, never overwriting a day the
-    // user already picked. Deferred to after the first frame: Riverpod
-    // forbids modifying a provider from initState itself.
+    // Deferred to after the first frame: Riverpod forbids modifying a
+    // provider from initState itself.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      if (widget.ref.read(draftLogEntryProvider).date == null) {
-        widget.ref
-            .read(draftLogEntryProvider.notifier)
-            .setDate(widget.ref.read(selectedDateProvider));
+      final existing = widget.existing;
+      final notifier = widget.ref.read(draftLogEntryProvider.notifier);
+      if (existing != null) {
+        // Editing — the draft always starts empty on a fresh open, so
+        // this fully repopulates it from the block being edited rather
+        // than just defaulting the date.
+        final goal = goalForCategory(
+          widget.ref.read(goalsProvider),
+          existing.categoryId,
+        );
+        notifier
+          ..setDate(
+            DateTime(
+              existing.start.year,
+              existing.start.month,
+              existing.start.day,
+            ),
+          )
+          ..setActivity(existing.title)
+          ..setStart(TimeOfDay.fromDateTime(existing.start))
+          ..setEnd(TimeOfDay.fromDateTime(existing.end))
+          ..setNote(existing.note ?? '');
+        if (goal != null) notifier.setGoal(goal.id);
+      } else if (widget.ref.read(draftLogEntryProvider).date == null) {
+        // Creating — defaults to whatever day the app is currently
+        // showing (both _close and _save reset the draft, so this only
+        // ever fires once per open, never overwriting a day the user
+        // already picked).
+        notifier.setDate(widget.ref.read(selectedDateProvider));
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _activityController.dispose();
+    _noteController.dispose();
+    super.dispose();
   }
 
   void _close() {
@@ -118,20 +172,34 @@ class _LogActivitySheetState extends ConsumerState<LogActivitySheet> {
         ? goal.name
         : draft.activity.trim();
 
+    final existing = widget.existing;
     widget.ref
         .read(trackedBlocksRepositoryProvider)
         .upsert(
           TrackedBlock(
-            id: 'manual-${DateTime.now().microsecondsSinceEpoch}',
+            id: existing?.id ?? 'manual-${DateTime.now().microsecondsSinceEpoch}',
             start: startDt,
             end: endDt,
             title: title,
             categoryId: goal.categoryId,
-            sourceId: 'manual',
+            // Editing keeps the block's real provenance (a health/calendar
+            // import stays that, not relabeled "manual" just because it
+            // was touched) and its link back to a plan, if it had one.
+            sourceId: existing?.sourceId ?? 'manual',
+            confidence: existing?.confidence ?? 1.0,
+            plannedBlockId: existing?.plannedBlockId,
             note: draft.note.trim().isEmpty ? null : draft.note.trim(),
           ),
         );
 
+    widget.ref.read(draftLogEntryProvider.notifier).reset();
+    Navigator.of(context).pop();
+  }
+
+  void _delete() {
+    widget.ref
+        .read(trackedBlocksRepositoryProvider)
+        .remove(widget.existing!.id);
     widget.ref.read(draftLogEntryProvider.notifier).reset();
     Navigator.of(context).pop();
   }
@@ -175,7 +243,10 @@ class _LogActivitySheetState extends ConsumerState<LogActivitySheet> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Log activity', style: AppTextStyles.title()),
+                      Text(
+                        _isEditing ? 'Edit activity' : 'Log activity',
+                        style: AppTextStyles.title(),
+                      ),
                       GestureDetector(
                         onTap: _close,
                         behavior: HitTestBehavior.opaque,
@@ -203,6 +274,7 @@ class _LogActivitySheetState extends ConsumerState<LogActivitySheet> {
                   const SizedBox(height: AppSpacing.s3),
                   _FieldLabel('Activity'),
                   TextField(
+                    controller: _activityController,
                     style: AppTextStyles.label(),
                     decoration: const InputDecoration(isDense: true),
                     onChanged: notifier.setActivity,
@@ -293,6 +365,7 @@ class _LogActivitySheetState extends ConsumerState<LogActivitySheet> {
                   const SizedBox(height: AppSpacing.s3),
                   _FieldLabel('Note'),
                   TextField(
+                    controller: _noteController,
                     minLines: 3,
                     maxLines: 5,
                     style: AppTextStyles.label(),
@@ -315,11 +388,27 @@ class _LogActivitySheetState extends ConsumerState<LogActivitySheet> {
                         horizontal: AppSpacing.s3,
                       ),
                       child: Text(
-                        'Save entry',
+                        _isEditing ? 'Save changes' : 'Save entry',
                         style: AppTextStyles.small(color: AppColors.surface),
                       ),
                     ),
                   ),
+                  if (_isEditing) ...[
+                    const SizedBox(height: AppSpacing.s2),
+                    GestureDetector(
+                      onTap: _delete,
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        width: double.infinity,
+                        constraints: const BoxConstraints(minHeight: 44),
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Delete activity',
+                          style: AppTextStyles.small(color: AppColors.accent),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

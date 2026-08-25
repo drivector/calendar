@@ -1,7 +1,7 @@
 # Track My Day (formerly "Calendar Tracker") — session handoff
 
-Updated 2026-08-25 (sixth session — sixteen batches pushed, all clean, see
-**Git status**; the fifth pushed batch also **deployed live Firestore
+Updated 2026-08-25 (sixth session — seventeen batches pushed, all clean,
+see **Git status**; the fifth pushed batch also **deployed live Firestore
 rules changes to production**) — the app's user-visible
 name changed from **"Calendar Tracker" to "Track My Day"** partway
 through this session (see **App renamed**, near the end) — this doc's
@@ -305,7 +305,7 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
 `AsyncLoading`. Widget tests don't need this explicitly since
 `pumpAndSettle()` flushes it.
 
-## Git status — sixth session's first sixteen batches pushed, all clean
+## Git status — sixth session's first seventeen batches pushed, all clean
 
 - The Firebase Auth/Firestore backend, the fourth session's UX fixes/CI,
   the entire fifth session (week nav, Activities tab, onboarding, cap
@@ -425,6 +425,21 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
   `lib/state/week_view_providers.dart` (doc comment only),
   `test/widget_test.dart`. Live-verified on the iOS Simulator, including
   the tight "Working week" case at real phone width.
+- The sixth session's **seventeenth batch — pushed as `TBD`**: edit and
+  delete for entries in the Activities list, reusing `LogActivitySheet`
+  for edit (an optional `existing: TrackedBlock?` param) rather than a
+  second form, with a "Delete activity" row once editing (mirrors the
+  goal/category sheets' own delete-row convention) plus a direct
+  "delete" link on each list row. Along the way, fixed a real
+  pre-existing bug: the sheet's Activity/Note fields had no
+  `TextEditingController`, so a prefilled edit could never actually
+  display — invisible for create (both start blank anyway), caught by
+  the new tests failing. See **Activities list: edit and delete** for
+  the full write-up. Touched:
+  `lib/features/log_activity/widgets/log_activity_sheet.dart`,
+  `lib/features/log_activity/widgets/activities_list.dart`,
+  `test/widget_test.dart`. Live-verified on the iOS Simulator against
+  the real signed-in account.
 - A stray duplicate clone of this repo that existed briefly at
   `/Users/alexandrospanagiotidis/DriVector/Calendar/calendar/` (see the
   sign-up bug section for how it got there) has been **deleted** — it had
@@ -1723,6 +1738,60 @@ iOS Simulator: the collapsed header at both the easy (Day mode) and tight
 from the live signed-in account, and the creation date showing correctly
 against that same real account ("25 August 2026" — this session's actual
 sign-up day).
+
+## Activities list: edit and delete (sixth session)
+
+Ask, verbatim: "on activities list, add edit and delete of activity."
+Each `_ActivityRow` in `activities_list.dart` gained "edit" and "delete"
+links, reusing `LogActivitySheet` (the existing manual-entry form) rather
+than building a second form — `showLogActivitySheet` now takes an
+optional `existing: TrackedBlock?`, and the sheet fully repopulates its
+draft from it (day, activity, start/end, the goal backing its category,
+note) instead of defaulting to a blank create.
+
+- **Saving preserves the block's real identity, not just its content** —
+  same `id`, and `sourceId`/`confidence`/`plannedBlockId` are carried
+  over from the original rather than reset to `'manual'`/`1.0`/`null`.
+  Editing a health- or calendar-imported entry keeps it tagged as such;
+  it doesn't get relabeled "manual" just because it was touched, and an
+  entry linked back to a plan (`plannedBlockId`, see the dashed-outline
+  actual-block work in the fourteenth batch) keeps that link.
+- **"Delete activity"** lives inside the sheet too, once editing (mirrors
+  `goal_edit_sheet.dart`/`category_edit_sheet.dart`'s own "Delete
+  goal"/"Delete category" rows exactly — same styling, same no-confirmation
+  behavior, consistent with this app's established convention for this
+  kind of destructive action). The list rows also carry a direct "delete"
+  link of their own, for removing something without opening the sheet at
+  all.
+- **A real, pre-existing bug surfaced and got fixed along the way**: the
+  sheet's Activity and Note `TextField`s had no `TextEditingController`
+  and no `onChanged`-driven rebuild — for a fresh create this was
+  invisible (both start blank either way), but it meant an edit's
+  prefilled title/note could never actually *display*, even though the
+  underlying draft state was set correctly. Both fields now have a
+  controller seeded from `widget.existing` in `initState`, alongside the
+  existing `onChanged` wiring into the draft provider — this was caught
+  by the new tests failing (`enterText` couldn't find an `EditableText`
+  showing the expected prefilled text), not by inspection.
+- **The edit/delete links are laid out as their own trailing column**,
+  not merged into the row's title/goal `Row` — that row already has its
+  own tap target (the goal-name link opens the goal's detail sheet), and
+  nested `GestureDetector`s in Flutter don't stop a tap from reaching an
+  enclosing one, so overlapping them would have fired both handlers on
+  one tap. Confirmed live that the goal-name link still opens the right
+  goal's detail sheet, unaffected by the new links sitting elsewhere in
+  the row.
+
+### Verification
+
+`flutter analyze` + `flutter test` (164 tests, 2 new — one exercising a
+full edit-and-save round trip via a `ProviderContainer` check that the
+same block id was updated in place rather than duplicated, one for
+delete) clean. Live-verified on the iOS Simulator against the real
+signed-in account: every row's edit link opens fully prefilled (title,
+times, and the correct goal chip pre-selected in green), Delete activity
+is present once editing, and the goal-name link still independently opens
+the goal detail sheet with no interference from the new links.
 
 ## Day view: multi-day timeline, date picker, Week tab removed (sixth session)
 

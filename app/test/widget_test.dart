@@ -744,6 +744,102 @@ void main() {
     },
   );
 
+  testWidgets(
+    'Activities: tapping edit on a row opens it prefilled, and saving '
+    'updates that same entry in place',
+    (WidgetTester tester) async {
+      final container = ProviderContainer(overrides: await _signedInOverrides());
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _tapTab(tester, 'Account');
+      await tester.tap(find.text('Activities'));
+      await tester.pumpAndSettle();
+
+      // 'actual-walk' (mock_day_20aug.dart): "Walk 48 m", 07:00–07:48,
+      // Walking goal.
+      final row = find.byKey(const ValueKey('actual-walk'));
+      await tester.ensureVisible(row);
+      await tester.tap(find.descendant(of: row, matching: find.text('edit')));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Edit activity'), findsOneWidget);
+      // Prefilled from the existing block, not a blank form — scoped to
+      // the sheet since "Walk 48 m" also still shows on the Activities
+      // row behind the modal.
+      final activityField = find.descendant(
+        of: find.byType(LogActivitySheet),
+        matching: find.text('Walk 48 m'),
+      );
+      expect(activityField, findsOneWidget);
+      expect(find.text('7:00 AM'), findsOneWidget);
+      expect(find.text('7:48 AM'), findsOneWidget);
+
+      await tester.enterText(activityField, 'Morning walk, edited');
+      await tester.ensureVisible(find.text('Save changes'));
+      await tester.tap(find.text('Save changes'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      // Same id, new title — an edit, not a second entry alongside the
+      // original.
+      final blocks = container
+          .read(allTrackedBlocksProvider)
+          .where((b) => b.id == 'actual-walk');
+      expect(blocks, hasLength(1));
+      expect(blocks.single.title, 'Morning walk, edited');
+      expect(find.text('Morning walk, edited'), findsOneWidget);
+      expect(find.text('Walk 48 m'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'Activities: tapping delete on a row removes just that entry',
+    (WidgetTester tester) async {
+      final container = ProviderContainer(overrides: await _signedInOverrides());
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _tapTab(tester, 'Account');
+      await tester.tap(find.text('Activities'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Walk 48 m'), findsOneWidget);
+      expect(find.text('Deep work 1 h 45'), findsOneWidget);
+
+      final row = find.byKey(const ValueKey('actual-walk'));
+      await tester.ensureVisible(row);
+      await tester.tap(
+        find.descendant(of: row, matching: find.text('delete')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        container
+            .read(allTrackedBlocksProvider)
+            .where((b) => b.id == 'actual-walk'),
+        isEmpty,
+      );
+      expect(find.text('Walk 48 m'), findsNothing);
+      // A different row on the same day survives untouched.
+      expect(find.text('Deep work 1 h 45'), findsOneWidget);
+    },
+  );
+
   testWidgets("Activities: each row shows its goal next to the title, and tapping it opens "
       "that goal's detail", (WidgetTester tester) async {
     await tester.pumpWidget(

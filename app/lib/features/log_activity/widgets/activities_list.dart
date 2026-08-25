@@ -13,6 +13,7 @@ import '../../../theme/app_spacing.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../utils/duration_format.dart';
 import '../../goals/widgets/goal_detail_sheet.dart';
+import 'log_activity_sheet.dart';
 
 /// Every activity ever tracked, grouped into a day-by-day list (most recent
 /// day first; see `models/activity_log.dart`). Lives inside the Activities
@@ -39,11 +40,17 @@ class ActivitiesList extends ConsumerWidget {
                   const SizedBox(height: AppSpacing.s1),
                   for (final block in group.blocks)
                     _ActivityRow(
+                      key: ValueKey(block.id),
                       block: block,
                       color: resolveCategory(categories, block.categoryId).color,
                       goal: goalForCategory(goals, block.categoryId),
                       onTapGoal: (goal) =>
                           showGoalDetailSheet(context, ref, goal.id),
+                      onEdit: () =>
+                          showLogActivitySheet(context, ref, existing: block),
+                      onDelete: () => ref
+                          .read(trackedBlocksRepositoryProvider)
+                          .remove(block.id),
                     ),
                   const SizedBox(height: AppSpacing.s3),
                 ],
@@ -80,10 +87,13 @@ String _clock(DateTime t) =>
 
 class _ActivityRow extends StatelessWidget {
   const _ActivityRow({
+    super.key,
     required this.block,
     required this.color,
     required this.goal,
     required this.onTapGoal,
+    required this.onEdit,
+    required this.onDelete,
   });
 
   final TrackedBlock block;
@@ -95,6 +105,9 @@ class _ActivityRow extends StatelessWidget {
   // as a dead link.
   final Goal? goal;
   final ValueChanged<Goal> onTapGoal;
+
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -145,9 +158,40 @@ class _ActivityRow extends StatelessWidget {
                 ],
               ),
             ),
-            Text(
-              formatDuration(block.duration),
-              style: AppTextStyles.mono(color: AppColors.text),
+            // Its own column, not nested inside the title/goal Row above —
+            // that Row already has its own tap target for the goal-name
+            // link, and Flutter doesn't stop a tap from also reaching an
+            // enclosing GestureDetector, so overlapping the two would fire
+            // both on one tap.
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  formatDuration(block.duration),
+                  style: AppTextStyles.mono(color: AppColors.text),
+                ),
+                const SizedBox(height: AppSpacing.s1),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    GestureDetector(
+                      onTap: onEdit,
+                      behavior: HitTestBehavior.opaque,
+                      child: Text('edit', style: AppTextStyles.mono()),
+                    ),
+                    const SizedBox(width: AppSpacing.s2),
+                    GestureDetector(
+                      onTap: onDelete,
+                      behavior: HitTestBehavior.opaque,
+                      child: Text(
+                        'delete',
+                        style: AppTextStyles.mono(color: AppColors.accent),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ],
         ),
