@@ -1,10 +1,7 @@
 # Track My Day (formerly "Calendar Tracker") — session handoff
 
-Updated 2026-08-25 (sixth session — seventeen batches pushed, all clean,
-plus an **eighteenth batch done but not yet committed** — delete
-confirmation, soft delete, and a dashed-outline fuzzy-match fix, see
-**Delete confirmation, soft delete, and a dashed-outline fuzzy-match
-fix** and **Git status**; the fifth pushed batch also **deployed live
+Updated 2026-08-25 (sixth session — eighteen batches pushed, all clean,
+see **Git status**; the fifth pushed batch also **deployed live
 Firestore rules changes to production**) — the app's user-visible
 name changed from **"Calendar Tracker" to "Track My Day"** partway
 through this session (see **App renamed**, near the end) — this doc's
@@ -308,8 +305,7 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
 `AsyncLoading`. Widget tests don't need this explicitly since
 `pumpAndSettle()` flushes it.
 
-## Git status — sixth session's first seventeen batches pushed, all
-clean; an eighteenth batch is done but uncommitted
+## Git status — sixth session's first eighteen batches pushed, all clean
 
 - The Firebase Auth/Firestore backend, the fourth session's UX fixes/CI,
   the entire fifth session (week nav, Activities tab, onboarding, cap
@@ -444,7 +440,7 @@ clean; an eighteenth batch is done but uncommitted
   `lib/features/log_activity/widgets/activities_list.dart`,
   `test/widget_test.dart`. Live-verified on the iOS Simulator against
   the real signed-in account.
-- The sixth session's **eighteenth batch — done, not yet committed**:
+- The sixth session's **eighteenth batch — pushed as `acf379f`**:
   delete confirmation + soft delete for Activities, plus the
   dashed-outline fuzzy-match fix — see **Delete confirmation, soft
   delete, and a dashed-outline fuzzy-match fix** for the full writeup.
