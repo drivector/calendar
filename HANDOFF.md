@@ -1,11 +1,7 @@
 # Track My Day (formerly "Calendar Tracker") — session handoff
 
-Updated 2026-08-25 (sixth session — twenty batches pushed, all clean,
-plus a twenty-first batch **done but not yet committed** (tap a planned
-block to log it, the planned/drift wiring fix, and the actual-block
-inset — see **Day view: tap a planned block to log it, planned/drift
-wiring fix, actual-block inset** and **Git status**); the fifth pushed
-batch also **deployed live
+Updated 2026-08-25 (sixth session — twenty-one batches pushed, all
+clean, see **Git status**; the fifth pushed batch also **deployed live
 Firestore rules changes to production**) — the app's user-visible
 name changed from **"Calendar Tracker" to "Track My Day"** partway
 through this session (see **App renamed**, near the end) — this doc's
@@ -309,8 +305,7 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
 `AsyncLoading`. Widget tests don't need this explicitly since
 `pumpAndSettle()` flushes it.
 
-## Git status — sixth session's first twenty batches pushed, all clean;
-a twenty-first batch is done but uncommitted
+## Git status — sixth session's first twenty-one batches pushed, all clean
 
 - The Firebase Auth/Firestore backend, the fourth session's UX fixes/CI,
   the entire fifth session (week nav, Activities tab, onboarding, cap
@@ -476,7 +471,7 @@ a twenty-first batch is done but uncommitted
   `test/models/clock_time_test.dart`, `test/widget_test.dart`. `flutter
   analyze` + `flutter test` (182/182) clean; both bugs live-verified on
   the iOS Simulator (see that section's own **Verification**).
-- The sixth session's **twenty-first batch — done, not yet committed**:
+- The sixth session's **twenty-first batch — pushed as `b30411b`**:
   tapping a planned block to log it, the planned/drift wiring fix, and
   the actual-block inset — see **Day view: tap a planned block to log
   it, planned/drift wiring fix, actual-block inset** for the full
