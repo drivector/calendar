@@ -3,14 +3,17 @@ import 'package:flutter/widgets.dart';
 import '../../../models/category.dart';
 import '../../../models/planned_block.dart';
 import '../../../shared/widgets/dashed_border.dart';
+import '../../../theme/app_category_colors.dart';
 import '../../../theme/app_colors.dart';
+import '../../../theme/app_shapes.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../theme/app_text_styles.dart';
 
 /// A planned block: a rounded 1px dashed outline in its category color,
-/// unfilled so a solid actual block for the same slot reads clearly on top
-/// of it. When [onConfirm] is set (nothing was tracked against this plan),
-/// an inline "Confirm" affordance accepts the plan as actual.
+/// lightly filled with that same color at 30% so it still reads clearly
+/// under a solid actual block for the same slot rather than competing
+/// with it. When [onConfirm] is set (nothing was tracked against this
+/// plan), an inline "Confirm" affordance accepts the plan as actual.
 class PlanBlockWidget extends StatelessWidget {
   const PlanBlockWidget({
     super.key,
@@ -29,6 +32,10 @@ class PlanBlockWidget extends StatelessWidget {
       color: category.color,
       child: Container(
         alignment: Alignment.topLeft,
+        decoration: BoxDecoration(
+          color: AppCategoryColors.planFill(category.color),
+          borderRadius: AppShapes.small,
+        ),
         padding: const EdgeInsets.all(AppSpacing.s1),
         // maxLines/ellipsis on the title — a narrow multi-day column
         // (Working week/Week mode) is narrow enough that unbounded text

@@ -320,6 +320,120 @@ void main() {
     },
   );
 
+  testWidgets(
+    'Day view: tapping an actual block opens a detail popup showing its '
+    'date, start–end time, and duration',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: await _signedInOverrides(),
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final actual = find.byWidgetPredicate(
+        (w) => w is ActualBlockWidget && w.block.id == 'actual-walk',
+      );
+      await tester.ensureVisible(actual);
+      await tester.tap(actual);
+      await tester.pumpAndSettle();
+
+      // 'actual-walk' (mock_day_20aug.dart): 07:00–07:48 on 20 Aug 2026.
+      expect(tester.takeException(), isNull);
+      expect(find.text('Thu, 20 Aug 2026'), findsOneWidget);
+      expect(find.text('07:00–07:48 · 48m'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    "Day view: the detail popup's edit icon opens the same edit sheet as "
+    "the Activities list's own edit link, prefilled",
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: await _signedInOverrides(),
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final actual = find.byWidgetPredicate(
+        (w) => w is ActualBlockWidget && w.block.id == 'actual-walk',
+      );
+      await tester.ensureVisible(actual);
+      await tester.tap(actual);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('✎'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Edit activity'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(LogActivitySheet),
+          matching: find.text('Walk 48 m'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    "Day view: the detail popup's delete icon confirms before "
+    'soft-deleting, and leaves the entry alone on Cancel',
+    (WidgetTester tester) async {
+      final container = ProviderContainer(overrides: await _signedInOverrides());
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final actual = find.byWidgetPredicate(
+        (w) => w is ActualBlockWidget && w.block.id == 'actual-walk',
+      );
+      await tester.ensureVisible(actual);
+      await tester.tap(actual);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('🗑'));
+      await tester.pumpAndSettle();
+
+      // Cancel — the popup itself stays open, the entry is untouched.
+      expect(find.text('Delete activity?'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Thu, 20 Aug 2026'), findsOneWidget);
+      expect(
+        container
+            .read(allTrackedBlocksProvider)
+            .where((b) => b.id == 'actual-walk'),
+        isNotEmpty,
+      );
+
+      // Delete again, this time confirming.
+      await tester.tap(find.text('🗑'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        container
+            .read(allTrackedBlocksProvider)
+            .where((b) => b.id == 'actual-walk'),
+        isEmpty,
+      );
+    },
+  );
+
   testWidgets('Day view: the header arrows step to the next/previous day', (
     WidgetTester tester,
   ) async {
@@ -1178,6 +1292,54 @@ void main() {
         find.descendant(of: titleRow, matching: find.text('Walking')),
         findsNothing,
       );
+    },
+  );
+
+  testWidgets(
+    'Activities: the search field filters by title or goal name, hiding '
+    'non-matching entries and days entirely',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: await _signedInOverrides(),
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _tapTab(tester, 'Account');
+      await tester.tap(find.text('Activities'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Walk 48 m'), findsOneWidget);
+      expect(find.text('Deep work 1 h 45'), findsOneWidget);
+
+      final searchField = find.byType(TextField).first;
+      await tester.enterText(searchField, 'walk');
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      // Title match, on two different days.
+      expect(find.text('Walk 48 m'), findsOneWidget);
+      expect(find.text('Walk 25 m'), findsOneWidget);
+      // A day with nothing matching disappears entirely, not just its rows.
+      expect(find.text('Deep work 1 h 45'), findsNothing);
+
+      // Matches by goal name too, not just the block's own title.
+      await tester.enterText(searchField, 'walking');
+      await tester.pumpAndSettle();
+      expect(find.text('Walk 48 m'), findsOneWidget);
+
+      // Clearing the field shows everything again.
+      await tester.enterText(searchField, '');
+      await tester.pumpAndSettle();
+      expect(find.text('Deep work 1 h 45'), findsOneWidget);
+
+      // A query matching nothing says so, instead of an empty blank list.
+      await tester.enterText(searchField, 'zzz-nonexistent');
+      await tester.pumpAndSettle();
+      expect(find.textContaining('No activities match'), findsOneWidget);
+      expect(find.text('Walk 48 m'), findsNothing);
     },
   );
 

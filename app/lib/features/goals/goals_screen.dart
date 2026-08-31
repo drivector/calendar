@@ -86,6 +86,7 @@ class GoalsScreen extends ConsumerWidget {
                           generatedThisWeek: generatedThisWeek,
                           allTracked: allTracked,
                           weekStart: weekStart,
+                          now: DateTime.now(),
                         ),
                       ),
                       const SizedBox(height: AppSpacing.s4),

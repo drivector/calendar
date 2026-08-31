@@ -8,6 +8,9 @@ import 'package:calendar_tracker/models/tracked_block.dart';
 final _ongoingStart = DateTime(2020, 1, 1);
 final _ongoingEnd = DateTime(2099, 12, 31);
 final _weekStart = DateTime(2026, 8, 17); // a Monday
+// Safely after every block these tests construct (including the one
+// deliberately placed a week later) — "complete" only fills in the past.
+final _now = DateTime(2026, 9, 1, 12, 0);
 
 Goal _goal({String id = 'goal-walking', String categoryId = 'walking'}) => Goal(
   id: id,
@@ -52,6 +55,7 @@ void main() {
         generatedThisWeek: const [],
         allTracked: const [],
         weekStart: _weekStart,
+        now: _now,
       );
 
       expect(pending, hasLength(1));
@@ -86,6 +90,7 @@ void main() {
           generatedThisWeek: const [],
           allTracked: tracked,
           weekStart: _weekStart,
+          now: _now,
         );
 
         expect(pending, isEmpty);
@@ -110,6 +115,7 @@ void main() {
           generatedThisWeek: generated,
           allTracked: const [],
           weekStart: _weekStart,
+          now: _now,
         );
 
         expect(pending, hasLength(1));
@@ -132,6 +138,7 @@ void main() {
         generatedThisWeek: generated,
         allTracked: const [],
         weekStart: _weekStart,
+        now: _now,
       );
 
       expect(pending, isEmpty);
@@ -152,6 +159,7 @@ void main() {
         generatedThisWeek: const [],
         allTracked: const [],
         weekStart: _weekStart,
+        now: _now,
       );
 
       expect(pending, isEmpty);
@@ -173,9 +181,50 @@ void main() {
         generatedThisWeek: const [],
         allTracked: const [],
         weekStart: _weekStart,
+        now: _now,
       );
 
       expect(pending, isEmpty);
+    });
+
+    test('a planned block that has not ended yet is not pending', () {
+      final goal = _goal();
+      final planned = [
+        _plannedBlock(id: 'plan-future', start: _now.add(const Duration(hours: 1))),
+      ];
+
+      final pending = pendingPlannedBlocksForGoal(
+        goal: goal,
+        allPlanned: planned,
+        generatedThisWeek: const [],
+        allTracked: const [],
+        weekStart: DateTime(_now.year, _now.month, _now.day),
+        now: _now,
+      );
+
+      expect(pending, isEmpty);
+    });
+
+    test('a planned block that ended just before now is pending', () {
+      final goal = _goal();
+      final planned = [
+        _plannedBlock(
+          id: 'plan-just-past',
+          start: _now.subtract(const Duration(minutes: 45)),
+        ),
+      ];
+
+      final pending = pendingPlannedBlocksForGoal(
+        goal: goal,
+        allPlanned: planned,
+        generatedThisWeek: const [],
+        allTracked: const [],
+        weekStart: DateTime(_now.year, _now.month, _now.day),
+        now: _now,
+      );
+
+      expect(pending, hasLength(1));
+      expect(pending.single.id, 'plan-just-past');
     });
   });
 
@@ -197,7 +246,7 @@ void main() {
       expect(block.title, pending.single.title);
       expect(block.categoryId, pending.single.categoryId);
       expect(block.plannedBlockId, 'plan-1');
-      expect(block.sourceId, 'manual');
+      expect(block.sourceId, 'auto');
     });
 
     test('the id is derived from the planned block id, not a timestamp — idempotent on repeat', () {

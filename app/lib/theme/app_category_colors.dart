@@ -29,4 +29,9 @@ class AppCategoryColors {
   /// text stays readable on top.
   static Color blockFill(Color category) =>
       Color.lerp(const Color(0xFFFFFFFF), category, 0.15)!;
+
+  /// A planned block's own light fill — true alpha, not a lerp toward
+  /// white like [blockFill], so it reads as translucent (the grid lines
+  /// underneath still show through) rather than just a paler solid.
+  static Color planFill(Color category) => category.withValues(alpha: 0.3);
 }

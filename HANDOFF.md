@@ -1,7 +1,11 @@
 # Track My Day (formerly "Calendar Tracker") — session handoff
 
-Updated 2026-08-25 (sixth session — twenty-one batches pushed, all
-clean, see **Git status**; the fifth pushed batch also **deployed live
+Updated 2026-08-31 (sixth session — twenty-one batches pushed, all
+clean, plus a twenty-second batch **done but not yet committed** (the
+seven-item follow-up round — goal-tick past-only, Activities search,
+18:00 default view, 1am grid extension, centered detail dialog, plan
+fill, column dividers — see **Seven-item follow-up round** and **Git
+status**); the fifth pushed batch also **deployed live
 Firestore rules changes to production**) — the app's user-visible
 name changed from **"Calendar Tracker" to "Track My Day"** partway
 through this session (see **App renamed**, near the end) — this doc's
@@ -305,7 +309,8 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
 `AsyncLoading`. Widget tests don't need this explicitly since
 `pumpAndSettle()` flushes it.
 
-## Git status — sixth session's first twenty-one batches pushed, all clean
+## Git status — sixth session's first twenty-one batches pushed, all
+clean; a twenty-second batch is done but uncommitted
 
 - The Firebase Auth/Firestore backend, the fourth session's UX fixes/CI,
   the entire fifth session (week nav, Activities tab, onboarding, cap
@@ -483,6 +488,23 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
   `flutter analyze` + `flutter test` (192/192) clean; all three
   live-verified on the iOS Simulator, including against the real
   account's own data.
+- The sixth session's **twenty-second batch — done, not yet committed**:
+  the seven-item follow-up round (goal-tick past-only + `sourceId: 'auto'`,
+  Activities search field, 18:00 default Day-view scroll, timeline
+  extended to 1am, the actual-block detail popup rebuilt as a centered
+  dialog with a bin delete icon, planned blocks' 30%-opacity fill, and
+  day-column dividers) — see **Seven-item follow-up round** for the full
+  writeup. Touched:
+  `lib/features/day_view/widgets/actual_block_widget.dart`,
+  `lib/features/day_view/widgets/plan_block_widget.dart`,
+  `lib/features/day_view/widgets/time_body_grid.dart`,
+  `lib/features/goals/goals_screen.dart`,
+  `lib/features/log_activity/widgets/activities_list.dart`,
+  `lib/models/goal_completion.dart`, `lib/theme/app_category_colors.dart`,
+  `test/models/goal_completion_test.dart`, `test/widget_test.dart`.
+  `flutter analyze` + `flutter test` (198/198) clean; live-verified on the
+  iOS Simulator for most of the seven (see that section's own
+  **Verification** for what wasn't).
 - A stray duplicate clone of this repo that existed briefly at
   `/Users/alexandrospanagiotidis/DriVector/Calendar/calendar/` (see the
   sign-up bug section for how it got there) has been **deleted** — it had
@@ -1972,6 +1994,67 @@ inset via the rendered `Positioned` geometry). All three fixes
 live-verified on the iOS Simulator against the real signed-in account —
 including the planned/drift wiring fix, confirmed directly against the
 real account's own Job/walking/piano data (not just mock fixtures).
+
+## Seven-item follow-up round: goal-tick past-only, search, 18:00 default, 1am extension, centered detail dialog, plan fill, column dividers (sixth session)
+
+A single large ask covering seven separate, mostly independent changes.
+
+- **The Goals list's "complete" (✓) button only fills in the past now.**
+  `pendingPlannedBlocksForGoal` (`models/goal_completion.dart`) gained a
+  required `now` param and filters to `block.end.isBefore(now)` — a
+  planned block later in the week that hasn't happened yet is left alone
+  instead of being silently marked done. Its `sourceId` also changed from
+  `'manual'` to `'auto'`, so a "complete"-filled entry is distinguishable
+  from one actually typed by hand.
+- **Activities gained a search field** — filters by title, goal name, or
+  category name (case-insensitive substring), and a day with nothing
+  matching disappears from the list entirely rather than showing an empty
+  header. `ActivitiesList` became a `ConsumerStatefulWidget` to hold the
+  query as local state; a "no activities match" message replaces the list
+  when the query has no hits at all.
+- **The Day view now always opens to 18:00**, not wherever the day's
+  first event happens to be — `time_body_grid.dart`'s old
+  "scroll to first event minus an hour" heuristic (`_scrollOffsetForFirstEvent`)
+  is gone, replaced with a flat, mode-independent `_initialScrollOffset =
+  18:00`. Applies on every fresh open and on date/mode changes alike.
+- **The timeline now extends one hour past midnight** (to 01:00) instead
+  of stopping dead at 24:00 — `_dayHeight` is `25 * _hourHeight`, the hour
+  grid loop runs `0..24` inclusive, and the extra line is labelled "00"
+  (`hour % 24`), matching the real clock rolling over.
+- **The actual-block detail popup (view/edit/delete on tap) is a centered
+  dialog now, not a bottom sheet.** First built as a bottom sheet fixed to
+  half the screen height, per a follow-up correction from the user ("not
+  half the screen in total, but... top down the minimum possible area") —
+  rebuilt as a `Dialog` sized to its own content, matching
+  `showConfirmDeleteDialog`'s own styling exactly. Its delete icon is now
+  a bin (🗑) instead of an "×", to read unambiguously as delete rather than
+  close.
+- **Planned blocks get a light fill now** — 30% alpha of the category's
+  own color (`AppCategoryColors.planFill`, true alpha via `withValues`,
+  not the lerp-toward-white `blockFill` actual blocks use), so a plan
+  reads as a real, visible block rather than just a dashed outline over
+  blank canvas. Combined with the actual-block inset from the previous
+  batch, an overlapping plan+actual pair now clearly shows both.
+- **A hairline divider between adjacent day-columns** in 3 Day/Working
+  week/Week modes (`dates.length > 1`), so columns read as separate days
+  rather than one continuous strip. Day mode has nothing to divide, so it
+  stays untouched.
+
+### Verification
+
+`flutter analyze` clean. `flutter test`: 198/198 (new: two
+`pendingPlannedBlocksForGoal` tests for the past/future boundary, the
+`sourceId: 'auto'` assertion updated, an Activities search-field test
+covering title match, goal-name match, clearing, and the no-match
+message). Live-verified on the iOS Simulator against the real account:
+18:00 default view, the extended grid past midnight, the 30%-opacity
+plan fill, and the actual-block inset all confirmed together on a real
+Job block and a real walking plan+actual pair. The centered dialog and
+bin icon were verified by the test suite; live confirmation of that
+specific piece was cut short by this session's own Simulator
+tap-coordinate difficulties (a recurring, already-documented environment
+limitation) compounding with an unrelated MCP disconnect that reset the
+Simulator session mid-verification — worth a real look next session.
 
 ## Edge-case unit tests + two new bug fixes: stale "+ Log" date, goal schedule overnight ranges (sixth session)
 

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../models/planned_block.dart';
 import '../../../models/tracked_block.dart';
 import '../../../shared/widgets/date_swipe_nav.dart';
 import '../../../state/categories_providers.dart';
@@ -71,7 +70,10 @@ class TimeBodyGrid extends ConsumerStatefulWidget {
 /// scrolling, generous enough that a 30-minute block still reads clearly.
 const _pxPerMinute = 1.2;
 const _hourHeight = 60 * _pxPerMinute;
-const _dayHeight = 24 * _hourHeight;
+// One hour past midnight, not a bare 24 — scrolling all the way down still
+// leaves a full hour of the next day visible instead of stopping dead at
+// the 00 line.
+const _dayHeight = 25 * _hourHeight;
 
 class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
   late final ScrollController _scrollController;
@@ -80,10 +82,7 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
   void initState() {
     super.initState();
     _scrollController = ScrollController(
-      initialScrollOffset: _initialScrollOffset(
-        ref.read(dayViewModeProvider),
-        ref.read(visibleDayBlocksProvider),
-      ),
+      initialScrollOffset: _initialScrollOffset,
     );
   }
 
@@ -93,31 +92,10 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
     super.dispose();
   }
 
-  // Restricted to Day mode: in a multi-day view, one outlier day's early
-  // block yanking the whole shared vertical scroll position for every
-  // column would read as a bug, not a feature — multi-day modes always
-  // start at the same fixed default instead.
-  static double _initialScrollOffset(DayViewMode mode, List<DayBlocks> dayBlocks) {
-    if (mode != DayViewMode.day) return _scrollOffsetForFirstEvent(const [], const []);
-    final only = dayBlocks.single;
-    return _scrollOffsetForFirstEvent(only.planned, only.tracked);
-  }
-
-  static double _scrollOffsetForFirstEvent(
-    List<PlannedBlock> planned,
-    List<TrackedBlock> tracked,
-  ) {
-    final starts = [
-      ...planned.map((b) => b.start),
-      ...tracked.map((b) => b.start),
-    ];
-    final earliestMinute = starts.isEmpty
-        ? 7 * 60
-        : starts
-              .map((d) => d.hour * 60 + d.minute)
-              .reduce((a, b) => a < b ? a : b);
-    return ((earliestMinute - 60).clamp(0, 24 * 60 - 1)) * _pxPerMinute;
-  }
+  // A fixed 18:00 anchor, the same in every view mode — entering the
+  // Calendar tab (or changing date/mode) always lands on the evening
+  // rather than wherever the day's own first event happens to be.
+  static double get _initialScrollOffset => 18 * 60 * _pxPerMinute;
 
   // Always logs an actual entry — with Plan and Actual sharing one slot
   // now, there's no separate Plan-only region left to tap for a manual
@@ -166,8 +144,23 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
               width: double.infinity,
               child: Stack(
                 children: [
-                  for (var hour = 0; hour < 24; hour++)
+                  for (var hour = 0; hour <= 24; hour++)
                     _HourGridLine(hour: hour, gutterWidth: kGutterWidth),
+                  // A hairline between adjacent day-columns — only when
+                  // there's more than one to tell apart (3 Day/Working
+                  // week/Week); Day mode has just the one column, nothing
+                  // to divide.
+                  if (dates.length > 1)
+                    for (var i = 1; i < dates.length; i++)
+                      Positioned(
+                        left: layouts[i].left,
+                        top: 0,
+                        width: 1,
+                        height: _dayHeight,
+                        child: IgnorePointer(
+                          child: ColoredBox(color: AppColors.divider),
+                        ),
+                      ),
                   for (var i = 0; i < dates.length; i++) ...[
                     // Empty-space tap target — added before the blocks
                     // below so any block painted on top claims its own tap
@@ -244,6 +237,7 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
                             block,
                             dayBlocks[i].planned,
                           ),
+                          ref: ref,
                         ),
                       ),
                   ],
@@ -257,11 +251,9 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
   }
 
   void _jumpToInitialOffset() {
-    final target = _initialScrollOffset(
-      ref.read(dayViewModeProvider),
-      ref.read(visibleDayBlocksProvider),
-    );
-    if (_scrollController.hasClients) _scrollController.jumpTo(target);
+    if (_scrollController.hasClients) {
+      _scrollController.jumpTo(_initialScrollOffset);
+    }
   }
 
   Positioned _timedPositioned({
@@ -313,7 +305,9 @@ class _HourGridLine extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.only(right: 4),
                 child: Text(
-                  hour.toString().padLeft(2, '0'),
+                  // hour 24 is the extra hour past midnight this grid
+                  // extends into — labelled "00", matching the real clock.
+                  (hour % 24).toString().padLeft(2, '0'),
                   textAlign: TextAlign.right,
                   style: AppTextStyles.mono(),
                 ),
