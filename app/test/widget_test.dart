@@ -3093,6 +3093,38 @@ void main() {
   );
 
   testWidgets(
+    'Day view: the drift footer also totals every visible day, and drops '
+    'the "TODAY" label once more than one day is on screen',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: await _signedInOnboardedNoActivityOverrides(),
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Day mode: nothing tracked against one day's 30m target reads as
+      // −30m, labelled "DRIFT TODAY".
+      expect(find.text('DRIFT TODAY'), findsOneWidget);
+      expect(find.text('−30m'), findsOneWidget);
+
+      await _selectDayViewMode(tester, '3 Day');
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      // Three days' worth of the same 30m/day target, still nothing
+      // tracked — the bug this covers: drift used to keep comparing
+      // against just one day's target even with three days on screen. The
+      // "TODAY" label is also gone now that it isn't just today.
+      expect(find.text('DRIFT'), findsOneWidget);
+      expect(find.text('DRIFT TODAY'), findsNothing);
+      expect(find.text('−1h 30m'), findsOneWidget);
+      expect(find.text('−30m'), findsNothing);
+    },
+  );
+
+  testWidgets(
     'Categories: a new category needs a goal of its own before it shows up as a Log activity chip',
     (WidgetTester tester) async {
       await tester.pumpWidget(

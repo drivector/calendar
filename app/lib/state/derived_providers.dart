@@ -16,23 +16,40 @@ import 'goals_providers.dart';
   return (start, end);
 }
 
-// Both providers below read [dayViewPlannedBlocksProvider] (manual blocks
-// plus whatever active goals' own time-range entries generate for the
-// selected day — see that provider's own doc comment) rather than the
-// narrower [plannedBlocksProvider], and add in [goalsProvider]'s
-// plain-duration entries on top — otherwise a fully-scheduled goal with no
-// *manually* created planned block (the normal case: nobody hand-plans a
-// recurring goal) would silently show "planned 0m" and drift as if nothing
-// had ever been planned for it at all.
+// Both providers below read [visibleDayBlocksProvider] (manual blocks plus
+// whatever active goals' own time-range entries generate, per visible day
+// — see that provider's own doc comment) rather than the narrower
+// [plannedBlocksProvider], and add in [goalsProvider]'s plain-duration
+// entries on top — otherwise a fully-scheduled goal with no *manually*
+// created planned block (the normal case: nobody hand-plans a recurring
+// goal) would silently show "planned 0m" and drift as if nothing had ever
+// been planned for it at all.
 
+/// Drift across every day the Day view's timeline currently shows — see
+/// [dayTotalsProvider]'s own doc comment, which this mirrors: the same bug
+/// (only ever looking at [selectedDateProvider] alone, ignoring the other
+/// visible columns in 3 Day/Working week/Week mode) applied here too.
 final driftProvider = Provider<List<CategoryDrift>>((ref) {
-  final selectedDate = ref.watch(selectedDateProvider);
-  final planned = ref.watch(dayViewPlannedBlocksProvider);
-  final tracked = ref.watch(trackedBlocksProvider);
-  final untimed = untimedPlannedDurationByCategoryForDate(
-    goals: ref.watch(goalsProvider),
-    date: selectedDate,
-  );
+  final dates = ref.watch(visibleDatesProvider);
+  final dayBlocks = ref.watch(visibleDayBlocksProvider);
+  final goals = ref.watch(goalsProvider);
+
+  final planned = [for (final day in dayBlocks) ...day.planned];
+  final tracked = [for (final day in dayBlocks) ...day.tracked];
+  final untimed = <String, Duration>{};
+  for (final date in dates) {
+    for (final entry
+        in untimedPlannedDurationByCategoryForDate(
+          goals: goals,
+          date: date,
+        ).entries) {
+      untimed.update(
+        entry.key,
+        (total) => total + entry.value,
+        ifAbsent: () => entry.value,
+      );
+    }
+  }
   return computeDrift(
     planned: planned,
     tracked: tracked,

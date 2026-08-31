@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../state/categories_providers.dart';
+import '../../../state/day_view_providers.dart';
 import '../../../state/derived_providers.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_spacing.dart';
@@ -15,6 +16,10 @@ class DriftFooter extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final drift = ref.watch(driftProvider);
     final categories = ref.watch(categoriesProvider);
+    // Only genuinely "today" in Day mode — [driftProvider] now sums across
+    // every visible day, so the label needs to stop claiming "today" once
+    // there's more than one day on screen.
+    final isDayMode = ref.watch(dayViewModeProvider) == DayViewMode.day;
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -29,7 +34,10 @@ class DriftFooter extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('DRIFT TODAY', style: AppTextStyles.kicker()),
+            Text(
+              isDayMode ? 'DRIFT TODAY' : 'DRIFT',
+              style: AppTextStyles.kicker(),
+            ),
             const SizedBox(height: AppSpacing.s1),
             for (final entry in drift)
               if (entry.delta.inMinutes != 0)
