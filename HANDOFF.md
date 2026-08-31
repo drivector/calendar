@@ -1,11 +1,7 @@
 # Track My Day (formerly "Calendar Tracker") — session handoff
 
-Updated 2026-08-31 (sixth session — twenty-one batches pushed, all
-clean, plus a twenty-second batch **done but not yet committed** (the
-seven-item follow-up round — goal-tick past-only, Activities search,
-18:00 default view, 1am grid extension, centered detail dialog, plan
-fill, column dividers — see **Seven-item follow-up round** and **Git
-status**); the fifth pushed batch also **deployed live
+Updated 2026-08-31 (sixth session — twenty-two batches pushed, all
+clean, see **Git status**; the fifth pushed batch also **deployed live
 Firestore rules changes to production**) — the app's user-visible
 name changed from **"Calendar Tracker" to "Track My Day"** partway
 through this session (see **App renamed**, near the end) — this doc's
@@ -309,8 +305,7 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
 `AsyncLoading`. Widget tests don't need this explicitly since
 `pumpAndSettle()` flushes it.
 
-## Git status — sixth session's first twenty-one batches pushed, all
-clean; a twenty-second batch is done but uncommitted
+## Git status — sixth session's first twenty-two batches pushed, all clean
 
 - The Firebase Auth/Firestore backend, the fourth session's UX fixes/CI,
   the entire fifth session (week nav, Activities tab, onboarding, cap
@@ -488,7 +483,7 @@ clean; a twenty-second batch is done but uncommitted
   `flutter analyze` + `flutter test` (192/192) clean; all three
   live-verified on the iOS Simulator, including against the real
   account's own data.
-- The sixth session's **twenty-second batch — done, not yet committed**:
+- The sixth session's **twenty-second batch — pushed as `6f9782f`**:
   the seven-item follow-up round (goal-tick past-only + `sourceId: 'auto'`,
   Activities search field, 18:00 default Day-view scroll, timeline
   extended to 1am, the actual-block detail popup rebuilt as a centered
