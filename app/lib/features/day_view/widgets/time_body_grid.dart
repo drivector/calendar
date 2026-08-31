@@ -11,6 +11,7 @@ import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import 'actual_block_widget.dart';
 import 'add_block_sheet.dart';
+import 'block_label_style.dart';
 import 'plan_block_widget.dart';
 
 /// Left gutter reserved for the hour labels ("06", "07", ...).
@@ -190,7 +191,7 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
                         // tap does, prefilled from the plan itself (time,
                         // title, goal) — logging what was already planned
                         // shouldn't mean retyping it.
-                        child: GestureDetector(
+                        childBuilder: (labelStyle) => GestureDetector(
                           behavior: HitTestBehavior.opaque,
                           onTap: () => showAddBlockSheet(
                             context,
@@ -204,6 +205,7 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
                               goals,
                               block.categoryId,
                             )?.id,
+                            fromPlan: true,
                           ),
                           child: PlanBlockWidget(
                             block: block,
@@ -211,6 +213,7 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
                               categories,
                               block.categoryId,
                             ),
+                            labelStyle: labelStyle,
                           ),
                         ),
                       ),
@@ -227,7 +230,7 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
                         // disappearing underneath.
                         left: layouts[i].left + layouts[i].width * _actualBlockInset,
                         width: layouts[i].width * (1 - _actualBlockInset),
-                        child: ActualBlockWidget(
+                        childBuilder: (labelStyle) => ActualBlockWidget(
                           block: block,
                           category: resolveCategory(
                             categories,
@@ -238,6 +241,7 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
                             dayBlocks[i].planned,
                           ),
                           ref: ref,
+                          labelStyle: labelStyle,
                         ),
                       ),
                   ],
@@ -256,29 +260,45 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
     }
   }
 
+  // 52px — the height two lines of text (a title plus a secondary line)
+  // need to fit without overflowing. Used only to decide how much of a
+  // block's label to show — never to resize the block itself, which
+  // always renders at its own real start/end time with no minimum floor.
+  // A block used to be clamped to this height outright, which was a
+  // genuine bug a user hit directly: a 15-minute actual entry rendered
+  // the exact same height, at the exact same start time, as the
+  // 30-minute planned block behind it, reading as if the two exactly
+  // matched when they didn't.
+  static const _twoLineMinHeight = 52.0;
+
+  // 28px — the least a single compact line can fit in without clipping.
+  // Below this, there's no room for a label at all — see
+  // [BlockLabelStyle.hidden].
+  static const _oneLineMinHeight = 28.0;
+
   Positioned _timedPositioned({
     required DateTime start,
     required DateTime end,
     required double left,
     required double width,
-    required Widget child,
+    required Widget Function(BlockLabelStyle labelStyle) childBuilder,
   }) {
     final startMinute = start.hour * 60 + start.minute;
     final durationMinutes = end.difference(start).inMinutes;
+    final height = durationMinutes * _pxPerMinute;
+    final labelStyle = height >= _twoLineMinHeight
+        ? BlockLabelStyle.full
+        : height >= _oneLineMinHeight
+        ? BlockLabelStyle.compact
+        : BlockLabelStyle.hidden;
     return Positioned(
       top: startMinute * _pxPerMinute,
       left: left,
       width: width,
-      // 52px minimum — short blocks (e.g. a 30-minute manual entry) need
-      // room for two lines of text without overflowing; the original mock
-      // data happened to always be >=40 minutes, which is why this only
-      // surfaced once a shorter block was added. Raised from 44 when the
-      // Outlook restyle grew the type ramp (label 12→14, mono 11→12): the
-      // two lines plus padding no longer fit the old minimum.
-      height: (durationMinutes * _pxPerMinute).clamp(52.0, double.infinity),
+      height: height,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(2, 0, 2, 2),
-        child: child,
+        child: childBuilder(labelStyle),
       ),
     );
   }

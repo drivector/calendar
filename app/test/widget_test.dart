@@ -272,6 +272,82 @@ void main() {
   );
 
   testWidgets(
+    'Day view: a block always renders at the height its own real start/end '
+    "time implies — a 15-minute actual no longer inflates to a 30-minute "
+    "planned block's height just because both used to clamp to the same "
+    'fixed minimum',
+    (WidgetTester tester) async {
+      final container = ProviderContainer(overrides: await _signedInOverrides());
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await container.read(plannedBlocksRepositoryProvider).upsert(
+        PlannedBlock(
+          id: 'test-duration-plan',
+          start: DateTime(2026, 8, 20, 14, 0),
+          end: DateTime(2026, 8, 20, 14, 30), // 30m
+          title: 'Test plan',
+          categoryId: walkingCategoryId,
+        ),
+      );
+      await container.read(trackedBlocksRepositoryProvider).upsert(
+        TrackedBlock(
+          id: 'test-duration-actual',
+          start: DateTime(2026, 8, 20, 14, 0),
+          end: DateTime(2026, 8, 20, 14, 15), // 15m — half the plan's own
+          // duration, so its rendered height should be too.
+          title: 'Test actual',
+          categoryId: walkingCategoryId,
+          sourceId: 'manual',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final plan = find.byWidgetPredicate(
+        (w) => w is PlanBlockWidget && w.block.id == 'test-duration-plan',
+      );
+      final actual = find.byWidgetPredicate(
+        (w) => w is ActualBlockWidget && w.block.id == 'test-duration-actual',
+      );
+      await tester.ensureVisible(plan);
+      await tester.ensureVisible(actual);
+
+      // The 30m plan is short enough for the compact combined line, not
+      // the usual two-line layout.
+      expect(
+        find.descendant(of: plan, matching: find.text('30m · Test plan')),
+        findsOneWidget,
+      );
+      // The 15m actual is shorter still — too short for even one line, so
+      // it shows no text at all rather than something illegible.
+      expect(find.descendant(of: actual, matching: find.byType(Text)), findsNothing);
+
+      // The actual point of this test: their rendered heights genuinely
+      // differ, proportional to their real durations — not both clamped to
+      // one shared minimum.
+      final planHeight = tester
+          .widget<Positioned>(
+            find.ancestor(of: plan, matching: find.byType(Positioned)).first,
+          )
+          .height!;
+      final actualHeight = tester
+          .widget<Positioned>(
+            find.ancestor(of: actual, matching: find.byType(Positioned)).first,
+          )
+          .height!;
+      expect(planHeight, 36); // 30m * 1.2px/min
+      expect(actualHeight, 18); // 15m * 1.2px/min
+      expect(actualHeight, planHeight / 2);
+    },
+  );
+
+  testWidgets(
     "Day view: an actual block is inset from its column's left edge — a "
     "planned block for the same time isn't fully covered by it",
     (WidgetTester tester) async {
@@ -1010,6 +1086,52 @@ void main() {
       expect(blocks.single.title, 'Morning walk, edited');
       expect(find.text('Morning walk, edited'), findsOneWidget);
       expect(find.text('Walk 48 m'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    "Log activity: Save lives in the header next to close, not as a "
+    'separate full-width button below the form',
+    (WidgetTester tester) async {
+      final container = ProviderContainer(overrides: await _signedInOverrides());
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _tapTab(tester, 'Account');
+      await tester.tap(find.text('Activities'));
+      await tester.pumpAndSettle();
+
+      final row = find.byKey(const ValueKey('actual-walk'));
+      await tester.ensureVisible(row);
+      await tester.tap(find.descendant(of: row, matching: find.text('edit')));
+      await tester.pumpAndSettle();
+
+      // Both "close" and "Save changes" sit in the same header Row as the
+      // sheet's own title, not scattered elsewhere in the form.
+      final headerRow = find
+          .ancestor(
+            of: find.text('Edit activity'),
+            matching: find.byType(Row),
+          )
+          .first;
+      expect(
+        find.descendant(of: headerRow, matching: find.text('close')),
+        findsOneWidget,
+      );
+      // Only one "Save changes" anywhere in the sheet — scoped to the
+      // header, not duplicated as a separate full-width button elsewhere
+      // in the form.
+      expect(
+        find.descendant(of: headerRow, matching: find.text('Save changes')),
+        findsOneWidget,
+      );
+      expect(find.text('Save changes'), findsOneWidget);
     },
   );
 
@@ -2533,9 +2655,16 @@ void main() {
           .any((b) => b.title == 'Recovered entry'),
       isTrue,
     );
-    // Sheet closed this time — back on the Day view, entry visible there
-    // (same day, same title text shown on the block itself).
-    expect(find.text('Recovered entry'), findsOneWidget);
+    // Sheet closed this time — back on the Day view, entry visible there.
+    // 15 minutes is too short to fit even a compact label (see
+    // BlockLabelStyle.hidden), so the block itself — not its text — is
+    // what's checked here.
+    expect(
+      find.byWidgetPredicate(
+        (w) => w is ActualBlockWidget && w.block.title == 'Recovered entry',
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets(
@@ -2698,8 +2827,10 @@ void main() {
       isTrue,
     );
     // Saving closes the sheet, back on the Day view — the new entry's
-    // block should now render there too.
-    expect(find.text('Evening walk'), findsOneWidget);
+    // block should now render there too. 30 minutes renders compact
+    // (duration combined with title on one line), not the plain title
+    // alone — see ActualBlockWidget's own `compact` doc comment.
+    expect(find.text('30m · Evening walk'), findsOneWidget);
   });
 
   testWidgets(
@@ -2934,6 +3065,34 @@ void main() {
   );
 
   testWidgets(
+    'Day view: the header legend totals every visible day, not just the '
+    'selected one — switching to 3 Day should show 3 days of planned time, '
+    'not still just one',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: await _signedInOnboardedNoActivityOverrides(),
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Day mode: one day's worth of the goal's own 30m/day schedule.
+      expect(find.text('planned 30m'), findsOneWidget);
+
+      await _selectDayViewMode(tester, '3 Day');
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      // Three visible days, each with the same 30m/day schedule — the bug
+      // this covers: the legend used to keep showing just one day's 30m
+      // even with three days on screen.
+      expect(find.text('planned 1h 30m'), findsOneWidget);
+      expect(find.text('planned 30m'), findsNothing);
+    },
+  );
+
+  testWidgets(
     'Categories: a new category needs a goal of its own before it shows up as a Log activity chip',
     (WidgetTester tester) async {
       await tester.pumpWidget(
@@ -3130,6 +3289,14 @@ void main() {
       expect(tester.takeException(), isNull);
       // No goal pre-selected — picking one is a real, required choice now.
       expect(find.text('set goal'), findsOneWidget);
+      // Opened from empty space, not a plan — no "matches a planned
+      // activity" icon.
+      expect(
+        find.byWidgetPredicate(
+          (w) => w is Tooltip && w.message == 'Matches a planned activity',
+        ),
+        findsNothing,
+      );
 
       await tester.enterText(find.byType(TextField).first, 'Morning walk');
       await tester.pumpAndSettle();
@@ -3256,6 +3423,17 @@ void main() {
       expect(find.text('· 30m'), findsOneWidget);
       expect(find.text('test goal'), findsOneWidget); // dropdown lowercases
       expect(find.text('set goal'), findsNothing);
+      // The "matches a planned activity" icon shows only because this sheet
+      // was opened by tapping the plan, not an empty-space tap.
+      expect(
+        find.descendant(
+          of: sheet,
+          matching: find.byWidgetPredicate(
+            (w) => w is Tooltip && w.message == 'Matches a planned activity',
+          ),
+        ),
+        findsOneWidget,
+      );
 
       await tester.ensureVisible(find.text('save'));
       await tester.tap(find.text('save'));

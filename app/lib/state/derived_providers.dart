@@ -60,13 +60,34 @@ final driftProvider = Provider<List<CategoryDrift>>((ref) {
   return (plannedTotal, trackedTotal);
 }
 
+/// Header totals across every day the Day view's timeline currently shows
+/// — [visibleDatesProvider] (1/3/5/7 days depending on the Day/3 Day/
+/// Working week/Week mode), not just [selectedDateProvider] alone. A user
+/// hit this directly: switching to 3 Day still showed only the selected
+/// day's own planned/tracked total, reading as if the other two visible
+/// columns weren't planned or tracked at all.
 final dayTotalsProvider = Provider<(Duration planned, Duration tracked)>((ref) {
-  final selectedDate = ref.watch(selectedDateProvider);
-  final planned = ref.watch(dayViewPlannedBlocksProvider);
-  final tracked = ref.watch(trackedBlocksProvider);
-  final untimed = untimedPlannedDurationByCategoryForDate(
-    goals: ref.watch(goalsProvider),
-    date: selectedDate,
-  ).values.fold<Duration>(Duration.zero, (total, d) => total + d);
-  return dayTotals(planned, tracked, untimedPlanned: untimed);
+  final dates = ref.watch(visibleDatesProvider);
+  final dayBlocks = ref.watch(visibleDayBlocksProvider);
+  final goals = ref.watch(goalsProvider);
+
+  var plannedTotal = Duration.zero;
+  var trackedTotal = Duration.zero;
+  for (final day in dayBlocks) {
+    plannedTotal += day.planned.fold<Duration>(
+      Duration.zero,
+      (total, b) => total + b.duration,
+    );
+    trackedTotal += day.tracked.fold<Duration>(
+      Duration.zero,
+      (total, b) => total + b.duration,
+    );
+  }
+  for (final date in dates) {
+    plannedTotal += untimedPlannedDurationByCategoryForDate(
+      goals: goals,
+      date: date,
+    ).values.fold<Duration>(Duration.zero, (total, d) => total + d);
+  }
+  return (plannedTotal, trackedTotal);
 });

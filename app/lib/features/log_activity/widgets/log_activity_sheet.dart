@@ -263,10 +263,28 @@ class _LogActivitySheetState extends ConsumerState<LogActivitySheet> {
                         _isEditing ? 'Edit activity' : 'Log activity',
                         style: AppTextStyles.title(),
                       ),
-                      GestureDetector(
-                        onTap: _close,
-                        behavior: HitTestBehavior.opaque,
-                        child: Text('close', style: AppTextStyles.mono()),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          GestureDetector(
+                            onTap: _close,
+                            behavior: HitTestBehavior.opaque,
+                            child: Text('close', style: AppTextStyles.mono()),
+                          ),
+                          const SizedBox(width: AppSpacing.s3),
+                          // Save lives in the header next to close, not as
+                          // a separate full-width button below the form —
+                          // matches the add-block sheet's own header
+                          // save/close convention.
+                          GestureDetector(
+                            onTap: _save,
+                            behavior: HitTestBehavior.opaque,
+                            child: Text(
+                              _isEditing ? 'Save changes' : 'Save entry',
+                              style: AppTextStyles.mono(color: AppColors.accent),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -388,29 +406,8 @@ class _LogActivitySheetState extends ConsumerState<LogActivitySheet> {
                     decoration: const InputDecoration(isDense: true),
                     onChanged: notifier.setNote,
                   ),
-                  const SizedBox(height: AppSpacing.s4),
-                  GestureDetector(
-                    onTap: _save,
-                    behavior: HitTestBehavior.opaque,
-                    child: Container(
-                      width: double.infinity,
-                      constraints: const BoxConstraints(minHeight: 44),
-                      alignment: Alignment.centerLeft,
-                      decoration: const BoxDecoration(
-                        color: AppColors.accent,
-                        borderRadius: AppShapes.small,
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.s3,
-                      ),
-                      child: Text(
-                        _isEditing ? 'Save changes' : 'Save entry',
-                        style: AppTextStyles.small(color: AppColors.surface),
-                      ),
-                    ),
-                  ),
                   if (_isEditing) ...[
-                    const SizedBox(height: AppSpacing.s2),
+                    const SizedBox(height: AppSpacing.s4),
                     GestureDetector(
                       onTap: _delete,
                       behavior: HitTestBehavior.opaque,

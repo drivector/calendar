@@ -15,6 +15,7 @@ import '../../../theme/app_spacing.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../utils/duration_format.dart';
 import '../../log_activity/widgets/log_activity_sheet.dart';
+import 'block_label_style.dart';
 
 /// A tracked block, styled like an Outlook calendar event chip: rounded,
 /// a pale category tint, a solid category bar down the left edge, subject
@@ -34,6 +35,7 @@ class ActualBlockWidget extends StatelessWidget {
     required this.category,
     required this.wasPlanned,
     required this.ref,
+    required this.labelStyle,
   });
 
   final TrackedBlock block;
@@ -45,40 +47,66 @@ class ActualBlockWidget extends StatelessWidget {
   // only inside callbacks, never .watch() during build.
   final WidgetRef ref;
 
+  // How much text this block's own real, unclamped height has room for —
+  // see [BlockLabelStyle]'s own doc comment.
+  final BlockLabelStyle labelStyle;
+
   @override
   Widget build(BuildContext context) {
+    final durationLabel = formatDuration(block.duration);
+    Widget? label;
+    switch (labelStyle) {
+      case BlockLabelStyle.full:
+        label = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              block.title,
+              // Outlook sets an event's subject a notch heavier than body
+              // text, with the secondary line beneath it staying quiet.
+              style: AppTextStyles.label().copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            Text(
+              '$durationLabel · (${block.sourceId})',
+              style: AppTextStyles.mono(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        );
+      case BlockLabelStyle.compact:
+        label = Text(
+          '$durationLabel · ${block.title}',
+          style: AppTextStyles.mono(),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        );
+      case BlockLabelStyle.hidden:
+        // Too short for even one line — a plain colored bar, no text,
+        // rather than clipped, illegible characters.
+        label = null;
+    }
     final content = Container(
-      alignment: Alignment.topLeft,
+      alignment: labelStyle == BlockLabelStyle.full
+          ? Alignment.topLeft
+          : Alignment.centerLeft,
       decoration: BoxDecoration(
         color: AppCategoryColors.blockFill(category.color),
         border: Border(left: BorderSide(color: category.color, width: 3)),
         borderRadius: AppShapes.small,
       ),
-      padding: const EdgeInsets.all(AppSpacing.s1),
-      // maxLines/ellipsis on both lines — a narrow multi-day column
-      // (Working week/Week mode) is narrow enough that unbounded text
-      // would wrap onto more lines than the block's minimum height fits,
-      // overflowing it.
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            block.title,
-            // Outlook sets an event's subject a notch heavier than body
-            // text, with the secondary line beneath it staying quiet.
-            style: AppTextStyles.label().copyWith(fontWeight: FontWeight.w600),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          Text(
-            '(${block.sourceId})',
-            style: AppTextStyles.mono(),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
+      padding: label == null
+          ? EdgeInsets.zero
+          : const EdgeInsets.all(AppSpacing.s1),
+      // maxLines/ellipsis throughout — a narrow multi-day column (Working
+      // week/Week mode) is narrow enough that unbounded text would wrap
+      // onto more lines than the block's own height fits, overflowing it.
+      child: label,
     );
 
     return GestureDetector(

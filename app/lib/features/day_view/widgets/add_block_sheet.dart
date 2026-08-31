@@ -7,6 +7,7 @@ import '../../../models/category.dart';
 import '../../../models/goal.dart';
 import '../../../models/planned_block.dart';
 import '../../../models/tracked_block.dart';
+import '../../../shared/widgets/dashed_border.dart';
 import '../../../shared/widgets/inline_form_error.dart';
 import '../../../state/categories_providers.dart';
 import '../../../state/day_view_providers.dart';
@@ -40,6 +41,7 @@ Future<void> showAddBlockSheet(
   TimeOfDay? initialEnd,
   String? initialTitle,
   String? initialGoalId,
+  bool fromPlan = false,
 }) {
   // Nothing to file a block under yet — a brand-new account starts with no
   // goals, so tell the user to create one first rather than opening a form
@@ -70,6 +72,7 @@ Future<void> showAddBlockSheet(
       initialEnd: initialEnd,
       initialTitle: initialTitle,
       initialGoalId: initialGoalId,
+      fromPlan: fromPlan,
     ),
   );
 }
@@ -83,6 +86,7 @@ class _AddBlockSheet extends StatefulWidget {
     this.initialEnd,
     this.initialTitle,
     this.initialGoalId,
+    this.fromPlan = false,
   });
 
   final bool isPlan;
@@ -97,6 +101,11 @@ class _AddBlockSheet extends StatefulWidget {
   final TimeOfDay? initialEnd;
   final String? initialTitle;
   final String? initialGoalId;
+
+  // True only when opened by tapping an existing planned block — shows an
+  // icon next to the title flagging that this entry matches a plan, rather
+  // than being a fresh manual entry.
+  final bool fromPlan;
 
   @override
   State<_AddBlockSheet> createState() => _AddBlockSheetState();
@@ -321,6 +330,10 @@ class _AddBlockSheetState extends State<_AddBlockSheet> {
                               '· ${formatDuration(_duration)}',
                               style: AppTextStyles.mono(),
                             ),
+                            if (widget.fromPlan) ...[
+                              const SizedBox(width: AppSpacing.s2),
+                              const _MatchesPlanIcon(),
+                            ],
                           ],
                         ),
                         GestureDetector(
@@ -462,6 +475,36 @@ class _UnsavedActivityDialog extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A small dashed-outline check mark, shown next to the sheet's title only
+/// when it was opened by tapping an existing planned block — echoes
+/// [PlanBlockWidget]'s own dashed-outline styling so it reads as "this
+/// matches a plan" at a glance, with a [Tooltip] spelling that out for
+/// anyone who isn't sure what the glyph means.
+class _MatchesPlanIcon extends StatelessWidget {
+  const _MatchesPlanIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Matches a planned activity',
+      child: DashedRectBorder(
+        color: AppColors.accent,
+        radius: const Radius.circular(9),
+        child: SizedBox(
+          width: 18,
+          height: 18,
+          child: Center(
+            child: Text(
+              '✓',
+              style: AppTextStyles.small(color: AppColors.accent),
+            ),
           ),
         ),
       ),
