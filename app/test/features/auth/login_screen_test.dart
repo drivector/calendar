@@ -426,6 +426,34 @@ void main() {
   );
 
   testWidgets(
+    'AuthGate: reaching the unverified gate sends a verification email on '
+    "its own, without a manual resend — covers signing back in to an "
+    'existing unverified account, not just a fresh sign-up',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            firebaseAuthProvider.overrideWithValue(
+              MockFirebaseAuth(
+                signedIn: true,
+                mockUser: MockUser(uid: 'u3b', isEmailVerified: false),
+              ),
+            ),
+            firestoreProvider.overrideWithValue(FakeFirebaseFirestore()),
+          ],
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      // No tap on "resend" — this fires automatically the moment the gate
+      // is reached, per _UnverifiedEmailGateState.initState().
+      expect(find.text('Verification email sent.'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'AuthGate: "resend verification email" on the unverified gate does not crash',
     (WidgetTester tester) async {
       await tester.pumpWidget(

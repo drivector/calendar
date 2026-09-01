@@ -68,6 +68,23 @@ class _UnverifiedEmailGateState extends ConsumerState<_UnverifiedEmailGate> {
   bool _busy = false;
   String? _message;
 
+  @override
+  void initState() {
+    super.initState();
+    // Sends the verification email the moment this gate is first reached
+    // — not just for a fresh sign-up (which used to send it from
+    // login_screen.dart instead), but also for an existing unverified
+    // account simply signing back in, which never sent anything at all: a
+    // real bug where this screen's own "We sent a link to ..." copy was
+    // false for that path. Deferred a frame (can't call setState — which
+    // _resend does immediately — synchronously from initState itself),
+    // same pattern used elsewhere in this app for "can't touch state
+    // during build."
+    if (!_verified) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _resend());
+    }
+  }
+
   Future<void> _resend() async {
     setState(() {
       _busy = true;

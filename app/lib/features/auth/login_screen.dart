@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -103,14 +101,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final auth = ref.read(firebaseAuthProvider);
     try {
       if (_isSignUp) {
-        final credential = await auth.createUserWithEmailAndPassword(
+        // No sendEmailVerification() call here — AuthGate's own
+        // _UnverifiedEmailGate sends it once, the moment it first mounts,
+        // covering both this path and an existing unverified account
+        // simply signing back in (which never used to send anything at
+        // all — a real bug: signing in reached a gate claiming "we sent a
+        // link" when nothing had been sent).
+        await auth.createUserWithEmailAndPassword(
           email: email,
           password: password,
         );
-        // Fire-and-forget: AuthGate gates on emailVerified regardless of
-        // whether this succeeds, and a "resend" action covers the case
-        // where it doesn't (e.g. a flaky send right at sign-up).
-        unawaited(credential.user?.sendEmailVerification());
       } else {
         await auth.signInWithEmailAndPassword(email: email, password: password);
       }
