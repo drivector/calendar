@@ -46,14 +46,25 @@ final visibleDatesProvider = Provider<List<DateTime>>((ref) {
   return List.generate(windowSizeFor(mode), (i) => anchor.add(Duration(days: i)));
 });
 
-/// Steps [selectedDateProvider] by the current view mode's whole window
-/// size (1/3/5/7 days) — shared by the header's prev/next arrows and the
-/// timeline's own swipe navigation so both always mean the same thing.
+/// How far one "next/previous" step moves [selectedDateProvider] — the
+/// whole window for Working week/Week (jumps a full week at a time, same
+/// as any calendar app's week view), but just **one day** for 3 Day: a
+/// sliding 3-day window, not a jump to a disjoint next set of three days.
+/// Day mode's window is already 1, so stepping by it is the same thing
+/// either way.
+int stepSizeFor(DayViewMode mode) => switch (mode) {
+  DayViewMode.day || DayViewMode.threeDay => 1,
+  DayViewMode.workingWeek || DayViewMode.week => windowSizeFor(mode),
+};
+
+/// Steps [selectedDateProvider] by [stepSizeFor] the current view mode —
+/// shared by the header's prev/next arrows and the timeline's own swipe
+/// navigation so both always mean the same thing.
 void stepDayViewWindow(WidgetRef ref, {required bool forward}) {
-  final windowSize = windowSizeFor(ref.read(dayViewModeProvider));
+  final step = stepSizeFor(ref.read(dayViewModeProvider));
   final current = ref.read(selectedDateProvider);
   ref.read(selectedDateProvider.notifier).state = current.add(
-    Duration(days: forward ? windowSize : -windowSize),
+    Duration(days: forward ? step : -step),
   );
 }
 

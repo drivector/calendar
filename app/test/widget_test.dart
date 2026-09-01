@@ -540,6 +540,60 @@ void main() {
   });
 
   testWidgets(
+    'Day view: in 3 Day mode, the header arrows slide the window by one '
+    "day, not by three — Working week/Week still jump by their whole "
+    'window',
+    (WidgetTester tester) async {
+      final container = ProviderContainer(overrides: await _signedInOverrides());
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _selectDayViewMode(tester, '3 Day');
+      await tester.pumpAndSettle();
+
+      // mockDay is 20 Aug — 3 Day starts there: 20/21/22 Aug.
+      expect(container.read(selectedDateProvider), DateTime(2026, 8, 20));
+
+      final arrows = find.descendant(
+        of: find.byType(DayHeaderBar),
+        matching: find.byType(StepArrowButton),
+      );
+      await tester.tap(arrows.at(1)); // next
+      await tester.pumpAndSettle();
+
+      // A sliding window by one day (21 Aug), not a jump to a disjoint
+      // next set of three (23 Aug).
+      expect(container.read(selectedDateProvider), DateTime(2026, 8, 21));
+
+      await _selectDayViewMode(tester, 'Week');
+      await tester.pumpAndSettle();
+
+      final weekStartBefore = container.read(selectedDateProvider);
+      await tester.tap(
+        find
+            .descendant(
+              of: find.byType(DayHeaderBar),
+              matching: find.byType(StepArrowButton),
+            )
+            .at(1), // next
+      );
+      await tester.pumpAndSettle();
+
+      // Week mode still jumps a full 7 days, unaffected by the 3 Day fix.
+      expect(
+        container.read(selectedDateProvider),
+        weekStartBefore.add(const Duration(days: 7)),
+      );
+    },
+  );
+
+  testWidgets(
     'Day view: a leftward swipe on the timeline advances to the next day',
     (WidgetTester tester) async {
       await tester.pumpWidget(
