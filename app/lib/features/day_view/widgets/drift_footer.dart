@@ -46,12 +46,29 @@ class DriftFooter extends ConsumerWidget {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        resolveCategory(
-                          categories,
-                          entry.categoryId,
-                        ).name.toLowerCase(),
-                        style: AppTextStyles.mono(color: AppColors.text),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Same colored-bar convention as the Activities
+                          // list and the block widgets — the category's
+                          // own color, not plain text.
+                          Container(
+                            width: 3,
+                            height: 12,
+                            color: resolveCategory(
+                              categories,
+                              entry.categoryId,
+                            ).color,
+                          ),
+                          const SizedBox(width: AppSpacing.s1),
+                          Text(
+                            resolveCategory(
+                              categories,
+                              entry.categoryId,
+                            ).name.toLowerCase(),
+                            style: AppTextStyles.mono(color: AppColors.text),
+                          ),
+                        ],
                       ),
                       Text(
                         formatSignedDuration(entry.delta),

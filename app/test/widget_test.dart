@@ -3061,6 +3061,14 @@ void main() {
       // under the category name (lowercased), not the goal's own name.
       expect(find.text('work'), findsOneWidget);
       expect(find.text('−30m'), findsOneWidget);
+
+      // The category's own color, as a small bar next to its name — not
+      // plain text, matching the same convention the Activities list and
+      // Day view blocks already use.
+      final swatch = find.byWidgetPredicate(
+        (w) => w is Container && w.color == const Color(0xFF0278E7),
+      );
+      expect(swatch, findsOneWidget);
     },
   );
 
