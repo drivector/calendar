@@ -1,19 +1,46 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/clock_time.dart';
 import '../models/drift.dart';
 import '../models/goal_planned_blocks.dart';
 import '../models/planned_block.dart';
 import '../models/tracked_block.dart';
+import '../models/user_settings.dart';
 import 'day_view_providers.dart';
 import 'goals_providers.dart';
+import 'user_settings_providers.dart';
 
-/// The window "untracked" gaps are computed against — 07:00–18:00, not the
-/// full 24h the timeline scrolls through. A calendar showing nothing
-/// scheduled at 3am is normal; a giant "untracked" block there wouldn't be.
-(DateTime start, DateTime end) dayWindowFor(DateTime date) {
-  final start = DateTime(date.year, date.month, date.day, 7, 0);
-  final end = DateTime(date.year, date.month, date.day, 18, 0);
-  return (start, end);
+/// The window(s) "untracked" gaps are computed against — not the full 24h
+/// the timeline scrolls through by default, so a calendar showing nothing
+/// scheduled at 3am doesn't automatically read as a giant "untracked" gap
+/// there. [windows] is a day's [UserSettings.windowsForWeekday] result —
+/// possibly more than one range (e.g. 06:00–09:00 and 17:00–22:00, skipping
+/// a midday gap) — each converted to a real [start, end) pair on [date].
+/// Defaults to [fullDayWindow], matching an account that's never
+/// configured a narrower one.
+List<(DateTime start, DateTime end)> dayWindowsFor(
+  DateTime date, {
+  List<ClockRange> windows = const [fullDayWindow],
+}) {
+  return [
+    for (final window in windows)
+      (
+        DateTime(
+          date.year,
+          date.month,
+          date.day,
+          window.start.hour,
+          window.start.minute,
+        ),
+        DateTime(
+          date.year,
+          date.month,
+          date.day,
+          window.end.hour,
+          window.end.minute,
+        ),
+      ),
+  ];
 }
 
 // Both providers below read [visibleDayBlocksProvider] (manual blocks plus
@@ -57,11 +84,11 @@ final driftProvider = Provider<List<CategoryDrift>>((ref) {
   );
 });
 
-/// Header totals — "planned 8 h 30 · tracked 7 h 20" — computed as real sums
-/// over the mock data rather than hardcoded strings.
-(Duration planned, Duration tracked) dayTotals(
+/// Header totals — "planned 8 h 30 · registered 7 h 20" — computed as real
+/// sums over the mock data rather than hardcoded strings.
+(Duration planned, Duration registered) dayTotals(
   List<PlannedBlock> planned,
-  List<TrackedBlock> tracked, {
+  List<TrackedBlock> registered, {
   Duration untimedPlanned = Duration.zero,
 }) {
   final plannedTotal =
@@ -70,41 +97,59 @@ final driftProvider = Provider<List<CategoryDrift>>((ref) {
         (total, b) => total + b.duration,
       ) +
       untimedPlanned;
-  final trackedTotal = tracked.fold<Duration>(
+  final registeredTotal = registered.fold<Duration>(
     Duration.zero,
     (total, b) => total + b.duration,
   );
-  return (plannedTotal, trackedTotal);
+  return (plannedTotal, registeredTotal);
 }
 
 /// Header totals across every day the Day view's timeline currently shows
 /// — [visibleDatesProvider] (1/3/5/7 days depending on the Day/3 Day/
 /// Working week/Week mode), not just [selectedDateProvider] alone. A user
 /// hit this directly: switching to 3 Day still showed only the selected
-/// day's own planned/tracked total, reading as if the other two visible
-/// columns weren't planned or tracked at all.
-final dayTotalsProvider = Provider<(Duration planned, Duration tracked)>((ref) {
-  final dates = ref.watch(visibleDatesProvider);
-  final dayBlocks = ref.watch(visibleDayBlocksProvider);
-  final goals = ref.watch(goalsProvider);
+/// day's own planned/registered total, reading as if the other two visible
+/// columns weren't planned or logged at all.
+///
+/// "tracked" in the header means the user's own configured tracking
+/// window (see [UserSettings]) — how many hours count as trackable across
+/// the visible days — not what's actually been logged; that's
+/// [registered] (real [TrackedBlock]s, formerly what this header itself
+/// called "tracked", before the window took that name).
+final dayTotalsProvider =
+    Provider<(Duration planned, Duration tracked, Duration registered)>((
+      ref,
+    ) {
+      final dates = ref.watch(visibleDatesProvider);
+      final dayBlocks = ref.watch(visibleDayBlocksProvider);
+      final goals = ref.watch(goalsProvider);
+      final settings = ref.watch(userSettingsProvider);
 
-  var plannedTotal = Duration.zero;
-  var trackedTotal = Duration.zero;
-  for (final day in dayBlocks) {
-    plannedTotal += day.planned.fold<Duration>(
-      Duration.zero,
-      (total, b) => total + b.duration,
-    );
-    trackedTotal += day.tracked.fold<Duration>(
-      Duration.zero,
-      (total, b) => total + b.duration,
-    );
-  }
-  for (final date in dates) {
-    plannedTotal += untimedPlannedDurationByCategoryForDate(
-      goals: goals,
-      date: date,
-    ).values.fold<Duration>(Duration.zero, (total, d) => total + d);
-  }
-  return (plannedTotal, trackedTotal);
-});
+      var plannedTotal = Duration.zero;
+      var registeredTotal = Duration.zero;
+      for (final day in dayBlocks) {
+        plannedTotal += day.planned.fold<Duration>(
+          Duration.zero,
+          (total, b) => total + b.duration,
+        );
+        registeredTotal += day.tracked.fold<Duration>(
+          Duration.zero,
+          (total, b) => total + b.duration,
+        );
+      }
+      var windowTotal = Duration.zero;
+      for (final date in dates) {
+        plannedTotal += untimedPlannedDurationByCategoryForDate(
+          goals: goals,
+          date: date,
+        ).values.fold<Duration>(Duration.zero, (total, d) => total + d);
+        for (final window
+            in dayWindowsFor(
+              date,
+              windows: settings.windowsForWeekday(date.weekday),
+            )) {
+          windowTotal += window.$2.difference(window.$1);
+        }
+      }
+      return (plannedTotal, windowTotal, registeredTotal);
+    });

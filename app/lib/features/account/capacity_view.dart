@@ -15,9 +15,10 @@ import '../../utils/duration_format.dart';
 
 /// "How much is planned, and how much is still available" — shows plan vs.
 /// available time per day and per goal for the current week. Two sections:
-/// free time slots per day (against the same 07:00–18:00 window the Day
-/// view already uses for "untracked"), and remaining room per goal (target
-/// minus what's already planned toward it this week).
+/// free time slots per day (against the user's own tracking window, set on
+/// the Account screen's Details tab — the same one the Day view uses for
+/// "untracked"), and remaining room per goal (target minus what's already
+/// planned toward it this week).
 ///
 /// A body, not a screen: it's one of the Account screen's segments, so the
 /// surrounding chrome (background, safe area, header) belongs to
@@ -66,8 +67,9 @@ class CapacityView extends ConsumerWidget {
                     Text('FREE TIME PER DAY', style: AppTextStyles.kicker()),
                     const SizedBox(height: AppSpacing.s1),
                     Text(
-                      'against each day\'s 07:00–18:00 window — the same one '
-                      'the Day view uses for "untracked"',
+                      'against each day\'s own tracking window — the same '
+                      'one the Day view uses for "untracked". Change it from '
+                      'Account · Details.',
                       style: AppTextStyles.mono(),
                     ),
                     const SizedBox(height: AppSpacing.s2),

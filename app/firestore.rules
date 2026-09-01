@@ -75,5 +75,20 @@ service cloud.firestore {
           && isReasonableString(request.resource.data.sourceId);
       allow delete: if isOwner(uid);
     }
+
+    // A single doc ('app'), not a growing collection — the user's own
+    // settings (currently just their tracking window; see
+    // models/user_settings.dart). Keyed by weekday ('1'..'7'), each a list
+    // of {startMinutes, endMinutes} ranges — the same "don't deep-validate
+    // an arbitrary-length list of per-day entries" call the goals
+    // collection above already makes, for the same reason: fragile rules
+    // surface for a single-user app's own data, with no cross-cutting risk
+    // (type confusion, size abuse) beyond what the top-level map check
+    // already gates.
+    match /users/{uid}/settings/{docId} {
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid) && request.resource.data is map;
+      allow delete: if isOwner(uid);
+    }
   }
 }

@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart' show FirebaseException;
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' show UserMetadata;
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
@@ -12,6 +13,7 @@ import 'package:calendar_tracker/features/account/account_screen.dart';
 import 'package:calendar_tracker/features/categories/categories_screen.dart';
 import 'package:calendar_tracker/features/day_view/widgets/actual_block_widget.dart';
 import 'package:calendar_tracker/features/day_view/widgets/day_header_bar.dart';
+import 'package:calendar_tracker/features/day_view/widgets/legend_row.dart';
 import 'package:calendar_tracker/features/day_view/widgets/plan_block_widget.dart';
 import 'package:calendar_tracker/features/day_view/widgets/time_body_grid.dart';
 import 'package:calendar_tracker/features/goals/goals_screen.dart';
@@ -26,6 +28,7 @@ import 'package:calendar_tracker/models/clock_time.dart';
 import 'package:calendar_tracker/models/goal.dart';
 import 'package:calendar_tracker/models/planned_block.dart';
 import 'package:calendar_tracker/models/tracked_block.dart';
+import 'package:calendar_tracker/models/user_settings.dart';
 import 'package:calendar_tracker/shared/widgets/app_tab_bar.dart';
 import 'package:calendar_tracker/shared/widgets/dashed_border.dart';
 import 'package:calendar_tracker/shared/widgets/step_arrow_button.dart';
@@ -35,6 +38,7 @@ import 'package:calendar_tracker/state/firestore_providers.dart';
 import 'package:calendar_tracker/state/goals_providers.dart';
 import 'package:calendar_tracker/state/log_entry_providers.dart';
 import 'package:calendar_tracker/state/root_shell_providers.dart';
+import 'package:calendar_tracker/state/user_settings_providers.dart';
 
 import 'support/firestore_test_fixtures.dart';
 
@@ -167,6 +171,7 @@ Future<void> _selectDayViewMode(WidgetTester tester, String label) async {
   await tester.tap(find.text(label).last);
   await tester.pumpAndSettle();
 }
+
 
 void main() {
   testWidgets('Day view renders the mock day without layout errors', (
@@ -897,8 +902,20 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // 12 hours of manually planned time on Monday — more than the 11h
-      // 07:00–18:00 window — on top of whatever the seed data already has.
+      // Monday's own tracking window narrowed to 8h (09:00–17:00) — the
+      // default is the full 24h, which nothing short of a fully-booked day
+      // could ever exceed.
+      await container.read(userSettingsDocProvider).set(
+        const UserSettings(
+          trackingWindowsByWeekday: {
+            DateTime.monday: [
+              ClockRange(ClockTime(9, 0), ClockTime(17, 0)),
+            ],
+          },
+        ).toMap(),
+      );
+      // 12 hours of manually planned time on that same Monday — more than
+      // its own 8h window — on top of whatever the seed data already has.
       await container
           .read(plannedBlocksRepositoryProvider)
           .upsert(
@@ -3109,20 +3126,20 @@ void main() {
       // be coming from the goal's own schedule, not a manual block.
       expect(tester.takeException(), isNull);
       expect(find.text('planned 30m'), findsOneWidget);
-      expect(find.text('tracked 0m'), findsOneWidget);
+      // "tracked" is the configured tracking window (defaults to the full
+      // 24h — no settings saved for this fixture); "registered" is what's
+      // actually been logged, zero here.
+      expect(find.text('tracked 24h'), findsOneWidget);
+      expect(find.text('registered 0m'), findsOneWidget);
 
       // Drift footer: nothing tracked against a 30m target reads as −30m,
       // under the category name (lowercased), not the goal's own name.
       expect(find.text('work'), findsOneWidget);
       expect(find.text('−30m'), findsOneWidget);
 
-      // The category's own color, as a small bar next to its name — not
-      // plain text, matching the same convention the Activities list and
-      // Day view blocks already use.
-      final swatch = find.byWidgetPredicate(
-        (w) => w is Container && w.color == const Color(0xFF0278E7),
-      );
-      expect(swatch, findsOneWidget);
+      // The whole category word rendered in the category's own color.
+      final coloredWord = tester.widget<Text>(find.text('work'));
+      expect(coloredWord.style?.color, const Color(0xFF0278E7));
     },
   );
 
@@ -3146,11 +3163,37 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
+      // 3 Day (and beyond) collapses the legend to icon + value only —
+      // the word ("planned"/etc.) is what's hidden by default and
+      // revealed one at a time by tapping — see LegendRow's own doc
+      // comment for why (the word prefixes are what overflow a real
+      // phone width). The legend's own GestureDetectors, in item order:
+      // tracked, planned, registered.
+      final legendTaps = find.descendant(
+        of: find.byType(LegendRow),
+        matching: find.byType(GestureDetector),
+      );
+      expect(legendTaps, findsNWidgets(3));
+
       // Three visible days, each with the same 30m/day schedule — the bug
       // this covers: the legend used to keep showing just one day's 30m
-      // even with three days on screen.
-      expect(find.text('planned 1h 30m'), findsOneWidget);
+      // even with three days on screen. The value alone is already
+      // visible next to the icon, with no tap needed.
+      expect(find.text('1h 30m'), findsOneWidget);
+      expect(find.text('planned 1h 30m'), findsNothing);
       expect(find.text('planned 30m'), findsNothing);
+
+      await tester.tap(legendTaps.at(1)); // planned
+      await tester.pumpAndSettle();
+      // Tapping reveals the word alongside the same value.
+      expect(find.text('planned 1h 30m'), findsOneWidget);
+      expect(find.text('1h 30m'), findsNothing);
+
+      await tester.tap(legendTaps.at(0)); // tracked
+      await tester.pumpAndSettle();
+      // "tracked" (the window) sums the same way — 3 days at the default
+      // full 24h each (formatDuration doesn't roll over into "days").
+      expect(find.text('tracked 72h'), findsOneWidget);
     },
   );
 
@@ -4025,6 +4068,147 @@ void main() {
 
     expect(find.text('test@example.com'), findsOneWidget);
   });
+
+  testWidgets(
+    'Account: the tracking window sheet defaults every weekday to the full '
+    "24 hours for an account that's never set one",
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: await _signedInOverrides(),
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _tapTab(tester, 'Account');
+      expect(find.text('TRACKING WINDOW'), findsOneWidget);
+
+      await tester.tap(find.text('Edit tracking window'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Tracking window'), findsOneWidget);
+      // Every one of the 7 weekdays defaults to the full day — "24h"
+      // appears twice per day: once as the section's own summary label,
+      // once as the single range row's own duration (00:00–24:00 is a
+      // real 24h span).
+      expect(find.text('24h'), findsNWidgets(14));
+
+      // Closing with no changes made shouldn't prompt to save anything.
+      await tester.tap(find.text('close'));
+      await tester.pumpAndSettle();
+      expect(find.text('Tracking window'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'Account: a saved per-weekday tracking window shows in the sheet and '
+    'feeds the Capacity page',
+    (WidgetTester tester) async {
+      final container = ProviderContainer(overrides: await _signedInOverrides());
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Every weekday narrowed to 8h (09:00–17:00) — saved directly,
+      // bypassing the actual time-picker dialogs (Material's own picker
+      // isn't practical to drive from a widget test) — this still
+      // exercises the real Firestore doc and every provider downstream of
+      // it, the same way other tests write through e.g.
+      // plannedBlocksRepositoryProvider directly.
+      await container.read(userSettingsDocProvider).set(
+        UserSettings(
+          trackingWindowsByWeekday: {
+            for (var weekday = 1; weekday <= 7; weekday++)
+              weekday: const [ClockRange(ClockTime(9, 0), ClockTime(17, 0))],
+          },
+        ).toMap(),
+      );
+      await tester.pumpAndSettle();
+
+      await _tapTab(tester, 'Account');
+      await tester.tap(find.text('Edit tracking window'));
+      await tester.pumpAndSettle();
+
+      // 24-hour clock format (ClockTime.format()), not TimeOfDay's
+      // localized "9:00 AM" — one row per weekday, all identical.
+      expect(find.text('09:00'), findsNWidgets(7));
+      expect(find.text('17:00'), findsNWidgets(7));
+      expect(find.text('24h'), findsNothing);
+
+      await tester.tap(find.text('close'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Capacity'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      // 8h/day * 7 days = 56h total window, not the default's 168h
+      // (24h * 7).
+      expect(find.textContaining('of 56h this week'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Account: a failed tracking-window save shows an inline error and '
+    'keeps the sheet open, rather than silently doing nothing — the exact '
+    'bug this app shipped once (Firestore rules not deployed for the new '
+    "collection, and nothing caught the resulting permission-denied)",
+    (WidgetTester tester) async {
+      final container = ProviderContainer(
+        overrides: [
+          ...await _signedInOverrides(),
+          // Everything else (snapshots(), used to seed the sheet) still
+          // works normally — only the save call itself is broken here, so
+          // this isolates that one path. `DocumentReference` is a sealed
+          // class in cloud_firestore, so it can't be wrapped/faked
+          // directly the way this app's other repository providers can be
+          // — overriding this provider instead is the actual seam built
+          // for exactly this.
+          saveUserSettingsProvider.overrideWithValue(
+            (settings) => Future.error(
+              FirebaseException(
+                plugin: 'cloud_firestore',
+                code: 'permission-denied',
+                message: 'The caller does not have permission.',
+              ),
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _tapTab(tester, 'Account');
+      await tester.tap(find.text('Edit tracking window'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('save'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      // The sheet is still open — a silent failure would have looked
+      // identical to a successful save closing it.
+      expect(find.text('Tracking window'), findsOneWidget);
+      expect(
+        find.textContaining("Couldn't save"),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets(
     'Account: shows the account creation date when the user has one',

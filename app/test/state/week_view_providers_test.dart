@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:calendar_tracker/data/mock/mock_categories.dart';
 import 'package:calendar_tracker/models/untracked_gap.dart';
+import 'package:calendar_tracker/models/user_settings.dart';
 import 'package:calendar_tracker/state/auth_providers.dart';
 import 'package:calendar_tracker/state/day_view_providers.dart';
 import 'package:calendar_tracker/state/derived_providers.dart';
@@ -93,7 +94,11 @@ void main() {
           .read(allTrackedBlocksProvider)
           .where((b) => isSameDay(b.start, date))
           .toList();
-      final (windowStart, windowEnd) = dayWindowFor(date);
+      // No settings saved — defaults to the full day, one range.
+      final (windowStart, windowEnd) = dayWindowsFor(
+        date,
+        windows: const [fullDayWindow],
+      ).single;
       final expectedGaps = computeUntrackedGaps(
         tracked: tracked,
         windowStart: windowStart,
@@ -124,8 +129,8 @@ void main() {
         expect(day.actualHoursByCategory, isEmpty);
         expect(
           day.untrackedHours,
-          closeTo(11.0, 0.001),
-        ); // the full 07:00-18:00 window
+          closeTo(24.0, 0.001),
+        ); // no settings saved — defaults to the full 24h window
       }
     });
 

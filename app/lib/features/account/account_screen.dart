@@ -6,12 +6,14 @@ import '../../shared/widgets/date_swipe_nav.dart';
 import '../../shared/widgets/segmented_control.dart';
 import '../../state/auth_providers.dart';
 import '../../state/root_shell_providers.dart';
+import '../../state/user_settings_providers.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_shapes.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 import '../log_activity/widgets/activities_list.dart';
 import 'capacity_view.dart';
+import 'tracking_window_sheet.dart';
 
 enum _AccountTab { details, activities, capacity }
 
@@ -100,6 +102,13 @@ class _AccountDetails extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Not displayed directly here any more (see showTrackingWindowSheet),
+    // but watching it keeps the Firestore stream subscribed and warm from
+    // the moment this screen is visible — without this, the sheet's own
+    // synchronous ref.read of the same provider could catch it still on
+    // its very first (loading) snapshot, since nothing else on this
+    // screen would have started listening yet.
+    ref.watch(userSettingsProvider);
     final user = ref.watch(authStateChangesProvider).valueOrNull;
     final email = user?.email ?? '';
     // A Firebase user with no real creation timestamp reports the epoch
@@ -131,6 +140,32 @@ class _AccountDetails extends ConsumerWidget {
               style: AppTextStyles.mono(),
             ),
           ],
+          const SizedBox(height: AppSpacing.s3),
+          Text('TRACKING WINDOW', style: AppTextStyles.kicker()),
+          const SizedBox(height: AppSpacing.s1),
+          Text(
+            'which hours of each day count as trackable, per weekday — '
+            'defaults to the full 24 hours',
+            style: AppTextStyles.mono(),
+          ),
+          const SizedBox(height: AppSpacing.s1),
+          GestureDetector(
+            onTap: () => showTrackingWindowSheet(context, ref),
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 32),
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s2),
+              decoration: BoxDecoration(
+                border: Border.all(color: AppColors.neutral500),
+                borderRadius: AppShapes.small,
+              ),
+              child: Text(
+                'Edit tracking window',
+                style: AppTextStyles.small(color: AppColors.text),
+              ),
+            ),
+          ),
           const SizedBox(height: AppSpacing.s4),
           GestureDetector(
             onTap: () => ref.read(firebaseAuthProvider).signOut(),
