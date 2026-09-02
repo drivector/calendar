@@ -3,10 +3,12 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/tracked_block.dart';
+import '../../../models/user_settings.dart';
 import '../../../shared/widgets/date_swipe_nav.dart';
 import '../../../state/categories_providers.dart';
 import '../../../state/day_view_providers.dart';
 import '../../../state/goals_providers.dart';
+import '../../../state/user_settings_providers.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import 'actual_block_widget.dart';
@@ -93,10 +95,12 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
     super.dispose();
   }
 
-  // A fixed 18:00 anchor, the same in every view mode — entering the
-  // Calendar tab (or changing date/mode) always lands on the evening
+  // Anchored to the user's configured default open hour (Account >
+  // Details, defaults to 18:00) — the same anchor in every view mode, so
+  // entering the Calendar tab (or changing date/mode) always lands there
   // rather than wherever the day's own first event happens to be.
-  static double get _initialScrollOffset => 18 * 60 * _pxPerMinute;
+  double get _initialScrollOffset =>
+      ref.read(userSettingsProvider).defaultOpenHour * 60 * _pxPerMinute;
 
   // Always logs an actual entry — with Plan and Actual sharing one slot
   // now, there's no separate Plan-only region left to tap for a manual
@@ -123,6 +127,10 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
     });
     ref.listen<DayViewMode>(dayViewModeProvider, (previous, next) {
       if (previous == next) return;
+      _jumpToInitialOffset();
+    });
+    ref.listen<UserSettings>(userSettingsProvider, (previous, next) {
+      if (previous?.defaultOpenHour == next.defaultOpenHour) return;
       _jumpToInitialOffset();
     });
 

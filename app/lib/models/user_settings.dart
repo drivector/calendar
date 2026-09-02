@@ -21,12 +21,21 @@ const fullDayWindow = ClockRange(ClockTime(0, 0), ClockTime(24, 0));
 /// this setting tracks the full 24 hours, not a narrower default someone
 /// has to discover and change.
 class UserSettings {
-  const UserSettings({this.trackingWindowsByWeekday = const {}});
+  const UserSettings({
+    this.trackingWindowsByWeekday = const {},
+    this.defaultOpenHour = 18,
+  });
 
   /// Keyed by [DateTime.weekday] (Monday = 1 .. Sunday = 7). A day with no
   /// key at all — not an empty list, which would mean "never trackable" —
   /// falls back to [fullDayWindow] via [windowsForWeekday].
   final Map<int, List<ClockRange>> trackingWindowsByWeekday;
+
+  /// Which hour (0-23) the Day/Week timeline scrolls to when it first
+  /// opens — the Calendar tab's own anchor, unrelated to the tracking
+  /// window above. Defaults to 18 (6pm), the same fixed anchor the app
+  /// used before this was configurable.
+  final int defaultOpenHour;
 
   List<ClockRange> windowsForWeekday(int weekday) =>
       trackingWindowsByWeekday[weekday] ?? const [fullDayWindow];
@@ -37,6 +46,14 @@ class UserSettings {
         ...trackingWindowsByWeekday,
         weekday: windows,
       },
+      defaultOpenHour: defaultOpenHour,
+    );
+  }
+
+  UserSettings copyWithDefaultOpenHour(int hour) {
+    return UserSettings(
+      trackingWindowsByWeekday: trackingWindowsByWeekday,
+      defaultOpenHour: hour,
     );
   }
 
@@ -49,26 +66,31 @@ class UserSettings {
             'endMinutes': range.end.minutesSinceMidnight,
           },
       ],
+    'defaultOpenHour': defaultOpenHour,
   };
 
   factory UserSettings.fromMap(Map<String, dynamic> map) {
     return UserSettings(
       trackingWindowsByWeekday: {
+        // Weekday windows are keyed by their numeric weekday, so skip the
+        // non-numeric `defaultOpenHour` key sharing this same map.
         for (final entry in map.entries)
-          int.parse(entry.key): [
-            for (final raw in entry.value as List<dynamic>)
-              ClockRange(
-                ClockTime(
-                  (raw['startMinutes'] as int) ~/ 60,
-                  (raw['startMinutes'] as int) % 60,
+          if (int.tryParse(entry.key) != null)
+            int.parse(entry.key): [
+              for (final raw in entry.value as List<dynamic>)
+                ClockRange(
+                  ClockTime(
+                    (raw['startMinutes'] as int) ~/ 60,
+                    (raw['startMinutes'] as int) % 60,
+                  ),
+                  ClockTime(
+                    (raw['endMinutes'] as int) ~/ 60,
+                    (raw['endMinutes'] as int) % 60,
+                  ),
                 ),
-                ClockTime(
-                  (raw['endMinutes'] as int) ~/ 60,
-                  (raw['endMinutes'] as int) % 60,
-                ),
-              ),
-          ],
+            ],
       },
+      defaultOpenHour: map['defaultOpenHour'] as int? ?? 18,
     );
   }
 }

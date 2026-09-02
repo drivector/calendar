@@ -138,6 +138,15 @@ Future<List<Override>> _signedInOnboardedNoActivityOverrides() async {
   ];
 }
 
+/// A goal's own name can collide with plain body text elsewhere on screen
+/// once drift is grouped by goal rather than category (e.g. the drift
+/// footer's own "test goal" row, always visible whenever that goal is
+/// behind) — scoped to any open [BottomSheet] (the add-block sheet itself,
+/// and/or its nested goal-picker sheet) sidesteps that ambiguity for the
+/// add-block sheet's goal field/picker specifically.
+Finder _goalTextInSheet(String name) =>
+    find.descendant(of: find.byType(BottomSheet), matching: find.text(name));
+
 /// GoalEditSheet is a 4-step wizard (Category → Name & dates → Schedule →
 /// Reminders) — steps are strictly linear, reached only via "NEXT", so any
 /// test that needs a field past step 1 has to walk there first.
@@ -730,7 +739,7 @@ void main() {
       );
       await tester.tap(find.text('set goal'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('test goal'));
+      await tester.tap(_goalTextInSheet('test goal'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('save'));
       await tester.pumpAndSettle();
@@ -935,6 +944,37 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(find.textContaining('over by'), findsWidgets);
+    },
+  );
+
+  testWidgets(
+    "Capacity: a goal's own generated schedule counts as planned there "
+    "too, not just on the Day view's own legend",
+    (WidgetTester tester) async {
+      // _signedInOnboardedNoActivityOverrides seeds one goal ("Test goal",
+      // category "Work") with a plain 30m/day schedule and zero manually
+      // created planned blocks — so this can only be coming from the
+      // goal's own schedule, not a manual block. A real gap a user hit:
+      // the Day view's legend already counted this as planned, but
+      // Capacity's own total silently didn't, since it only ever read
+      // manually created PlannedBlocks.
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: await _signedInOnboardedNoActivityOverrides(),
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('planned 30m'), findsOneWidget);
+
+      await _tapTab(tester, 'Account');
+      await tester.tap(find.text('Capacity'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      // 30m/day * 7 days = 3h 30m for the week — not "0m".
+      expect(find.text('3h 30m'), findsOneWidget);
     },
   );
 
@@ -3108,6 +3148,90 @@ void main() {
   );
 
   testWidgets(
+    "Goals: a second goal sharing a category with an existing one gets "
+    "its own planned hours, not a copy of the first goal's — the exact "
+    "bug a real user hit adding a second goal ('side project') under the "
+    "same category as an existing one ('job')",
+    (WidgetTester tester) async {
+      final container = ProviderContainer(
+        overrides: await _signedInOnboardedNoActivityOverrides(),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // _signedInOnboardedNoActivityOverrides seeds 'goal-1' ("Test goal",
+      // category "cat-1"/"Work") with a duration-only schedule, which never
+      // generates a block (see generateGoalPlannedBlocksForDate), so its
+      // own plannedHours is driven purely by manually planned blocks in
+      // "cat-1". Add a second goal in the same category with no schedule
+      // of its own, then manually plan one block in "cat-1" — a manually
+      // planned block only ever carries a category, never a goal id, so
+      // before the fix that block's hours got credited to *both* goals,
+      // making their plannedHours identical (the exact bug: a real user's
+      // new "side project" goal read the same planned hours as "job",
+      // both sharing "work").
+      final secondGoal = Goal(
+        id: 'goal-2',
+        name: 'Side project',
+        categoryId: 'cat-1',
+        startDate: DateTime(2020, 1, 1),
+        endDate: DateTime(2099, 12, 31),
+        scheduleByWeekday: {for (var weekday = 1; weekday <= 7; weekday++) weekday: []},
+      );
+      await container.read(goalsRepositoryProvider).upsert(secondGoal);
+
+      final selectedDate = container.read(selectedDateProvider);
+      await container
+          .read(plannedBlocksRepositoryProvider)
+          .upsert(
+            PlannedBlock(
+              id: 'test-plan-work',
+              start: DateTime(
+                selectedDate.year,
+                selectedDate.month,
+                selectedDate.day,
+                9,
+                0,
+              ),
+              end: DateTime(
+                selectedDate.year,
+                selectedDate.month,
+                selectedDate.day,
+                11,
+                0,
+              ),
+              title: 'Deep work',
+              categoryId: 'cat-1',
+            ),
+          );
+      await tester.pumpAndSettle();
+
+      final progressList = container.read(goalProgressListProvider);
+      final firstGoalProgress = progressList.firstWhere(
+        (p) => p.goal.id == 'goal-1',
+      );
+      final secondGoalProgress = progressList.firstWhere(
+        (p) => p.goal.id == 'goal-2',
+      );
+
+      // Exactly one of the two goals is credited with the 2h manual block
+      // — never both, and never neither.
+      final plannedTotals = [
+        firstGoalProgress.plannedHours,
+        secondGoalProgress.plannedHours,
+      ]..sort();
+      expect(plannedTotals, [0.0, 2.0]);
+    },
+  );
+
+  testWidgets(
     "Day view: a goal's own schedule counts as planned even with no "
     'manually-created planned block and nothing tracked yet — both the '
     'legend total and the drift footer reflect it',
@@ -3133,12 +3257,14 @@ void main() {
       expect(find.text('registered 0m'), findsOneWidget);
 
       // Drift footer: nothing tracked against a 30m target reads as −30m,
-      // under the category name (lowercased), not the goal's own name.
-      expect(find.text('work'), findsOneWidget);
+      // under the goal's own name (lowercased) — drift is grouped by goal,
+      // not category, so a category backing more than one goal can show
+      // each goal's drift on its own row.
+      expect(find.text('test goal'), findsOneWidget);
       expect(find.text('−30m'), findsOneWidget);
 
-      // The whole category word rendered in the category's own color.
-      final coloredWord = tester.widget<Text>(find.text('work'));
+      // The whole word still rendered in the goal's own category's color.
+      final coloredWord = tester.widget<Text>(find.text('test goal'));
       expect(coloredWord.style?.color, const Color(0xFF0278E7));
     },
   );
@@ -3443,7 +3569,7 @@ void main() {
       // specifically so this can't pass by coincidence.
       await tester.tap(find.text('set goal'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('test goal'));
+      await tester.tap(_goalTextInSheet('test goal'));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('save'));
@@ -3489,20 +3615,20 @@ void main() {
       // No goal pre-selected — the closed field reads "set goal" until one
       // is actually picked, not the Wrap of chips this used to be.
       expect(find.text('set goal'), findsOneWidget);
-      expect(find.text('test goal'), findsNothing);
+      expect(_goalTextInSheet('test goal'), findsNothing);
 
       // Tapping opens a flat picker list rather than a native dropdown menu.
       await tester.tap(find.text('set goal'));
       await tester.pumpAndSettle();
-      expect(find.text('test goal'), findsOneWidget); // the one list row
+      expect(_goalTextInSheet('test goal'), findsOneWidget); // the one list row
 
-      await tester.tap(find.text('test goal'));
+      await tester.tap(_goalTextInSheet('test goal'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
       // Picker closed, field now shows the picked goal.
       expect(find.text('set goal'), findsNothing);
-      expect(find.text('test goal'), findsOneWidget);
+      expect(_goalTextInSheet('test goal'), findsOneWidget);
 
       // The bottom save button is gone — "save" now lives in the header,
       // next to the title, to keep the sheet as short as possible.
@@ -3558,7 +3684,7 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('· 30m'), findsOneWidget);
-      expect(find.text('test goal'), findsOneWidget); // dropdown lowercases
+      expect(_goalTextInSheet('test goal'), findsOneWidget); // dropdown lowercases
       expect(find.text('set goal'), findsNothing);
       // The "matches a planned activity" icon shows only because this sheet
       // was opened by tapping the plan, not an empty-space tap.
@@ -3629,7 +3755,7 @@ void main() {
       // A goal is picked, but the activity name is left blank.
       await tester.tap(find.text('set goal'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('test goal'));
+      await tester.tap(_goalTextInSheet('test goal'));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('save'));
@@ -3794,7 +3920,7 @@ void main() {
       // A goal is required to save now — pick the fixture's one goal.
       await tester.tap(find.text('set goal'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('test goal'));
+      await tester.tap(_goalTextInSheet('test goal'));
       await tester.pumpAndSettle();
 
       await tester.tapAt(const Offset(200, 10));
@@ -3845,7 +3971,7 @@ void main() {
       // activity name is deliberately left blank.
       await tester.tap(find.text('set goal'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('test goal'));
+      await tester.tap(_goalTextInSheet('test goal'));
       await tester.pumpAndSettle();
 
       await tester.tapAt(const Offset(200, 10));

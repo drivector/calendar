@@ -1,11 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/clock_time.dart';
 import '../models/day_capacity.dart';
+import '../models/goal_planned_blocks.dart';
 import '../models/goal_progress.dart';
 import '../models/untracked_gap.dart';
 import '../models/week_day_summary.dart';
 import 'day_view_providers.dart';
 import 'derived_providers.dart';
+import 'goals_providers.dart';
 import 'user_settings_providers.dart';
 
 /// Live per-day breakdown for the week containing [selectedDateProvider] —
@@ -14,11 +17,21 @@ import 'user_settings_providers.dart';
 /// activity (or an honest empty day for one with nothing logged). Backs
 /// the Capacity page (`features/account/capacity_view.dart`) — there is
 /// no "Week view" tab any more.
+///
+/// "Planned" here has to match what the Day view's own header legend
+/// counts as planned, or the two screens silently disagree — a real gap a
+/// user hit directly: this used to read only [allPlannedBlocksProvider]
+/// (manually created blocks), leaving out everything a goal's own schedule
+/// generates (see [generateGoalPlannedBlocksForDate] and
+/// [untimedPlannedDurationByCategoryForDate]), which is what
+/// `dayTotalsProvider` (the legend) already includes — the normal case,
+/// since nobody hand-plans a recurring goal.
 final weekDaySummariesProvider = Provider<List<WeekDaySummary>>((ref) {
   final selectedDate = ref.watch(selectedDateProvider);
   final weekStart = weekStartFor(selectedDate);
   final allPlanned = ref.watch(allPlannedBlocksProvider);
   final allTracked = ref.watch(allTrackedBlocksProvider);
+  final goals = ref.watch(goalsProvider);
   final settings = ref.watch(userSettingsProvider);
 
   double hoursOf(Duration d) => d.inMinutes / 60;
@@ -40,12 +53,28 @@ final weekDaySummariesProvider = Provider<List<WeekDaySummary>>((ref) {
   return List<WeekDaySummary>.generate(7, (i) {
     final date = weekStart.add(Duration(days: i));
 
-    final dayPlanned = allPlanned
-        .where((b) => isSameDay(b.start, date))
-        .toList();
+    final dayPlanned = [
+      ...allPlanned.where((b) => isSameDay(b.start, date)),
+      ...generateGoalPlannedBlocksForDate(goals: goals, date: date),
+    ];
     final dayTracked = allTracked
         .where((b) => isSameDay(b.start, date))
         .toList();
+
+    final plannedByCategory = groupByCategory(
+      dayPlanned.map((b) => (categoryId: b.categoryId, duration: b.duration)),
+    );
+    for (final entry
+        in untimedPlannedDurationByCategoryForDate(
+          goals: goals,
+          date: date,
+        ).entries) {
+      plannedByCategory.update(
+        entry.key,
+        (h) => h + hoursOf(entry.value),
+        ifAbsent: () => hoursOf(entry.value),
+      );
+    }
 
     // A day can have more than one tracking window now (see
     // UserSettings.windowsByWeekday) — untracked gaps are computed
@@ -66,13 +95,12 @@ final weekDaySummariesProvider = Provider<List<WeekDaySummary>>((ref) {
 
     return WeekDaySummary(
       date: date,
-      plannedHoursByCategory: groupByCategory(
-        dayPlanned.map((b) => (categoryId: b.categoryId, duration: b.duration)),
-      ),
+      plannedHoursByCategory: plannedByCategory,
       actualHoursByCategory: groupByCategory(
         dayTracked.map((b) => (categoryId: b.categoryId, duration: b.duration)),
       ),
       untrackedHours: untrackedHours,
+      plannedBlocks: dayPlanned,
     );
   });
 });
@@ -87,13 +115,31 @@ final weekDayCapacityProvider = Provider<List<DayCapacity>>((ref) {
   final settings = ref.watch(userSettingsProvider);
   return [
     for (final day in days)
-      computeDayCapacity(
-        date: day.date,
-        plannedHours: day.totalPlannedHours,
-        actualHours: day.totalActualHours,
-        windowHours: settings
-            .windowsForWeekday(day.date.weekday)
-            .fold<double>(0, (t, w) => t + w.duration.inMinutes / 60),
-      ),
+      _dayCapacityFor(day, settings.windowsForWeekday(day.date.weekday)),
   ];
 });
+
+DayCapacity _dayCapacityFor(WeekDaySummary day, List<ClockRange> windows) {
+  final ranges = dayWindowsFor(day.date, windows: windows);
+  DateTime? windowStart;
+  DateTime? windowEnd;
+  for (final (start, end) in ranges) {
+    if (windowStart == null || start.isBefore(windowStart)) {
+      windowStart = start;
+    }
+    if (windowEnd == null || end.isAfter(windowEnd)) windowEnd = end;
+  }
+  return computeDayCapacity(
+    date: day.date,
+    plannedHours: day.totalPlannedHours,
+    actualHours: day.totalActualHours,
+    windowHours: windows.fold<double>(
+      0,
+      (t, w) => t + w.duration.inMinutes / 60,
+    ),
+    plannedHoursByCategory: day.plannedHoursByCategory,
+    plannedBlocks: day.plannedBlocks,
+    windowStart: windowStart,
+    windowEnd: windowEnd,
+  );
+}

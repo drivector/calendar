@@ -1,7 +1,9 @@
 import 'package:intl/intl.dart';
+import 'package:flutter/material.dart' show showTimePicker, TimeOfDay;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/clock_time.dart';
 import '../../shared/widgets/date_swipe_nav.dart';
 import '../../shared/widgets/segmented_control.dart';
 import '../../state/auth_providers.dart';
@@ -100,15 +102,31 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
 class _AccountDetails extends ConsumerWidget {
   const _AccountDetails();
 
+  Future<void> _pickDefaultOpenHour(
+    BuildContext context,
+    WidgetRef ref,
+    int currentHour,
+  ) async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: currentHour, minute: 0),
+    );
+    if (picked == null) return;
+    await saveUserSettings(
+      ref,
+      ref.read(userSettingsProvider).copyWithDefaultOpenHour(picked.hour),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Not displayed directly here any more (see showTrackingWindowSheet),
-    // but watching it keeps the Firestore stream subscribed and warm from
-    // the moment this screen is visible — without this, the sheet's own
-    // synchronous ref.read of the same provider could catch it still on
-    // its very first (loading) snapshot, since nothing else on this
-    // screen would have started listening yet.
-    ref.watch(userSettingsProvider);
+    // Also drives the visible default-open-hour value below, so watching
+    // it (rather than a one-off read) keeps the Firestore stream
+    // subscribed and warm from the moment this screen is visible — without
+    // this, the sheet's own synchronous ref.read of the same provider
+    // could catch it still on its very first (loading) snapshot, since
+    // nothing else on this screen would have started listening yet.
+    final settings = ref.watch(userSettingsProvider);
     final user = ref.watch(authStateChangesProvider).valueOrNull;
     final email = user?.email ?? '';
     // A Firebase user with no real creation timestamp reports the epoch
@@ -140,6 +158,35 @@ class _AccountDetails extends ConsumerWidget {
               style: AppTextStyles.mono(),
             ),
           ],
+          const SizedBox(height: AppSpacing.s3),
+          Text('DEFAULT OPEN HOUR', style: AppTextStyles.kicker()),
+          const SizedBox(height: AppSpacing.s1),
+          Text(
+            'which hour the Calendar tab scrolls to when it first opens',
+            style: AppTextStyles.mono(),
+          ),
+          const SizedBox(height: AppSpacing.s1),
+          GestureDetector(
+            onTap: () => _pickDefaultOpenHour(
+              context,
+              ref,
+              settings.defaultOpenHour,
+            ),
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 32),
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s2),
+              decoration: BoxDecoration(
+                border: Border.all(color: AppColors.neutral500),
+                borderRadius: AppShapes.small,
+              ),
+              child: Text(
+                ClockTime(settings.defaultOpenHour, 0).format(),
+                style: AppTextStyles.small(color: AppColors.text),
+              ),
+            ),
+          ),
           const SizedBox(height: AppSpacing.s3),
           Text('TRACKING WINDOW', style: AppTextStyles.kicker()),
           const SizedBox(height: AppSpacing.s1),

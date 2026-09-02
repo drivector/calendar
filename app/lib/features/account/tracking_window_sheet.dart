@@ -114,7 +114,10 @@ class _TrackingWindowSheetState extends State<_TrackingWindowSheet> {
     try {
       await saveUserSettings(
         widget.ref,
-        UserSettings(trackingWindowsByWeekday: _windows),
+        UserSettings(
+          trackingWindowsByWeekday: _windows,
+          defaultOpenHour: widget.ref.read(userSettingsProvider).defaultOpenHour,
+        ),
       );
       if (mounted) Navigator.of(context).pop();
     } catch (_) {

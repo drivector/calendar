@@ -56,7 +56,7 @@ List<(DateTime start, DateTime end)> dayWindowsFor(
 /// [dayTotalsProvider]'s own doc comment, which this mirrors: the same bug
 /// (only ever looking at [selectedDateProvider] alone, ignoring the other
 /// visible columns in 3 Day/Working week/Week mode) applied here too.
-final driftProvider = Provider<List<CategoryDrift>>((ref) {
+final driftProvider = Provider<List<GoalDrift>>((ref) {
   final dates = ref.watch(visibleDatesProvider);
   final dayBlocks = ref.watch(visibleDayBlocksProvider);
   final goals = ref.watch(goalsProvider);
@@ -66,7 +66,7 @@ final driftProvider = Provider<List<CategoryDrift>>((ref) {
   final untimed = <String, Duration>{};
   for (final date in dates) {
     for (final entry
-        in untimedPlannedDurationByCategoryForDate(
+        in untimedPlannedDurationByGoalForDate(
           goals: goals,
           date: date,
         ).entries) {
@@ -80,7 +80,8 @@ final driftProvider = Provider<List<CategoryDrift>>((ref) {
   return computeDrift(
     planned: planned,
     tracked: tracked,
-    untimedPlannedByCategory: untimed,
+    goals: goals,
+    untimedPlannedByGoal: untimed,
   );
 });
 

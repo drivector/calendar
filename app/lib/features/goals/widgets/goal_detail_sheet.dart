@@ -102,22 +102,35 @@ class _GoalDetailSheetState extends ConsumerState<GoalDetailSheet> {
         ),
     ];
 
+    // A manually planned/tracked block only carries a category, not a goal
+    // id, so when another goal shares this one's category it's only
+    // credited here if this goal is the one goalForCategory would resolve
+    // that category to — otherwise the same hours would double-count
+    // toward both goals (see _plannedHoursForGoal/_actualHoursForGoal in
+    // state/goals_providers.dart for the same rule).
+    final isPrimaryForCategory =
+        goalForCategory(goals, goal.categoryId)?.id == goal.id;
+
     final plannedActivity = [
-      ...ref
-          .watch(allPlannedBlocksProvider)
-          .where(
-            (b) => b.categoryId == goal!.categoryId && inThisWeek(b.start),
-          ),
+      if (isPrimaryForCategory)
+        ...ref
+            .watch(allPlannedBlocksProvider)
+            .where(
+              (b) => b.categoryId == goal!.categoryId && inThisWeek(b.start),
+            ),
       ...generatedThisWeek.where((b) => b.goalId == goal!.id),
     ]..sort((a, b) => a.start.compareTo(b.start));
 
     final actualActivity =
-        ref
-            .watch(allTrackedBlocksProvider)
-            .where(
-              (b) => b.categoryId == goal!.categoryId && inThisWeek(b.start),
-            )
-            .toList()
+        (isPrimaryForCategory
+            ? ref
+                  .watch(allTrackedBlocksProvider)
+                  .where(
+                    (b) =>
+                        b.categoryId == goal!.categoryId && inThisWeek(b.start),
+                  )
+                  .toList()
+            : <TrackedBlock>[])
           ..sort((a, b) => a.start.compareTo(b.start));
 
     final plannedHours = plannedActivity.fold<double>(

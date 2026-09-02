@@ -92,3 +92,29 @@ Map<String, Duration> untimedPlannedDurationByCategoryForDate({
   }
   return totals;
 }
+
+/// Same as [untimedPlannedDurationByCategoryForDate], but keyed by goal id
+/// instead of category id — for callers (drift) that need to keep two
+/// goals sharing a category separate rather than merging their untimed
+/// time into one bucket.
+Map<String, Duration> untimedPlannedDurationByGoalForDate({
+  required List<Goal> goals,
+  required DateTime date,
+}) {
+  final day = DateTime(date.year, date.month, date.day);
+  final weekday = day.weekday;
+
+  final totals = <String, Duration>{};
+  for (final goal in goals) {
+    if (!goal.isActiveOn(day)) continue;
+    for (final entry in goal.entriesForWeekday(weekday)) {
+      if (entry.isTimeRange) continue;
+      totals.update(
+        goal.id,
+        (total) => total + entry.effectiveDuration,
+        ifAbsent: () => entry.effectiveDuration,
+      );
+    }
+  }
+  return totals;
+}

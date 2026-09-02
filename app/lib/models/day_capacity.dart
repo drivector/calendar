@@ -1,3 +1,5 @@
+import 'planned_block.dart';
+
 /// The tracked window's length in hours — matches `dayWindowFor`
 /// (07:00–18:00) in `state/derived_providers.dart`, the same window the Day
 /// view already uses to decide what counts as an "untracked" gap. Reused
@@ -15,12 +17,28 @@ class DayCapacity {
     required this.plannedHours,
     required this.actualHours,
     this.windowHours = defaultCapacityWindowHours,
+    this.plannedHoursByCategory = const {},
+    this.plannedBlocks = const [],
+    this.windowStart,
+    this.windowEnd,
   });
 
   final DateTime date;
   final double plannedHours;
   final double actualHours;
   final double windowHours;
+  final Map<String, double> plannedHoursByCategory;
+
+  /// The day's own clock-timed planned blocks, so the Capacity page can
+  /// draw them at their real position within [windowStart]–[windowEnd]
+  /// rather than just stacked by category in an arbitrary order.
+  final List<PlannedBlock> plannedBlocks;
+
+  /// The span the day's bar is drawn against — the earliest start and
+  /// latest end across the day's own (possibly several) tracking windows.
+  /// Null when the day has no tracking window at all.
+  final DateTime? windowStart;
+  final DateTime? windowEnd;
 
   /// Hours in the window not yet claimed by any planned block — clamped at
   /// zero once planning fills or exceeds the window.
@@ -38,11 +56,19 @@ DayCapacity computeDayCapacity({
   required double plannedHours,
   required double actualHours,
   double windowHours = defaultCapacityWindowHours,
+  Map<String, double> plannedHoursByCategory = const {},
+  List<PlannedBlock> plannedBlocks = const [],
+  DateTime? windowStart,
+  DateTime? windowEnd,
 }) {
   return DayCapacity(
     date: date,
     plannedHours: plannedHours,
     actualHours: actualHours,
     windowHours: windowHours,
+    plannedHoursByCategory: plannedHoursByCategory,
+    plannedBlocks: plannedBlocks,
+    windowStart: windowStart,
+    windowEnd: windowEnd,
   );
 }

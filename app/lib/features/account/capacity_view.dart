@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../models/category.dart';
 import '../../models/day_capacity.dart';
 import '../../models/goal_progress.dart';
 import '../../shared/widgets/hatch_pattern.dart';
@@ -73,7 +74,8 @@ class CapacityView extends ConsumerWidget {
                       style: AppTextStyles.mono(),
                     ),
                     const SizedBox(height: AppSpacing.s2),
-                    for (final day in days) _DayCapacityRow(day: day),
+                    for (final day in days)
+                      _DayCapacityRow(day: day, categories: categories),
                     const SizedBox(height: AppSpacing.s4),
                     Text('ROOM TOWARD GOALS', style: AppTextStyles.kicker()),
                     const SizedBox(height: AppSpacing.s1),
@@ -108,14 +110,19 @@ class CapacityView extends ConsumerWidget {
 }
 
 class _DayCapacityRow extends StatelessWidget {
-  const _DayCapacityRow({required this.day});
+  const _DayCapacityRow({required this.day, required this.categories});
 
   final DayCapacity day;
+  final List<Category> categories;
 
   @override
   Widget build(BuildContext context) {
-    final plannedFlex = (day.plannedHours * 100).round().clamp(0, 1 << 30);
-    final availableFlex = (day.availableHours * 100).round().clamp(0, 1 << 30);
+    final windowStart = day.windowStart;
+    final windowEnd = day.windowEnd;
+    final hasTimeline =
+        windowStart != null &&
+        windowEnd != null &&
+        windowEnd.isAfter(windowStart);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.s1),
@@ -132,24 +139,14 @@ class _DayCapacityRow extends StatelessWidget {
           Expanded(
             child: SizedBox(
               height: 14,
-              child: plannedFlex == 0 && availableFlex == 0
-                  ? const SizedBox.shrink()
-                  : Row(
-                      children: [
-                        if (plannedFlex > 0)
-                          Expanded(
-                            flex: plannedFlex,
-                            child: ColoredBox(color: AppColors.text),
-                          ),
-                        if (plannedFlex > 0 && availableFlex > 0)
-                          const SizedBox(width: 2),
-                        if (availableFlex > 0)
-                          Expanded(
-                            flex: availableFlex,
-                            child: const HatchPatternBox(),
-                          ),
-                      ],
-                    ),
+              child: hasTimeline
+                  ? _TimelineBar(
+                      day: day,
+                      categories: categories,
+                      windowStart: windowStart,
+                      windowEnd: windowEnd,
+                    )
+                  : _StackedBar(day: day, categories: categories),
             ),
           ),
           const SizedBox(width: AppSpacing.s2),
@@ -167,6 +164,135 @@ class _DayCapacityRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Lays the day's own planned blocks out in real chronological order
+/// against [windowStart]–[windowEnd], so e.g. a sleep block from 1am–8am
+/// renders at the start of the bar rather than wherever its category
+/// happened to land in a per-category stack. Plain-duration goal entries
+/// (no real clock time) are packed in after the last timed block, since
+/// there's no true position to give them.
+class _TimelineBar extends StatelessWidget {
+  const _TimelineBar({
+    required this.day,
+    required this.categories,
+    required this.windowStart,
+    required this.windowEnd,
+  });
+
+  final DayCapacity day;
+  final List<Category> categories;
+  final DateTime windowStart;
+  final DateTime windowEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    final blocks = [...day.plannedBlocks]
+      ..sort((a, b) => a.start.compareTo(b.start));
+
+    final timedByCategory = <String, double>{};
+    for (final b in blocks) {
+      timedByCategory.update(
+        b.categoryId,
+        (h) => h + b.duration.inMinutes / 60,
+        ifAbsent: () => b.duration.inMinutes / 60,
+      );
+    }
+    final untimedByCategory = <String, double>{};
+    for (final entry in day.plannedHoursByCategory.entries) {
+      final leftover = entry.value - (timedByCategory[entry.key] ?? 0);
+      if (leftover > 0.01) untimedByCategory[entry.key] = leftover;
+    }
+
+    Widget hatch(int minutes) =>
+        Expanded(flex: minutes, child: const HatchPatternBox());
+    Widget colored(int minutes, Color color) =>
+        Expanded(flex: minutes, child: ColoredBox(color: color));
+
+    final segments = <Widget>[];
+    var cursor = windowStart;
+
+    for (final block in blocks) {
+      var start = block.start.isBefore(windowStart)
+          ? windowStart
+          : block.start;
+      final end = block.end.isAfter(windowEnd) ? windowEnd : block.end;
+      if (!end.isAfter(start)) continue;
+      if (start.isBefore(cursor)) start = cursor;
+      if (!end.isAfter(start)) continue;
+
+      final gapMinutes = start.difference(cursor).inMinutes;
+      if (gapMinutes > 0) segments.add(hatch(gapMinutes));
+
+      final blockMinutes = end.difference(start).inMinutes;
+      segments.add(
+        colored(blockMinutes, resolveCategory(categories, block.categoryId).color),
+      );
+      cursor = end;
+    }
+
+    var remainingMinutes = windowEnd.difference(cursor).inMinutes;
+    for (final entry in untimedByCategory.entries) {
+      if (remainingMinutes <= 0) break;
+      final minutes = (entry.value * 60).round().clamp(0, remainingMinutes);
+      if (minutes <= 0) continue;
+      segments.add(colored(minutes, resolveCategory(categories, entry.key).color));
+      remainingMinutes -= minutes;
+    }
+
+    if (remainingMinutes > 0) segments.add(hatch(remainingMinutes));
+    if (segments.isEmpty) return const SizedBox.shrink();
+
+    return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: segments);
+  }
+}
+
+/// Fallback for a day with no tracking window at all — nothing to lay a
+/// timeline against, so planned time is just shown as one stacked block per
+/// category next to the available portion.
+class _StackedBar extends StatelessWidget {
+  const _StackedBar({required this.day, required this.categories});
+
+  final DayCapacity day;
+  final List<Category> categories;
+
+  @override
+  Widget build(BuildContext context) {
+    final plannedFlex = (day.plannedHours * 100).round().clamp(0, 1 << 30);
+    final availableFlex = (day.availableHours * 100).round().clamp(0, 1 << 30);
+    final plannedEntries = day.plannedHoursByCategory.entries
+        .where((e) => e.value > 0)
+        .toList();
+
+    if (plannedFlex == 0 && availableFlex == 0) return const SizedBox.shrink();
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (plannedFlex > 0)
+          Expanded(
+            flex: plannedFlex,
+            child: plannedEntries.isEmpty
+                ? ColoredBox(color: AppColors.text)
+                : Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final entry in plannedEntries)
+                        Expanded(
+                          flex: (entry.value * 100).round().clamp(1, 1 << 30),
+                          child: ColoredBox(
+                            color: resolveCategory(categories, entry.key).color,
+                          ),
+                        ),
+                    ],
+                  ),
+          ),
+        if (plannedFlex > 0 && availableFlex > 0) const SizedBox(width: 2),
+        if (availableFlex > 0)
+          Expanded(flex: availableFlex, child: const HatchPatternBox()),
+      ],
     );
   }
 }

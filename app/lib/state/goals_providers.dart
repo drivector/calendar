@@ -44,12 +44,18 @@ Goal? goalForCategory(List<Goal> goals, String categoryId) {
 }
 
 /// Actual hours this week = tracked blocks in the goal's category that fall
-/// within the current week.
+/// within the current week. A manually tracked block only has a category,
+/// not a goal id, so when more than one goal shares a category (e.g. "job"
+/// and "side project" both under "work") it's only credited to the one
+/// [goalForCategory] would resolve that category to — otherwise the same
+/// hours would double-count toward every goal sharing the category.
 double _actualHoursForGoal(
   Goal goal,
+  List<Goal> allGoals,
   List<TrackedBlock> allTracked,
   DateTime selectedDate,
 ) {
+  if (goalForCategory(allGoals, goal.categoryId)?.id != goal.id) return 0;
   final weekStart = weekStartFor(selectedDate);
   final weekEnd = weekStart.add(const Duration(days: 7));
   return allTracked
@@ -65,23 +71,30 @@ double _actualHoursForGoal(
 /// Planned hours this week = manually planned blocks in this goal's category
 /// (seed data plus anything added since) plus the goal's own generated
 /// schedule for whichever days it was active this week — see
-/// [goalGeneratedBlocksThisWeekProvider].
+/// [goalGeneratedBlocksThisWeekProvider]. As with [_actualHoursForGoal], the
+/// manual half is only credited to the goal [goalForCategory] resolves the
+/// category to, since a manually planned block carries no goal id of its
+/// own; the generated half stays goal-specific via [PlannedBlock.goalId].
 double _plannedHoursForGoal(
   Goal goal,
+  List<Goal> allGoals,
   List<PlannedBlock> allPlanned,
   List<PlannedBlock> generatedThisWeek,
   DateTime selectedDate,
 ) {
   final weekStart = weekStartFor(selectedDate);
   final weekEnd = weekStart.add(const Duration(days: 7));
-  final manualHours = allPlanned
-      .where(
-        (b) =>
-            b.categoryId == goal.categoryId &&
-            !b.start.isBefore(weekStart) &&
-            b.start.isBefore(weekEnd),
-      )
-      .fold(0.0, (total, b) => total + b.duration.inMinutes / 60);
+  final manualHours =
+      goalForCategory(allGoals, goal.categoryId)?.id != goal.id
+      ? 0.0
+      : allPlanned
+            .where(
+              (b) =>
+                  b.categoryId == goal.categoryId &&
+                  !b.start.isBefore(weekStart) &&
+                  b.start.isBefore(weekEnd),
+            )
+            .fold(0.0, (total, b) => total + b.duration.inMinutes / 60);
   final generatedHours = generatedThisWeek
       .where((b) => b.goalId == goal.id)
       .fold(0.0, (total, b) => total + b.duration.inMinutes / 60);
@@ -182,9 +195,15 @@ final goalProgressListProvider = Provider<List<GoalProgress>>((ref) {
     for (final goal in goals)
       computeGoalProgress(
         goal: goal,
-        actualHours: _actualHoursForGoal(goal, allTracked, selectedDate),
+        actualHours: _actualHoursForGoal(
+          goal,
+          goals,
+          allTracked,
+          selectedDate,
+        ),
         plannedHours: _plannedHoursForGoal(
           goal,
+          goals,
           allPlanned,
           generatedThisWeek,
           selectedDate,
