@@ -772,7 +772,7 @@ void main() {
     }
   });
 
-  testWidgets('Goals: a leftward swipe steps to the next tab (Account)', (
+  testWidgets('Goals: a leftward swipe steps to the next tab (Planning)', (
     WidgetTester tester,
   ) async {
     final container = ProviderContainer(overrides: await _signedInOverrides());
@@ -799,7 +799,7 @@ void main() {
   });
 
   testWidgets(
-    'Account: a rightward swipe steps to the previous tab (Goals)',
+    'Account: a rightward swipe steps to the previous tab (Planning)',
     (WidgetTester tester) async {
       final container = ProviderContainer(
         overrides: await _signedInOverrides(),
@@ -814,7 +814,7 @@ void main() {
       await tester.pumpAndSettle();
 
       await _tapTab(tester, 'Account');
-      expect(container.read(currentTabIndexProvider), 2);
+      expect(container.read(currentTabIndexProvider), 3);
 
       await tester.fling(
         find.byType(AccountScreen),
@@ -824,7 +824,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      expect(container.read(currentTabIndexProvider), 1);
+      expect(container.read(currentTabIndexProvider), 2);
     },
   );
 
@@ -842,7 +842,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await _tapTab(tester, 'Account');
-    expect(container.read(currentTabIndexProvider), 2);
+    expect(container.read(currentTabIndexProvider), 3);
 
     // Account is already the last tab — swiping further "next" should
     // stay put, not wrap around to Day.
@@ -854,12 +854,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(container.read(currentTabIndexProvider), 2);
+    expect(container.read(currentTabIndexProvider), 3);
   });
 
   testWidgets(
-    'Account: the Capacity menu item shows per-day free time and per-goal '
-    'room, and switching back to Details returns to the account details',
+    'Capacity: its own top-level tab shows per-day free time and per-goal '
+    'room, and switching to Account still shows the account details',
     (WidgetTester tester) async {
       await tester.pumpWidget(
         ProviderScope(
@@ -869,9 +869,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await _tapTab(tester, 'Account');
-
-      await tester.tap(find.text('Capacity'));
+      await _tapTab(tester, 'Planning');
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
@@ -887,7 +885,7 @@ void main() {
       expect(find.text('ROOM TOWARD GOALS'), findsOneWidget);
       expect(find.textContaining('Walking · planned'), findsOneWidget);
 
-      await tester.tap(find.text('Details'));
+      await _tapTab(tester, 'Account');
       await tester.pumpAndSettle();
 
       expect(find.byType(CapacityView), findsNothing);
@@ -938,12 +936,43 @@ void main() {
           );
       await tester.pump();
 
-      await _tapTab(tester, 'Account');
-      await tester.tap(find.text('Capacity'));
+      await _tapTab(tester, 'Planning');
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
       expect(find.textContaining('over by'), findsWidgets);
+    },
+  );
+
+  testWidgets(
+    "Capacity: tapping a day opens a small read-only preview of that "
+    "day's planned blocks",
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: await _signedInOverrides(),
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _tapTab(tester, 'Planning');
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('MON 17'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Monday, 17 Aug'), findsOneWidget);
+      // Monday's own 09:00–12:00 "Deep work 3 h" planned block shows up,
+      // positioned and labelled the same way the real Day view would.
+      expect(find.text('Deep work 3 h'), findsOneWidget);
+      expect(find.text('3h'), findsOneWidget);
+
+      await tester.tap(find.text('close'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Monday, 17 Aug'), findsNothing);
     },
   );
 
@@ -968,8 +997,7 @@ void main() {
 
       expect(find.text('planned 30m'), findsOneWidget);
 
-      await _tapTab(tester, 'Account');
-      await tester.tap(find.text('Capacity'));
+      await _tapTab(tester, 'Planning');
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
@@ -4271,7 +4299,7 @@ void main() {
       await tester.tap(find.text('close'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Capacity'));
+      await _tapTab(tester, 'Planning');
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);

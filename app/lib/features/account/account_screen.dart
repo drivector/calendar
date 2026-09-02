@@ -14,18 +14,19 @@ import '../../theme/app_shapes.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 import '../log_activity/widgets/activities_list.dart';
-import 'capacity_view.dart';
 import 'tracking_window_sheet.dart';
 
-enum _AccountTab { details, activities, capacity }
+enum _AccountTab { details, activities }
 
 /// The former Activities tab — now "Account": account details (email,
 /// creation date, sign out) by default, with a segmented control to switch
-/// between that, the day-by-day activity list, and the weekly Capacity
-/// view — all three are menu items on the same screen, not separate
-/// pushed routes. Logging a new activity by hand happens from the Day view
-/// instead (see `showLogActivitySheet` there), so this screen has no
-/// "+ LOG" action of its own.
+/// to the day-by-day activity list — both are menu items on the same
+/// screen, not separate pushed routes. The weekly Capacity view used to be
+/// a third segment here; it's now its own top-level tab (see
+/// `CapacityScreen`), checked often enough to want one tap rather than two.
+/// Logging a new activity by hand happens from the Day view instead (see
+/// `showLogActivitySheet` there), so this screen has no "+ LOG" action of
+/// its own.
 class AccountScreen extends ConsumerStatefulWidget {
   const AccountScreen({super.key});
 
@@ -39,7 +40,7 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
   @override
   Widget build(BuildContext context) {
     void stepTab(int delta) {
-      final next = (ref.read(currentTabIndexProvider) + delta).clamp(0, 2);
+      final next = (ref.read(currentTabIndexProvider) + delta).clamp(0, 3);
       ref.read(currentTabIndexProvider.notifier).state = next;
     }
 
@@ -75,10 +76,6 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                           value: _AccountTab.activities,
                           label: 'Activities',
                         ),
-                        SegmentedOption(
-                          value: _AccountTab.capacity,
-                          label: 'Capacity',
-                        ),
                       ],
                     ),
                   ],
@@ -89,7 +86,6 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
               child: switch (_tab) {
                 _AccountTab.details => const _AccountDetails(),
                 _AccountTab.activities => const ActivitiesList(),
-                _AccountTab.capacity => const CapacityView(),
               },
             ),
           ],
