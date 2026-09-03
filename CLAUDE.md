@@ -64,6 +64,30 @@ and no macOS screen-capture permission), fall back to precise widget-tree
 assertions (rendered `Size`, `BoxDecoration`, exact text) rather than
 claiming something was visually checked when it wasn't.
 
+## Parallel sessions
+
+When multiple agent sessions work on this repo at once, each one must work
+in its own git worktree (`EnterWorktree`) on its own branch — never share a
+single checkout, since `flutter analyze`/`test` and file edits from two
+sessions in the same directory will collide.
+
+- Scope each session to a specific area (a screen, a provider, a feature
+  folder) to minimize overlap. The `StateNotifierProvider` files under
+  `state/` are the most likely conflict point if two sessions touch the
+  same one.
+- Each session still follows every rule in this file (analyze/test clean,
+  ask before commit/push, no new docs).
+- Don't edit `HANDOFF.md` from more than one session concurrently — leave
+  it to whichever session merges last, or to the user.
+- A session should report its branch back rather than merging or pushing
+  itself; branches get merged into `main` one at a time, re-running
+  `flutter analyze && flutter test` after each merge before merging the
+  next — two branches can conflict on merge even if their file scopes
+  didn't overlap.
+- Worktrees branch from `origin/main` by default, not the current
+  session's in-progress branch — say so explicitly if a new session should
+  instead build on another session's uncommitted/unmerged work.
+
 ## Riverpod gotcha
 
 A `WidgetRef` passed into a widget from its caller (not the widget's own
