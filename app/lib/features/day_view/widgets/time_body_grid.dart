@@ -27,16 +27,6 @@ const kGutterWidth = 38.0;
 /// (not fully covered) when an actual block overlaps it in time.
 const _actualBlockInset = 0.1;
 
-/// The live activity block's own end — "now", unless the run has somehow
-/// crossed into the next day, in which case it's clamped to [date]'s own
-/// midnight so the block never overflows past the bottom of its own
-/// day-column (a run that's still going the next morning shows up fresh
-/// on that day's own column instead, once it's viewed).
-DateTime _clampToDayEnd(DateTime date) {
-  final now = DateTime.now();
-  final dayEnd = DateTime(date.year, date.month, date.day + 1);
-  return now.isBefore(dayEnd) ? now : dayEnd;
-}
 
 /// One day-column's horizontal slot within the timeline — shared by
 /// [TimeBodyGrid] and the per-column date-label header above it so the two
@@ -259,9 +249,10 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
                     // "Registered only" — see [DayViewBlockFilter].
                     if (blockFilter != DayViewBlockFilter.registeredOnly)
                       for (final block in dayBlocks[i].planned)
-                        _timedPositioned(
+                        _clampedTimedPositioned(
                           start: block.start,
                           end: block.end,
+                          date: dates[i],
                           left: layouts[i].left,
                           width: layouts[i].width,
                           pxPerMinute: pxPerMinute,
@@ -301,9 +292,10 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
                     // "Planned only" — see [DayViewBlockFilter].
                     if (blockFilter != DayViewBlockFilter.plannedOnly)
                       for (final block in dayBlocks[i].tracked)
-                        _timedPositioned(
+                        _clampedTimedPositioned(
                           start: block.start,
                           end: block.end,
+                          date: dates[i],
                           // Inset from the column's own left edge — rather
                           // than fully covering a planned block for the same
                           // time (see the comment above), an actual block
@@ -330,17 +322,20 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
                             labelStyle: labelStyle,
                           ),
                         ),
-                    // The in-progress activity itself, drawn live on
-                    // whichever day column it started on — see
+                    // The in-progress activity itself, drawn live on every
+                    // day column it overlaps (not just the one it started
+                    // on — a run still going past midnight needs to show
+                    // up on the new day too) — see
                     // LiveActivityRunningBlock's own doc comment. Same
                     // filter gating as the tracked blocks above: it's a
                     // real in-progress "actual", just not registered yet.
                     if (blockFilter != DayViewBlockFilter.plannedOnly &&
                         running != null &&
-                        isSameDay(running.startedAt, dates[i]))
-                      _timedPositioned(
+                        overlapsDay(running.startedAt, DateTime.now(), dates[i]))
+                      _clampedTimedPositioned(
                         start: running.startedAt,
-                        end: _clampToDayEnd(dates[i]),
+                        end: DateTime.now(),
+                        date: dates[i],
                         left:
                             layouts[i].left +
                             layouts[i].width * _actualBlockInset,
@@ -381,6 +376,33 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
   // 30-minute planned block behind it, reading as if the two exactly
   // matched when they didn't.
   static const _twoLineMinHeight = 52.0;
+
+  // Clamps [start]/[end] to [date]'s own [00:00, 24:00) span before
+  // positioning — an overnight block (started the evening before, or
+  // still running past midnight) is drawn on *every* day it overlaps, not
+  // just the one it started on (see overlapsDay's own doc comment for the
+  // bug this fixes), so each day's own column needs only its own portion
+  // of the block's real time range, not the whole thing positioned as if
+  // it belonged wholly to this day.
+  Positioned _clampedTimedPositioned({
+    required DateTime start,
+    required DateTime end,
+    required DateTime date,
+    required double left,
+    required double width,
+    required double pxPerMinute,
+    required Widget Function(BlockLabelStyle labelStyle) childBuilder,
+  }) {
+    final (dayStart, dayEnd) = dayBounds(date);
+    return _timedPositioned(
+      start: start.isBefore(dayStart) ? dayStart : start,
+      end: end.isAfter(dayEnd) ? dayEnd : end,
+      left: left,
+      width: width,
+      pxPerMinute: pxPerMinute,
+      childBuilder: childBuilder,
+    );
+  }
 
   Positioned _timedPositioned({
     required DateTime start,

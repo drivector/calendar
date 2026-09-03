@@ -175,11 +175,17 @@ final visibleDayBlocksProvider = Provider<List<DayBlocks>>((ref) {
         date: date,
         planned:
             [
-                ...allPlanned.where((b) => isSameDay(b.start, date)),
+                ...allPlanned.where((b) => overlapsDay(b.start, b.end, date)),
                 ...generateGoalPlannedBlocksForDate(goals: goals, date: date),
               ]
               ..sort((a, b) => a.start.compareTo(b.start)),
-        tracked: allTracked.where((b) => isSameDay(b.start, date)).toList(),
+        // overlapsDay, not isSameDay — an overnight block (started one
+        // evening, ending after midnight) needs to show up on both days
+        // it touches, not just the one it started on. See overlapsDay's
+        // own doc comment for the exact bug this fixes.
+        tracked: allTracked
+            .where((b) => overlapsDay(b.start, b.end, date))
+            .toList(),
       ),
   ];
 });

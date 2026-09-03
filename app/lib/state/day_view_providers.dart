@@ -16,6 +16,25 @@ final selectedDateProvider = StateProvider<DateTime>((ref) => _today());
 bool isSameDay(DateTime a, DateTime b) =>
     a.year == b.year && a.month == b.month && a.day == b.day;
 
+/// [date]'s own [00:00, 24:00) span, as real `DateTime`s — the boundary
+/// every overnight-block calculation below clamps against.
+(DateTime start, DateTime end) dayBounds(DateTime date) {
+  final start = DateTime(date.year, date.month, date.day);
+  return (start, start.add(const Duration(days: 1)));
+}
+
+/// True if [start, end) overlaps [date]'s own day at all — unlike
+/// [isSameDay], which only ever matches a block's own *start* date, this
+/// is what an overnight block (started one evening, ending after
+/// midnight) needs: it genuinely belongs to *both* days it touches, not
+/// just the one it started on. A real gap a user hit directly — an
+/// activity registered from Wednesday evening to Thursday 1:30am simply
+/// never appeared anywhere on Thursday's own column.
+bool overlapsDay(DateTime start, DateTime end, DateTime date) {
+  final (dayStart, dayEnd) = dayBounds(date);
+  return start.isBefore(dayEnd) && end.isAfter(dayStart);
+}
+
 /// How many day-columns the Day view's timeline shows at once — mirrors the
 /// header's "Day | 3 Day | Working week | Week" segmented control.
 enum DayViewMode { day, threeDay, workingWeek, week }

@@ -395,6 +395,94 @@ void main() {
   );
 
   testWidgets(
+    'Day view: an activity spanning midnight shows up on both days it '
+    "touches, each showing only that day's own portion of it — the exact "
+    'bug a real user hit: an activity registered Wednesday evening to '
+    "Thursday 1:30am simply never appeared anywhere on Thursday's own "
+    'column',
+    (WidgetTester tester) async {
+      final wednesday = DateTime(2026, 8, 19);
+      final thursday = DateTime(2026, 8, 20); // mockDay
+      final container = ProviderContainer(
+        overrides: [
+          ...await _signedInOverrides(),
+          selectedDateProvider.overrideWith((ref) => wednesday),
+          // Fixed scale, for exact pixel-height math below.
+          dayViewFullDayProvider.overrideWith((ref) => false),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await container.read(trackedBlocksRepositoryProvider).upsert(
+        TrackedBlock(
+          id: 'test-overnight',
+          start: DateTime(2026, 8, 19, 23, 0),
+          end: DateTime(2026, 8, 20, 1, 30), // 2h30m total
+          title: 'Overnight walk',
+          categoryId: walkingCategoryId,
+          sourceId: 'manual',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final onWednesday = find.byWidgetPredicate(
+        (w) => w is ActualBlockWidget && w.block.id == 'test-overnight',
+      );
+      expect(onWednesday, findsOneWidget);
+      // Clamped to Wednesday's own 23:00–24:00 — just the 1h portion that
+      // actually falls on this day, not the block's full 2h30m duration.
+      expect(
+        tester
+            .widget<Positioned>(
+              find.ancestor(of: onWednesday, matching: find.byType(Positioned)).first,
+            )
+            .height,
+        72, // 60m * 1.2px/min
+      );
+
+      container.read(selectedDateProvider.notifier).state = thursday;
+      await tester.pumpAndSettle();
+
+      final onThursday = find.byWidgetPredicate(
+        (w) => w is ActualBlockWidget && w.block.id == 'test-overnight',
+      );
+      expect(
+        onThursday,
+        findsOneWidget,
+        reason: "the exact bug: this used to find nothing on Thursday's "
+            'own column at all',
+      );
+      // Clamped to Thursday's own 00:00–01:30 — the other 1h30m portion,
+      // positioned from the top of the column rather than at 23:00 (which
+      // would be the block's own absolute start time, wrong for this day).
+      expect(
+        tester
+            .widget<Positioned>(
+              find.ancestor(of: onThursday, matching: find.byType(Positioned)).first,
+            )
+            .height,
+        108, // 90m * 1.2px/min
+      );
+      expect(
+        tester
+            .widget<Positioned>(
+              find.ancestor(of: onThursday, matching: find.byType(Positioned)).first,
+            )
+            .top,
+        0,
+      );
+    },
+  );
+
+  testWidgets(
     "Day view: an actual block is inset from its column's left edge — a "
     "planned block for the same time isn't fully covered by it",
     (WidgetTester tester) async {
