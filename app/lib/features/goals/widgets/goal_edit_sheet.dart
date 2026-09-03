@@ -387,6 +387,20 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
     });
   }
 
+  // byDate's own analogue of _applySameEveryDay — copies just the one
+  // day right before [date] rather than forcing every day to match a
+  // single one, since a byDate schedule's whole point is that days can
+  // genuinely differ; this is for the common case of "same as
+  // yesterday, plus a tweak" instead of retyping each day from scratch.
+  void _copyFromPreviousDay(DateTime date) {
+    final previous = date.subtract(const Duration(days: 1));
+    setState(() {
+      _scheduleByDate[date] = List.of(
+        _scheduleByDate[previous] ?? const <DayScheduleEntry>[],
+      );
+    });
+  }
+
   void _applySameEveryDay() {
     setState(() {
       final mondayEntries = List.of(
@@ -660,6 +674,9 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
                 _editRangeStart(_scheduleByDate, dates[i], index),
             onEditRangeEnd: (index) =>
                 _editRangeEnd(_scheduleByDate, dates[i], index),
+            // Day 1 has no previous day in this schedule to copy from.
+            onCopyFromPrevious:
+                i == 0 ? null : () => _copyFromPreviousDay(dates[i]),
           ),
         const SizedBox(height: AppSpacing.s1),
         Row(
@@ -1166,6 +1183,7 @@ class _DayScheduleSection extends StatelessWidget {
     required this.onStepDuration,
     required this.onEditRangeStart,
     required this.onEditRangeEnd,
+    this.onCopyFromPrevious,
   });
 
   final String label;
@@ -1177,6 +1195,12 @@ class _DayScheduleSection extends StatelessWidget {
   final void Function(int index, int deltaMinutes) onStepDuration;
   final ValueChanged<int> onEditRangeStart;
   final ValueChanged<int> onEditRangeEnd;
+
+  // Only ever set for a byDate schedule's own day-to-day sections — a
+  // weekday section has no single "previous day" in the same sense (see
+  // _copyFromPreviousDay's own doc comment), and the first day of a
+  // byDate range has nothing before it to copy from either.
+  final VoidCallback? onCopyFromPrevious;
 
   @override
   Widget build(BuildContext context) {
@@ -1214,14 +1238,20 @@ class _DayScheduleSection extends StatelessWidget {
             ),
           Padding(
             padding: const EdgeInsets.only(top: 6),
-            child: Row(
+            child: Wrap(
+              spacing: AppSpacing.s2,
+              runSpacing: AppSpacing.s1,
               children: [
                 _SmallActionButton(label: '+ duration', onTap: onAddDuration),
-                const SizedBox(width: AppSpacing.s2),
                 _SmallActionButton(
                   label: '+ time range',
                   onTap: onAddTimeRange,
                 ),
+                if (onCopyFromPrevious != null)
+                  _SmallActionButton(
+                    label: 'copy from previous day',
+                    onTap: onCopyFromPrevious!,
+                  ),
               ],
             ),
           ),

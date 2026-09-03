@@ -2610,6 +2610,33 @@ void main() {
       expect(textInSheet('off'), findsNWidgets(2)); // days 2 and 3 only now
       expect(textInSheet('30m'), findsWidgets); // day 1's new entry + TOTAL
 
+      // "copy from previous day" on Day 2 pulls in Day 1's own entry —
+      // Day 1 has no such button at all, since it has nothing before it
+      // in this schedule to copy from.
+      expect(
+        find.descendant(
+          of: day1Section,
+          matching: find.text('copy from previous day'),
+        ),
+        findsNothing,
+      );
+      final day2Section = find
+          .ancestor(
+            of: textContainingInSheet('Day 2 —'),
+            matching: find.byType(Column),
+          )
+          .first;
+      final day2CopyButton = find.descendant(
+        of: day2Section,
+        matching: find.text('copy from previous day'),
+      );
+      await tester.ensureVisible(day2CopyButton);
+      await tester.pumpAndSettle();
+      await tester.tap(day2CopyButton);
+      await tester.pumpAndSettle();
+
+      expect(textInSheet('off'), findsNWidgets(1)); // day 3 only now
+
       await _goalSheetNext(tester); // -> step 4 (Reminders)
       await tester.ensureVisible(find.text('Save changes'));
       await tester.pumpAndSettle();
@@ -2625,7 +2652,12 @@ void main() {
         saved.targetForDate(DateTime(2026, 8, 20)),
         const Duration(minutes: 30),
       );
-      expect(saved.targetForDate(DateTime(2026, 8, 21)), Duration.zero);
+      // Copied from Day 1 via "copy from previous day".
+      expect(
+        saved.targetForDate(DateTime(2026, 8, 21)),
+        const Duration(minutes: 30),
+      );
+      expect(saved.targetForDate(DateTime(2026, 8, 22)), Duration.zero);
     },
   );
 
