@@ -14,6 +14,8 @@ import 'package:calendar_tracker/features/categories/categories_screen.dart';
 import 'package:calendar_tracker/features/day_view/widgets/actual_block_widget.dart';
 import 'package:calendar_tracker/features/day_view/widgets/day_header_bar.dart';
 import 'package:calendar_tracker/features/day_view/widgets/legend_row.dart';
+import 'package:calendar_tracker/features/day_view/widgets/live_activity_button.dart';
+import 'package:calendar_tracker/features/day_view/widgets/start_activity_sheet.dart';
 import 'package:calendar_tracker/features/day_view/widgets/plan_block_widget.dart';
 import 'package:calendar_tracker/features/day_view/widgets/time_body_grid.dart';
 import 'package:calendar_tracker/features/goals/goals_screen.dart';
@@ -27,6 +29,7 @@ import 'package:calendar_tracker/models/category.dart';
 import 'package:calendar_tracker/models/clock_time.dart';
 import 'package:calendar_tracker/models/goal.dart';
 import 'package:calendar_tracker/models/planned_block.dart';
+import 'package:calendar_tracker/models/running_activity.dart';
 import 'package:calendar_tracker/models/tracked_block.dart';
 import 'package:calendar_tracker/models/user_settings.dart';
 import 'package:calendar_tracker/shared/widgets/app_tab_bar.dart';
@@ -38,6 +41,7 @@ import 'package:calendar_tracker/state/firestore_providers.dart';
 import 'package:calendar_tracker/state/goals_providers.dart';
 import 'package:calendar_tracker/state/log_entry_providers.dart';
 import 'package:calendar_tracker/state/root_shell_providers.dart';
+import 'package:calendar_tracker/state/running_activity_providers.dart';
 import 'package:calendar_tracker/state/user_settings_providers.dart';
 
 import 'support/firestore_test_fixtures.dart';
@@ -4721,4 +4725,162 @@ void main() {
     expect(find.text('Sign in'), findsOneWidget);
     expect(find.byType(RootShell), findsNothing);
   });
+
+  testWidgets(
+    'Live activity: Start opens a goal picker, and starting shows a live '
+    'Stop button in place of Start',
+    (WidgetTester tester) async {
+      final container = ProviderContainer(overrides: await _signedInOverrides());
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(container.read(runningActivityProvider), isNull);
+
+      await tester.tap(find.text('▶ Start'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Start activity'), findsOneWidget);
+      // Picking a goal is required — Start with none picked says so
+      // instead of silently doing nothing.
+      await tester.tap(find.text('Start'));
+      await tester.pumpAndSettle();
+      expect(find.text('Pick a goal before starting'), findsOneWidget);
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(StartActivitySheet),
+          matching: find.text('walking'),
+        ),
+      );
+      await tester.tap(find.text('Start'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Start activity'), findsNothing);
+      final running = container.read(runningActivityProvider);
+      expect(running, isNotNull);
+      expect(running!.goalId, 'goal-walking');
+      expect(running.categoryId, walkingCategoryId);
+      expect(running.title, 'Walking');
+      expect(find.textContaining('Stop'), findsOneWidget);
+      expect(find.text('▶ Start'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'Live activity: Stop registers a real tracked block spanning start to '
+    'stop, and clears the running state',
+    (WidgetTester tester) async {
+      final container = ProviderContainer(overrides: await _signedInOverrides());
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final beforeCount = container.read(allTrackedBlocksProvider).length;
+
+      await tester.tap(find.text('▶ Start'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(
+          of: find.byType(StartActivitySheet),
+          matching: find.text('walking'),
+        ),
+      );
+      await tester.tap(find.text('Start'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(LiveActivityButton));
+      await tester.pumpAndSettle();
+
+      expect(container.read(runningActivityProvider), isNull);
+      expect(find.text('▶ Start'), findsOneWidget);
+
+      final all = container.read(allTrackedBlocksProvider);
+      expect(all.length, beforeCount + 1);
+      final logged = all.firstWhere((b) => b.sourceId == 'manual' && b.id.startsWith('live-'));
+      expect(logged.title, 'Walking');
+      expect(logged.categoryId, walkingCategoryId);
+      expect(logged.end.isBefore(logged.start), isFalse);
+    },
+  );
+
+  testWidgets(
+    'Live activity: a run started stays running across a simulated app '
+    'restart (a fresh ProviderContainer over the same Firestore data)',
+    (WidgetTester tester) async {
+      const uid = 'restart-uid';
+      final firestore = FakeFirebaseFirestore();
+      final firestoreOverride = firestoreProvider.overrideWithValue(firestore);
+      // A fresh MockFirebaseAuth per container, not one shared instance —
+      // its sign-in event fires exactly once, at construction, onto a
+      // broadcast stream with no replay for late subscribers, so reusing
+      // one instance across two containers would leave the second one
+      // waiting on an authStateChanges() event that already fired before
+      // it existed and hang forever. Two separate (but both signed-in-as-
+      // the-same-uid) instances is also the more faithful simulation
+      // anyway — a real cold relaunch gets its own fresh
+      // `authStateChanges()` emission from the persisted native session,
+      // not a continuation of the previous run's stream.
+      final container1 = ProviderContainer(
+        overrides: [
+          firebaseAuthProvider.overrideWithValue(
+            MockFirebaseAuth(
+              signedIn: true,
+              mockUser: MockUser(uid: uid, email: 'restart@example.com'),
+            ),
+          ),
+          firestoreOverride,
+        ],
+      );
+      await container1.read(authStateChangesProvider.future);
+      await container1
+          .read(runningActivityDocProvider)
+          .set(
+            RunningActivity(
+              startedAt: DateTime.now().subtract(const Duration(minutes: 5)),
+              goalId: 'goal-walking',
+              categoryId: walkingCategoryId,
+              title: 'Walking',
+            ).toMap(),
+          );
+      container1.dispose();
+
+      // A brand-new container, same underlying Firestore data — the same
+      // shape a real cold app relaunch takes (nothing carries over except
+      // what's actually persisted).
+      final container2 = ProviderContainer(
+        overrides: [
+          firebaseAuthProvider.overrideWithValue(
+            MockFirebaseAuth(
+              signedIn: true,
+              mockUser: MockUser(uid: uid, email: 'restart@example.com'),
+            ),
+          ),
+          firestoreOverride,
+        ],
+      );
+      addTearDown(container2.dispose);
+      await container2.read(authStateChangesProvider.future);
+      final running = await container2.read(
+        runningActivityStreamProvider.future,
+      );
+
+      expect(running, isNotNull);
+      expect(running!.goalId, 'goal-walking');
+      expect(running.categoryId, walkingCategoryId);
+      expect(running.title, 'Walking');
+    },
+  );
 }
