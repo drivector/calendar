@@ -160,6 +160,7 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
     final categories = ref.watch(categoriesProvider);
     final goals = ref.watch(goalsProvider);
     final fullDay = ref.watch(dayViewFullDayProvider);
+    final blockFilter = ref.watch(dayViewBlockFilterProvider);
 
     return DateSwipeNav(
       onPrevious: () => stepDayViewWindow(ref, forward: false),
@@ -234,71 +235,81 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
                     // Planned blocks paint first (dashed, unfilled) so a
                     // solid Actual block for the same time reads clearly on
                     // top of it rather than the two competing visually.
-                    for (final block in dayBlocks[i].planned)
-                      _timedPositioned(
-                        start: block.start,
-                        end: block.end,
-                        left: layouts[i].left,
-                        width: layouts[i].width,
-                        pxPerMinute: pxPerMinute,
-                        // Opens the same add-actual sheet an empty-space
-                        // tap does, prefilled from the plan itself (time,
-                        // title, goal) — logging what was already planned
-                        // shouldn't mean retyping it.
-                        childBuilder: (labelStyle) => GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () => showAddBlockSheet(
-                            context,
-                            ref,
-                            isPlan: false,
-                            date: dates[i],
-                            initialStart: TimeOfDay.fromDateTime(block.start),
-                            initialEnd: TimeOfDay.fromDateTime(block.end),
-                            initialTitle: block.title,
-                            initialGoalId: goalForCategory(
-                              goals,
-                              block.categoryId,
-                            )?.id,
-                            fromPlan: true,
+                    // Hidden outright when the header's filter is set to
+                    // "Registered only" — see [DayViewBlockFilter].
+                    if (blockFilter != DayViewBlockFilter.registeredOnly)
+                      for (final block in dayBlocks[i].planned)
+                        _timedPositioned(
+                          start: block.start,
+                          end: block.end,
+                          left: layouts[i].left,
+                          width: layouts[i].width,
+                          pxPerMinute: pxPerMinute,
+                          // Opens the same add-actual sheet an empty-space
+                          // tap does, prefilled from the plan itself (time,
+                          // title, goal) — logging what was already planned
+                          // shouldn't mean retyping it.
+                          childBuilder: (labelStyle) => GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () => showAddBlockSheet(
+                              context,
+                              ref,
+                              isPlan: false,
+                              date: dates[i],
+                              initialStart: TimeOfDay.fromDateTime(
+                                block.start,
+                              ),
+                              initialEnd: TimeOfDay.fromDateTime(block.end),
+                              initialTitle: block.title,
+                              initialGoalId: goalForCategory(
+                                goals,
+                                block.categoryId,
+                              )?.id,
+                              fromPlan: true,
+                            ),
+                            child: PlanBlockWidget(
+                              block: block,
+                              category: resolveCategory(
+                                categories,
+                                block.categoryId,
+                              ),
+                              labelStyle: labelStyle,
+                            ),
                           ),
-                          child: PlanBlockWidget(
+                        ),
+                    // Hidden outright when the header's filter is set to
+                    // "Planned only" — see [DayViewBlockFilter].
+                    if (blockFilter != DayViewBlockFilter.plannedOnly)
+                      for (final block in dayBlocks[i].tracked)
+                        _timedPositioned(
+                          start: block.start,
+                          end: block.end,
+                          // Inset from the column's own left edge — rather
+                          // than fully covering a planned block for the same
+                          // time (see the comment above), an actual block
+                          // now always leaves a sliver of it showing on the
+                          // left, so an overlap between the two reads as an
+                          // overlap instead of the planned block just
+                          // disappearing underneath.
+                          left:
+                              layouts[i].left +
+                              layouts[i].width * _actualBlockInset,
+                          width: layouts[i].width * (1 - _actualBlockInset),
+                          pxPerMinute: pxPerMinute,
+                          childBuilder: (labelStyle) => ActualBlockWidget(
                             block: block,
                             category: resolveCategory(
                               categories,
                               block.categoryId,
                             ),
+                            wasPlanned: trackedBlockWasPlanned(
+                              block,
+                              dayBlocks[i].planned,
+                            ),
+                            ref: ref,
                             labelStyle: labelStyle,
                           ),
                         ),
-                      ),
-                    for (final block in dayBlocks[i].tracked)
-                      _timedPositioned(
-                        start: block.start,
-                        end: block.end,
-                        // Inset from the column's own left edge — rather
-                        // than fully covering a planned block for the same
-                        // time (see the comment above), an actual block
-                        // now always leaves a sliver of it showing on the
-                        // left, so an overlap between the two reads as an
-                        // overlap instead of the planned block just
-                        // disappearing underneath.
-                        left: layouts[i].left + layouts[i].width * _actualBlockInset,
-                        width: layouts[i].width * (1 - _actualBlockInset),
-                        pxPerMinute: pxPerMinute,
-                        childBuilder: (labelStyle) => ActualBlockWidget(
-                          block: block,
-                          category: resolveCategory(
-                            categories,
-                            block.categoryId,
-                          ),
-                          wasPlanned: trackedBlockWasPlanned(
-                            block,
-                            dayBlocks[i].planned,
-                          ),
-                          ref: ref,
-                          labelStyle: labelStyle,
-                        ),
-                      ),
                   ],
                 ],
               ),

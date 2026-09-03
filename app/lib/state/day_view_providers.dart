@@ -37,6 +37,17 @@ final dayViewModeProvider = StateProvider<DayViewMode>(
 /// normal day; this is for glancing at the whole day's shape at once.
 final dayViewFullDayProvider = StateProvider<bool>((ref) => false);
 
+/// Which kinds of blocks the Day view's timeline actually draws — lets the
+/// calendar be decluttered down to just what's planned, just what's really
+/// happened, or both together (the default). A display filter only: it
+/// doesn't touch the legend's totals or the drift calculation, which stay
+/// based on the full data regardless of what the grid currently shows.
+enum DayViewBlockFilter { both, plannedOnly, registeredOnly }
+
+final dayViewBlockFilterProvider = StateProvider<DayViewBlockFilter>(
+  (ref) => DayViewBlockFilter.both,
+);
+
 /// The dates the timeline currently shows, one per column — "3 Day" starts
 /// at whatever day is selected; "Working week"/"Week" always anchor to the
 /// Monday of the selected day's week (so which weekday within the week is

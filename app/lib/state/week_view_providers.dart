@@ -18,14 +18,21 @@ import 'user_settings_providers.dart';
 /// the Capacity page (`features/account/capacity_view.dart`) — there is
 /// no "Week view" tab any more.
 ///
-/// "Planned" here has to match what the Day view's own header legend
-/// counts as planned, or the two screens silently disagree — a real gap a
-/// user hit directly: this used to read only [allPlannedBlocksProvider]
-/// (manually created blocks), leaving out everything a goal's own schedule
-/// generates (see [generateGoalPlannedBlocksForDate] and
-/// [untimedPlannedDurationByCategoryForDate]), which is what
-/// `dayTotalsProvider` (the legend) already includes — the normal case,
-/// since nobody hand-plans a recurring goal.
+/// "Planned" here used to have to match what the Day view's own header
+/// legend counts as planned, or the two screens silently disagreed — a
+/// real gap a user hit directly: this used to read only
+/// [allPlannedBlocksProvider] (manually created blocks), leaving out
+/// everything a goal's own schedule generates (see
+/// [generateGoalPlannedBlocksForDate] and
+/// [untimedPlannedDurationByCategoryForDate]).
+///
+/// That's since deliberately diverged from `dayTotalsProvider` (the Day
+/// view legend): the legend's "planned" now only counts blocks with a
+/// real clock time, while this still folds a goal's untimed minutes in —
+/// [_TimelineBar] on the Capacity page needs that combined figure to lay
+/// its bar out (it packs untimed goal minutes in after the last timed
+/// block, since there's no real position to give them). If the two ever
+/// need to agree again, this is where to look.
 final weekDaySummariesProvider = Provider<List<WeekDaySummary>>((ref) {
   final selectedDate = ref.watch(selectedDateProvider);
   final weekStart = weekStartFor(selectedDate);

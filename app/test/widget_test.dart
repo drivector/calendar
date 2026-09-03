@@ -181,6 +181,13 @@ Future<void> _selectDayViewMode(WidgetTester tester, String label) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> _selectBlockFilter(WidgetTester tester, String label) async {
+  await tester.tap(find.byType(PopupMenuButton<DayViewBlockFilter>));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(label).last);
+  await tester.pumpAndSettle();
+}
+
 
 void main() {
   testWidgets('Day view renders the mock day without layout errors', (
@@ -438,6 +445,39 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('Thu, 20 Aug 2026'), findsOneWidget);
       expect(find.text('07:00–07:48 · 48m'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    "Day view: the detail popup also shows the block's own goal, and "
+    "tapping it opens that goal's detail",
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: await _signedInOverrides(),
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final actual = find.byWidgetPredicate(
+        (w) => w is ActualBlockWidget && w.block.id == 'actual-walk',
+      );
+      await tester.ensureVisible(actual);
+      await tester.tap(actual);
+      await tester.pumpAndSettle();
+
+      // 'actual-walk' is in the Walking category, which backs the
+      // "Walking" goal — same pairing the Activities list shows.
+      expect(tester.takeException(), isNull);
+      final goalLabel = find.text('Walking');
+      expect(goalLabel, findsOneWidget);
+
+      await tester.tap(goalLabel);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(GoalDetailSheet), findsOneWidget);
     },
   );
 
@@ -989,9 +1029,12 @@ void main() {
       // category "Work") with a plain 30m/day schedule and zero manually
       // created planned blocks — so this can only be coming from the
       // goal's own schedule, not a manual block. A real gap a user hit:
-      // the Day view's legend already counted this as planned, but
-      // Capacity's own total silently didn't, since it only ever read
-      // manually created PlannedBlocks.
+      // Capacity's own total silently didn't count it, since it only ever
+      // read manually created PlannedBlocks — unlike the Day view legend,
+      // which folds a goal's own schedule in too (though there, a
+      // plain-duration entry like this one — no fixed clock time — counts
+      // as "unscheduled", not "planned"; see dayTotalsProvider's own doc
+      // comment).
       await tester.pumpWidget(
         ProviderScope(
           overrides: await _signedInOnboardedNoActivityOverrides(),
@@ -1000,7 +1043,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('planned 30m'), findsOneWidget);
+      expect(find.text('planned 0m'), findsOneWidget);
+      expect(find.text('unscheduled 30m'), findsOneWidget);
 
       await _tapTab(tester, 'Planning');
       await tester.pumpAndSettle();
@@ -3280,9 +3324,12 @@ void main() {
       // _signedInOnboardedNoActivityOverrides seeds exactly one goal
       // ("Test goal", category "Work") with a plain 30m/day schedule and
       // zero planned/tracked blocks of any kind — so this total can only
-      // be coming from the goal's own schedule, not a manual block.
+      // be coming from the goal's own schedule, not a manual block. It has
+      // no fixed clock time, so it counts as "unscheduled" rather than
+      // "planned" — see dayTotalsProvider's own doc comment.
       expect(tester.takeException(), isNull);
-      expect(find.text('planned 30m'), findsOneWidget);
+      expect(find.text('planned 0m'), findsOneWidget);
+      expect(find.text('unscheduled 30m'), findsOneWidget);
       // "tracked" is the configured tracking window (defaults to the full
       // 24h — no settings saved for this fixture); "registered" is what's
       // actually been logged, zero here.
@@ -3372,8 +3419,11 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Day mode: one day's worth of the goal's own 30m/day schedule.
-      expect(find.text('planned 30m'), findsOneWidget);
+      // Day mode: one day's worth of the goal's own 30m/day schedule — no
+      // fixed clock time, so it's "unscheduled" rather than "planned" (see
+      // dayTotalsProvider's own doc comment).
+      expect(find.text('planned 0m'), findsOneWidget);
+      expect(find.text('unscheduled 30m'), findsOneWidget);
 
       await _selectDayViewMode(tester, '3 Day');
       await tester.pumpAndSettle();
@@ -3384,25 +3434,28 @@ void main() {
       // revealed one at a time by tapping — see LegendRow's own doc
       // comment for why (the word prefixes are what overflow a real
       // phone width). The legend's own GestureDetectors, in item order:
-      // tracked, planned, registered.
+      // tracked, planned, registered, unscheduled — that fourth one only
+      // rendered here because this fixture actually has some.
       final legendTaps = find.descendant(
         of: find.byType(LegendRow),
         matching: find.byType(GestureDetector),
       );
-      expect(legendTaps, findsNWidgets(3));
+      expect(legendTaps, findsNWidgets(4));
 
       // Three visible days, each with the same 30m/day schedule — the bug
       // this covers: the legend used to keep showing just one day's 30m
       // even with three days on screen. The value alone is already
-      // visible next to the icon, with no tap needed.
+      // visible next to the icon, with no tap needed. It's the
+      // "unscheduled" total that carries this now, not "planned" — the
+      // goal's schedule has no fixed clock time.
       expect(find.text('1h 30m'), findsOneWidget);
-      expect(find.text('planned 1h 30m'), findsNothing);
-      expect(find.text('planned 30m'), findsNothing);
+      expect(find.text('unscheduled 1h 30m'), findsNothing);
+      expect(find.text('unscheduled 30m'), findsNothing);
 
-      await tester.tap(legendTaps.at(1)); // planned
+      await tester.tap(legendTaps.at(3)); // unscheduled
       await tester.pumpAndSettle();
       // Tapping reveals the word alongside the same value.
-      expect(find.text('planned 1h 30m'), findsOneWidget);
+      expect(find.text('unscheduled 1h 30m'), findsOneWidget);
       expect(find.text('1h 30m'), findsNothing);
 
       await tester.tap(legendTaps.at(0)); // tracked
@@ -4181,6 +4234,100 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(container.read(dayViewFullDayProvider), isFalse);
+    },
+  );
+
+  testWidgets(
+    'Day view: the All/Planned/Registered filter hides the other kind of '
+    "block from the timeline, without touching the legend's own totals",
+    (WidgetTester tester) async {
+      final container = ProviderContainer(overrides: await _signedInOverrides());
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final plan = find.byWidgetPredicate(
+        (w) => w is PlanBlockWidget && w.block.id == 'plan-walk',
+      );
+      final actual = find.byWidgetPredicate(
+        (w) => w is ActualBlockWidget && w.block.id == 'actual-walk',
+      );
+
+      // All — the default — shows every planned and tracked block.
+      expect(container.read(dayViewBlockFilterProvider), DayViewBlockFilter.both);
+      expect(plan, findsOneWidget);
+      expect(actual, findsOneWidget);
+
+      await _selectBlockFilter(tester, 'Planned');
+      expect(tester.takeException(), isNull);
+      expect(
+        container.read(dayViewBlockFilterProvider),
+        DayViewBlockFilter.plannedOnly,
+      );
+      expect(plan, findsOneWidget);
+      expect(actual, findsNothing);
+
+      await _selectBlockFilter(tester, 'Registered');
+      expect(tester.takeException(), isNull);
+      expect(
+        container.read(dayViewBlockFilterProvider),
+        DayViewBlockFilter.registeredOnly,
+      );
+      expect(plan, findsNothing);
+      expect(actual, findsOneWidget);
+
+      // The legend's own totals are unaffected — they reflect the full
+      // day's data regardless of what the grid currently hides. Captured
+      // as whatever the fixture's real numbers are, rather than hardcoded,
+      // since they're a sum over several seeded blocks.
+      final plannedLegend = tester
+          .widget<Text>(
+            find.byWidgetPredicate(
+              (w) => w is Text && (w.data?.startsWith('planned ') ?? false),
+            ),
+          )
+          .data;
+      final registeredLegend = tester
+          .widget<Text>(
+            find.byWidgetPredicate(
+              (w) =>
+                  w is Text && (w.data?.startsWith('registered ') ?? false),
+            ),
+          )
+          .data;
+
+      await _selectBlockFilter(tester, 'All');
+      expect(tester.takeException(), isNull);
+      expect(container.read(dayViewBlockFilterProvider), DayViewBlockFilter.both);
+      expect(plan, findsOneWidget);
+      expect(actual, findsOneWidget);
+      expect(
+        tester
+            .widget<Text>(
+              find.byWidgetPredicate(
+                (w) => w is Text && (w.data?.startsWith('planned ') ?? false),
+              ),
+            )
+            .data,
+        plannedLegend,
+      );
+      expect(
+        tester
+            .widget<Text>(
+              find.byWidgetPredicate(
+                (w) =>
+                    w is Text && (w.data?.startsWith('registered ') ?? false),
+              ),
+            )
+            .data,
+        registeredLegend,
+      );
     },
   );
 

@@ -104,6 +104,12 @@ class DayHeaderBar extends ConsumerWidget {
                   ref.read(dayViewModeProvider.notifier).state = value,
             ),
             const SizedBox(width: AppSpacing.s2),
+            _BlockFilterButton(
+              filter: ref.watch(dayViewBlockFilterProvider),
+              onChanged: (value) =>
+                  ref.read(dayViewBlockFilterProvider.notifier).state = value,
+            ),
+            const SizedBox(width: AppSpacing.s2),
             _FullDayToggle(
               active: ref.watch(dayViewFullDayProvider),
               onTap: () => ref.read(dayViewFullDayProvider.notifier).state =
@@ -195,6 +201,12 @@ const _viewModeOptions = [
   (value: DayViewMode.week, label: 'Week'),
 ];
 
+const _blockFilterOptions = [
+  (value: DayViewBlockFilter.both, label: 'All'),
+  (value: DayViewBlockFilter.plannedOnly, label: 'Planned'),
+  (value: DayViewBlockFilter.registeredOnly, label: 'Registered'),
+];
+
 /// A single bordered button showing the active view range, opening a
 /// dropdown menu of the other options on tap — the same "one button, tap
 /// for a menu" pattern a calendar app's own view switcher uses, replacing
@@ -251,6 +263,78 @@ class _ViewModeButton extends StatelessWidget {
         // child within it," which under the header's stretched Column
         // silently turned this into a full-width button. mainAxisSize.min
         // on the Row below already keeps this hugging its own content.
+        constraints: const BoxConstraints(minHeight: 32),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.s2,
+          vertical: AppSpacing.s1,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          border: Border.all(color: AppColors.neutral500),
+          borderRadius: AppShapes.small,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text(currentLabel, style: AppTextStyles.small(color: AppColors.text)),
+            const SizedBox(width: 4),
+            Text('▾', style: AppTextStyles.small(color: AppColors.text)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Same "one bordered button, tap for a menu" pattern as [_ViewModeButton]
+/// — filters which of Plan/Actual the timeline below actually draws (see
+/// [DayViewBlockFilter]'s own doc comment for what it does and doesn't
+/// affect).
+class _BlockFilterButton extends StatelessWidget {
+  const _BlockFilterButton({required this.filter, required this.onChanged});
+
+  final DayViewBlockFilter filter;
+  final ValueChanged<DayViewBlockFilter> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final currentLabel = _blockFilterOptions
+        .firstWhere((option) => option.value == filter)
+        .label;
+
+    return PopupMenuButton<DayViewBlockFilter>(
+      initialValue: filter,
+      onSelected: onChanged,
+      color: AppColors.surface,
+      elevation: 8,
+      padding: EdgeInsets.zero,
+      shape: const RoundedRectangleBorder(borderRadius: AppShapes.medium),
+      itemBuilder: (context) => [
+        for (final option in _blockFilterOptions)
+          PopupMenuItem<DayViewBlockFilter>(
+            value: option.value,
+            padding: EdgeInsets.zero,
+            height: 40,
+            child: Container(
+              width: double.infinity,
+              alignment: Alignment.centerLeft,
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s3),
+              color: option.value == filter ? AppColors.accent100 : null,
+              child: Text(
+                option.label,
+                style: AppTextStyles.label(
+                  color: option.value == filter ? AppColors.accent : null,
+                ).copyWith(
+                  fontWeight: option.value == filter
+                      ? FontWeight.w600
+                      : FontWeight.w400,
+                ),
+              ),
+            ),
+          ),
+      ],
+      child: Container(
         constraints: const BoxConstraints(minHeight: 32),
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.s2,

@@ -10,12 +10,16 @@ import '../../../theme/app_spacing.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../utils/duration_format.dart';
 
-/// Three items: a plain bordered swatch for "tracked" (the user's own
-/// configured tracking window — see `UserSettings` — not what's actually
-/// been logged), a dashed swatch for "planned", and a tinted+edged swatch
-/// for "registered" (real logged activity; this is what "tracked" itself
-/// used to mean here, before the window took that name). Totals computed
-/// as real sums over the visible days' data.
+/// Three items, plus a fourth shown only when relevant: a plain bordered
+/// swatch for "tracked" (the user's own configured tracking window — see
+/// `UserSettings` — not what's actually been logged), a dashed swatch for
+/// "planned" (only blocks with a real clock time — see
+/// [dayTotalsProvider]'s own doc comment), a tinted+edged swatch for
+/// "registered" (real logged activity; this is what "tracked" itself used
+/// to mean here, before the window took that name), and a filled neutral
+/// swatch for "unscheduled" — goal-targeted time with no fixed slot yet,
+/// which never counts toward "planned". Totals computed as real sums over
+/// the visible days' data.
 ///
 /// Day mode always shows the full "word value" label — one day's totals
 /// are short enough to fit. 3 Day/Working week/Week show icon + value only
@@ -35,9 +39,8 @@ class _LegendRowState extends ConsumerState<LegendRow> {
 
   @override
   Widget build(BuildContext context) {
-    final (plannedTotal, trackedTotal, registeredTotal) = ref.watch(
-      dayTotalsProvider,
-    );
+    final (plannedTotal, trackedTotal, registeredTotal, unscheduledTotal) =
+        ref.watch(dayTotalsProvider);
     final isDayMode = ref.watch(dayViewModeProvider) == DayViewMode.day;
 
     final items = [
@@ -72,6 +75,19 @@ class _LegendRowState extends ConsumerState<LegendRow> {
         word: 'registered',
         value: formatDuration(registeredTotal),
       ),
+      // Only shown when there's actually a goal owed some time it hasn't
+      // been given a fixed slot for yet — otherwise every account with
+      // fully-scheduled goals (the common case) would carry a permanent
+      // "unscheduled 0m" item for nothing.
+      if (unscheduledTotal > Duration.zero)
+        (
+          swatch: DecoratedBox(
+            decoration: const BoxDecoration(color: AppColors.neutral400),
+            child: const SizedBox(width: 14, height: 10),
+          ),
+          word: 'unscheduled',
+          value: formatDuration(unscheduledTotal),
+        ),
     ];
 
     return DecoratedBox(

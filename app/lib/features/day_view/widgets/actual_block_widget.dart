@@ -8,12 +8,14 @@ import '../../../models/tracked_block.dart';
 import '../../../shared/widgets/confirm_delete_dialog.dart';
 import '../../../shared/widgets/dashed_border.dart';
 import '../../../state/day_view_providers.dart';
+import '../../../state/goals_providers.dart';
 import '../../../theme/app_category_colors.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_shapes.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../utils/duration_format.dart';
+import '../../goals/widgets/goal_detail_sheet.dart';
 import '../../log_activity/widgets/log_activity_sheet.dart';
 import 'block_label_style.dart';
 
@@ -144,6 +146,7 @@ class _DetailDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final goal = goalForCategory(ref.read(goalsProvider), block.categoryId);
     return Dialog(
       backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(borderRadius: AppShapes.medium),
@@ -190,6 +193,20 @@ class _DetailDialog extends StatelessWidget {
                 ),
               ],
             ),
+            if (goal != null) ...[
+              const SizedBox(height: 2),
+              GestureDetector(
+                onTap: () {
+                  Navigator.of(context).pop();
+                  showGoalDetailSheet(context, ref, goal.id);
+                },
+                behavior: HitTestBehavior.opaque,
+                child: Text(
+                  goal.name,
+                  style: AppTextStyles.mono(color: AppColors.accent),
+                ),
+              ),
+            ],
             const SizedBox(height: AppSpacing.s2),
             Text(
               DateFormat('EEE, d MMM y').format(block.start),

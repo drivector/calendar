@@ -117,10 +117,25 @@ final driftProvider = Provider<List<GoalDrift>>((ref) {
 /// the visible days — not what's actually been logged; that's
 /// [registered] (real [TrackedBlock]s, formerly what this header itself
 /// called "tracked", before the window took that name).
+///
+/// "planned" only ever counts blocks with a real clock time on the
+/// calendar — a manually planned block, or a goal's own time-range
+/// schedule entry (see [generateGoalPlannedBlocksForDate]). A goal's
+/// plain-duration entry ("piano, 15 min, any time") has no slot on the
+/// calendar at all, so it's excluded from "planned" and counted in
+/// [unscheduled] instead — goal-targeted time that hasn't been given a
+/// fixed time yet. A user hit this directly: an untimed goal minute
+/// silently inflating "planned" past what the visible blocks on the
+/// calendar actually added up to, reading as a miscalculation.
 final dayTotalsProvider =
-    Provider<(Duration planned, Duration tracked, Duration registered)>((
-      ref,
-    ) {
+    Provider<
+      (
+        Duration planned,
+        Duration tracked,
+        Duration registered,
+        Duration unscheduled,
+      )
+    >((ref) {
       final dates = ref.watch(visibleDatesProvider);
       final dayBlocks = ref.watch(visibleDayBlocksProvider);
       final goals = ref.watch(goalsProvider);
@@ -139,8 +154,9 @@ final dayTotalsProvider =
         );
       }
       var windowTotal = Duration.zero;
+      var unscheduledTotal = Duration.zero;
       for (final date in dates) {
-        plannedTotal += untimedPlannedDurationByCategoryForDate(
+        unscheduledTotal += untimedPlannedDurationByCategoryForDate(
           goals: goals,
           date: date,
         ).values.fold<Duration>(Duration.zero, (total, d) => total + d);
@@ -152,5 +168,5 @@ final dayTotalsProvider =
           windowTotal += window.$2.difference(window.$1);
         }
       }
-      return (plannedTotal, windowTotal, registeredTotal);
+      return (plannedTotal, windowTotal, registeredTotal, unscheduledTotal);
     });
