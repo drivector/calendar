@@ -483,6 +483,175 @@ void main() {
   );
 
   testWidgets(
+    'Day view: two overlapping planned activities render side-by-side, '
+    'each getting half the column, rather than stacking on top of each '
+    'other',
+    (WidgetTester tester) async {
+      // The default mock day fixture already has its own planned blocks
+      // (e.g. "Deep work" 09:00-12:00) that would collide with the times
+      // used below — the clean, no-activity fixture avoids that.
+      final container = ProviderContainer(
+        overrides: [
+          ...await _signedInOnboardedNoActivityOverrides(),
+          dayViewFullDayProvider.overrideWith((ref) => false),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final repo = container.read(plannedBlocksRepositoryProvider);
+      // Isolated, non-overlapping — its own rendered width is the
+      // reference "full column width" the two overlapping ones below are
+      // expected to each get half of.
+      await repo.upsert(
+        PlannedBlock(
+          id: 'test-reference',
+          start: DateTime(2026, 8, 20, 6, 0),
+          end: DateTime(2026, 8, 20, 6, 30),
+          title: 'Reference',
+          categoryId: walkingCategoryId,
+        ),
+      );
+      await repo.upsert(
+        PlannedBlock(
+          id: 'test-overlap-a',
+          start: DateTime(2026, 8, 20, 10, 0),
+          end: DateTime(2026, 8, 20, 11, 0),
+          title: 'Overlap A',
+          categoryId: walkingCategoryId,
+        ),
+      );
+      await repo.upsert(
+        PlannedBlock(
+          id: 'test-overlap-b',
+          start: DateTime(2026, 8, 20, 10, 30),
+          end: DateTime(2026, 8, 20, 11, 30),
+          title: 'Overlap B',
+          categoryId: deepWorkCategoryId,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      Positioned positionedOf(String id) => tester.widget<Positioned>(
+        find.ancestor(
+          of: find.byWidgetPredicate(
+            (w) => w is PlanBlockWidget && w.block.id == id,
+          ),
+          matching: find.byType(Positioned),
+        ).first,
+      );
+
+      final reference = positionedOf('test-reference');
+      final a = positionedOf('test-overlap-a');
+      final b = positionedOf('test-overlap-b');
+
+      // Each overlapping block gets half of the full column width the
+      // isolated reference block gets — not the full width each, and
+      // not overlapping one another.
+      expect(a.width, closeTo(reference.width! / 2, 0.5));
+      expect(b.width, closeTo(reference.width! / 2, 0.5));
+      // A starts first, so it takes the left half; B (starting while A is
+      // still going) takes the right half, flush against A's own edge.
+      expect(a.left, reference.left);
+      expect(b.left, closeTo(a.left! + a.width!, 0.5));
+    },
+  );
+
+  testWidgets(
+    'Day view: a registered activity overlapping two planned activities '
+    "sits over the one sharing its own category/goal, not the other — "
+    'the other plan stays fully visible in its own slot',
+    (WidgetTester tester) async {
+      // Clean fixture — see the previous test's own note on why the
+      // default mock day's own pre-existing planned blocks would collide.
+      final container = ProviderContainer(
+        overrides: [
+          ...await _signedInOnboardedNoActivityOverrides(),
+          dayViewFullDayProvider.overrideWith((ref) => false),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await container.read(plannedBlocksRepositoryProvider).upsert(
+        PlannedBlock(
+          id: 'test-plan-match',
+          start: DateTime(2026, 8, 20, 10, 0),
+          end: DateTime(2026, 8, 20, 11, 0),
+          title: 'Walking plan',
+          categoryId: walkingCategoryId,
+        ),
+      );
+      await container.read(plannedBlocksRepositoryProvider).upsert(
+        PlannedBlock(
+          id: 'test-plan-other',
+          start: DateTime(2026, 8, 20, 10, 15),
+          end: DateTime(2026, 8, 20, 10, 45),
+          title: 'Deep work plan',
+          categoryId: deepWorkCategoryId,
+        ),
+      );
+      await container.read(trackedBlocksRepositoryProvider).upsert(
+        TrackedBlock(
+          id: 'test-actual-match',
+          start: DateTime(2026, 8, 20, 10, 5),
+          end: DateTime(2026, 8, 20, 10, 35),
+          title: 'Walking actual',
+          categoryId: walkingCategoryId,
+          sourceId: 'manual',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      Positioned positionedOfPlan(String id) => tester.widget<Positioned>(
+        find.ancestor(
+          of: find.byWidgetPredicate(
+            (w) => w is PlanBlockWidget && w.block.id == id,
+          ),
+          matching: find.byType(Positioned),
+        ).first,
+      );
+      final matchPlan = positionedOfPlan('test-plan-match');
+      final otherPlan = positionedOfPlan('test-plan-other');
+      final actual = tester.widget<Positioned>(
+        find.ancestor(
+          of: find.byWidgetPredicate(
+            (w) => w is ActualBlockWidget && w.block.id == 'test-actual-match',
+          ),
+          matching: find.byType(Positioned),
+        ).first,
+      );
+
+      // The two plans still get their own separate side-by-side slots —
+      // the registered entry existing doesn't collapse that.
+      expect(otherPlan.left, isNot(matchPlan.left));
+
+      // The actual entry sits fully inside its matching plan's own slot
+      // — not spanning the full column, and not intruding into the
+      // other, unrelated plan's slot.
+      expect(actual.left, greaterThanOrEqualTo(matchPlan.left!));
+      expect(
+        actual.left! + actual.width!,
+        lessThanOrEqualTo(matchPlan.left! + matchPlan.width! + 0.5),
+      );
+    },
+  );
+
+  testWidgets(
     "Day view: an actual block is inset from its column's left edge — a "
     "planned block for the same time isn't fully covered by it",
     (WidgetTester tester) async {

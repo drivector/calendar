@@ -2,6 +2,9 @@ import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../models/category.dart';
+import '../../../models/goal.dart';
+import '../../../models/running_activity.dart';
 import '../../../models/tracked_block.dart';
 import '../../../models/user_settings.dart';
 import '../../../shared/widgets/date_swipe_nav.dart';
@@ -12,6 +15,7 @@ import '../../../state/running_activity_providers.dart';
 import '../../../state/user_settings_providers.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
+import '../../../utils/overlap_layout.dart';
 import 'actual_block_widget.dart';
 import 'add_block_sheet.dart';
 import 'block_label_style.dart';
@@ -191,6 +195,20 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
               ? constraints.maxHeight
               : 25 * 60 * pxPerMinute;
 
+          List<Widget> columnChildren(int i) => _buildColumnChildren(
+            context: context,
+            date: dates[i],
+            dayBlocks: dayBlocks[i],
+            columnLeft: layouts[i].left,
+            columnWidth: layouts[i].width,
+            columnHeight: dayHeight,
+            pxPerMinute: pxPerMinute,
+            blockFilter: blockFilter,
+            running: running,
+            categories: categories,
+            goals: goals,
+          );
+
           return SingleChildScrollView(
             controller: _scrollController,
             physics: fullDay ? const NeverScrollableScrollPhysics() : null,
@@ -226,131 +244,7 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
                           child: ColoredBox(color: AppColors.divider),
                         ),
                       ),
-                  for (var i = 0; i < dates.length; i++) ...[
-                    // Empty-space tap target — added before the blocks
-                    // below so any block painted on top claims its own tap
-                    // first.
-                    Positioned(
-                      left: layouts[i].left,
-                      top: 0,
-                      width: layouts[i].width,
-                      height: dayHeight,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTapUp: (details) =>
-                            _handleEmptySpaceTap(details, dates[i], pxPerMinute),
-                        child: const SizedBox.expand(),
-                      ),
-                    ),
-                    // Planned blocks paint first (dashed, unfilled) so a
-                    // solid Actual block for the same time reads clearly on
-                    // top of it rather than the two competing visually.
-                    // Hidden outright when the header's filter is set to
-                    // "Registered only" — see [DayViewBlockFilter].
-                    if (blockFilter != DayViewBlockFilter.registeredOnly)
-                      for (final block in dayBlocks[i].planned)
-                        _clampedTimedPositioned(
-                          start: block.start,
-                          end: block.end,
-                          date: dates[i],
-                          left: layouts[i].left,
-                          width: layouts[i].width,
-                          pxPerMinute: pxPerMinute,
-                          // Opens the same add-actual sheet an empty-space
-                          // tap does, prefilled from the plan itself (time,
-                          // title, goal) — logging what was already planned
-                          // shouldn't mean retyping it.
-                          childBuilder: (labelStyle) => GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: () => showAddBlockSheet(
-                              context,
-                              ref,
-                              isPlan: false,
-                              date: dates[i],
-                              initialStart: TimeOfDay.fromDateTime(
-                                block.start,
-                              ),
-                              initialEnd: TimeOfDay.fromDateTime(block.end),
-                              initialTitle: block.title,
-                              initialGoalId: goalForCategory(
-                                goals,
-                                block.categoryId,
-                              )?.id,
-                              fromPlan: true,
-                            ),
-                            child: PlanBlockWidget(
-                              block: block,
-                              category: resolveCategory(
-                                categories,
-                                block.categoryId,
-                              ),
-                              labelStyle: labelStyle,
-                            ),
-                          ),
-                        ),
-                    // Hidden outright when the header's filter is set to
-                    // "Planned only" — see [DayViewBlockFilter].
-                    if (blockFilter != DayViewBlockFilter.plannedOnly)
-                      for (final block in dayBlocks[i].tracked)
-                        _clampedTimedPositioned(
-                          start: block.start,
-                          end: block.end,
-                          date: dates[i],
-                          // Inset from the column's own left edge — rather
-                          // than fully covering a planned block for the same
-                          // time (see the comment above), an actual block
-                          // now always leaves a sliver of it showing on the
-                          // left, so an overlap between the two reads as an
-                          // overlap instead of the planned block just
-                          // disappearing underneath.
-                          left:
-                              layouts[i].left +
-                              layouts[i].width * _actualBlockInset,
-                          width: layouts[i].width * (1 - _actualBlockInset),
-                          pxPerMinute: pxPerMinute,
-                          childBuilder: (labelStyle) => ActualBlockWidget(
-                            block: block,
-                            category: resolveCategory(
-                              categories,
-                              block.categoryId,
-                            ),
-                            wasPlanned: trackedBlockWasPlanned(
-                              block,
-                              dayBlocks[i].planned,
-                            ),
-                            ref: ref,
-                            labelStyle: labelStyle,
-                          ),
-                        ),
-                    // The in-progress activity itself, drawn live on every
-                    // day column it overlaps (not just the one it started
-                    // on — a run still going past midnight needs to show
-                    // up on the new day too) — see
-                    // LiveActivityRunningBlock's own doc comment. Same
-                    // filter gating as the tracked blocks above: it's a
-                    // real in-progress "actual", just not registered yet.
-                    if (blockFilter != DayViewBlockFilter.plannedOnly &&
-                        running != null &&
-                        overlapsDay(running.startedAt, DateTime.now(), dates[i]))
-                      _clampedTimedPositioned(
-                        start: running.startedAt,
-                        end: DateTime.now(),
-                        date: dates[i],
-                        left:
-                            layouts[i].left +
-                            layouts[i].width * _actualBlockInset,
-                        width: layouts[i].width * (1 - _actualBlockInset),
-                        pxPerMinute: pxPerMinute,
-                        childBuilder: (labelStyle) => LiveActivityRunningBlock(
-                          running: running,
-                          category: resolveCategory(
-                            categories,
-                            running.categoryId,
-                          ),
-                          labelStyle: labelStyle,
-                        ),
-                      ),
-                  ],
+                  for (var i = 0; i < dates.length; i++) ...columnChildren(i),
                 ],
               ),
             ),
@@ -377,31 +271,230 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
   // matched when they didn't.
   static const _twoLineMinHeight = 52.0;
 
-  // Clamps [start]/[end] to [date]'s own [00:00, 24:00) span before
-  // positioning — an overnight block (started the evening before, or
-  // still running past midnight) is drawn on *every* day it overlaps, not
-  // just the one it started on (see overlapsDay's own doc comment for the
-  // bug this fixes), so each day's own column needs only its own portion
-  // of the block's real time range, not the whole thing positioned as if
-  // it belonged wholly to this day.
-  Positioned _clampedTimedPositioned({
-    required DateTime start,
-    required DateTime end,
+  // Everything one day-column actually draws: the empty-space tap target,
+  // then the planned lane, then the tracked/live-activity lane on top of
+  // it. Both lanes lay overlapping items out side-by-side rather than
+  // stacking them directly on one another (see layoutOverlaps's own doc
+  // comment) — the same collision handling a calendar app gives
+  // simultaneous meetings. The one exception: an actual entry that
+  // matches a specific plan (same link or same category/time overlap —
+  // see matchingPlannedBlockForRange) sits *over* that plan's own slot
+  // instead of getting an independent one, so "this happened as planned"
+  // still reads as one paired signal even when other, unrelated plans are
+  // also on screen at the same time.
+  List<Widget> _buildColumnChildren({
+    required BuildContext context,
     required DateTime date,
-    required double left,
-    required double width,
+    required DayBlocks dayBlocks,
+    required double columnLeft,
+    required double columnWidth,
+    required double columnHeight,
     required double pxPerMinute,
-    required Widget Function(BlockLabelStyle labelStyle) childBuilder,
+    required DayViewBlockFilter blockFilter,
+    required RunningActivity? running,
+    required List<Category> categories,
+    required List<Goal> goals,
   }) {
     final (dayStart, dayEnd) = dayBounds(date);
-    return _timedPositioned(
-      start: start.isBefore(dayStart) ? dayStart : start,
-      end: end.isAfter(dayEnd) ? dayEnd : end,
-      left: left,
-      width: width,
-      pxPerMinute: pxPerMinute,
-      childBuilder: childBuilder,
-    );
+    DateTime clampStart(DateTime s) => s.isBefore(dayStart) ? dayStart : s;
+    DateTime clampEnd(DateTime e) => e.isAfter(dayEnd) ? dayEnd : e;
+
+    final children = <Widget>[
+      // Added before the blocks below so any block painted on top claims
+      // its own tap first.
+      Positioned(
+        left: columnLeft,
+        top: 0,
+        width: columnWidth,
+        height: columnHeight,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapUp: (details) => _handleEmptySpaceTap(details, date, pxPerMinute),
+          child: const SizedBox.expand(),
+        ),
+      ),
+    ];
+
+    // Planned blocks paint first (dashed, unfilled) so a solid Actual
+    // block for the same time reads clearly on top of it rather than the
+    // two competing visually. Hidden outright when the header's filter is
+    // set to "Registered only" — see [DayViewBlockFilter] — in which case
+    // there's nothing left for an actual entry below to align with
+    // either, so it falls back to its own independent layout.
+    final showPlanned = blockFilter != DayViewBlockFilter.registeredOnly;
+    final plannedSlotById = <String, ({double left, double width})>{};
+    if (showPlanned) {
+      for (final slot in layoutOverlaps(
+        dayBlocks.planned,
+        (b) => clampStart(b.start),
+        (b) => clampEnd(b.end),
+      )) {
+        final block = slot.item;
+        final slotWidth = columnWidth / slot.columnCount;
+        final slotLeft = columnLeft + slot.columnIndex * slotWidth;
+        plannedSlotById[block.id] = (left: slotLeft, width: slotWidth);
+        children.add(
+          _timedPositioned(
+            start: clampStart(block.start),
+            end: clampEnd(block.end),
+            left: slotLeft,
+            width: slotWidth,
+            pxPerMinute: pxPerMinute,
+            // Opens the same add-actual sheet an empty-space tap does,
+            // prefilled from the plan itself (time, title, goal) —
+            // logging what was already planned shouldn't mean retyping
+            // it.
+            childBuilder: (labelStyle) => GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => showAddBlockSheet(
+                context,
+                ref,
+                isPlan: false,
+                date: date,
+                initialStart: TimeOfDay.fromDateTime(block.start),
+                initialEnd: TimeOfDay.fromDateTime(block.end),
+                initialTitle: block.title,
+                initialGoalId: goalForCategory(goals, block.categoryId)?.id,
+                fromPlan: true,
+              ),
+              child: PlanBlockWidget(
+                block: block,
+                category: resolveCategory(categories, block.categoryId),
+                labelStyle: labelStyle,
+              ),
+            ),
+          ),
+        );
+      }
+    }
+
+    // Hidden outright when the header's filter is set to "Planned only" —
+    // see [DayViewBlockFilter].
+    if (blockFilter != DayViewBlockFilter.plannedOnly) {
+      final actualItems = <_ActualLikeItem>[
+        for (final block in dayBlocks.tracked)
+          _ActualLikeItem(
+            start: clampStart(block.start),
+            end: clampEnd(block.end),
+            rawStart: block.start,
+            rawEnd: block.end,
+            categoryId: block.categoryId,
+            plannedBlockId: block.plannedBlockId,
+            tracked: block,
+            running: null,
+          ),
+        // The in-progress activity shares this lane too, drawn live on
+        // every day column it overlaps (not just the one it started on —
+        // a run still going past midnight needs to show up on the new
+        // day too) — see LiveActivityRunningBlock's own doc comment.
+        if (running != null &&
+            overlapsDay(running.startedAt, DateTime.now(), date))
+          _ActualLikeItem(
+            start: clampStart(running.startedAt),
+            end: clampEnd(DateTime.now()),
+            rawStart: running.startedAt,
+            rawEnd: DateTime.now(),
+            categoryId: running.categoryId,
+            plannedBlockId: null,
+            tracked: null,
+            running: running,
+          ),
+      ];
+
+      // Each item's own matching plan, if any and if it's actually being
+      // shown — the same matching logic that already drives the
+      // dashed-outline signal, so "this was planned" and "this sits over
+      // its own plan" always agree.
+      final matchedGroups = <String, List<_ActualLikeItem>>{};
+      final unmatched = <_ActualLikeItem>[];
+      for (final item in actualItems) {
+        final matchedPlan = showPlanned
+            ? matchingPlannedBlockForRange(
+                start: item.rawStart,
+                end: item.rawEnd,
+                categoryId: item.categoryId,
+                planned: dayBlocks.planned,
+                plannedBlockId: item.plannedBlockId,
+              )
+            : null;
+        if (matchedPlan != null && plannedSlotById.containsKey(matchedPlan.id)) {
+          matchedGroups.putIfAbsent(matchedPlan.id, () => []).add(item);
+        } else {
+          unmatched.add(item);
+        }
+      }
+
+      Widget actualChild(_ActualLikeItem item, BlockLabelStyle labelStyle) {
+        final liveRunning = item.running;
+        if (liveRunning != null) {
+          return LiveActivityRunningBlock(
+            running: liveRunning,
+            category: resolveCategory(categories, liveRunning.categoryId),
+            labelStyle: labelStyle,
+          );
+        }
+        final block = item.tracked!;
+        return ActualBlockWidget(
+          block: block,
+          category: resolveCategory(categories, block.categoryId),
+          wasPlanned: matchingPlannedBlockFor(block, dayBlocks.planned) != null,
+          ref: ref,
+          labelStyle: labelStyle,
+        );
+      }
+
+      void addLaidOutActuals(
+        List<_ActualLikeItem> items,
+        double laneLeft,
+        double laneWidth,
+      ) {
+        for (final slot in layoutOverlaps(
+          items,
+          (it) => it.start,
+          (it) => it.end,
+        )) {
+          final slotWidth = laneWidth / slot.columnCount;
+          final slotLeft = laneLeft + slot.columnIndex * slotWidth;
+          children.add(
+            _timedPositioned(
+              start: slot.item.start,
+              end: slot.item.end,
+              left: slotLeft,
+              width: slotWidth,
+              pxPerMinute: pxPerMinute,
+              childBuilder: (labelStyle) => actualChild(slot.item, labelStyle),
+            ),
+          );
+        }
+      }
+
+      // Unmatched items get their own independent side-by-side layout,
+      // within the usual inset lane — rather than fully covering a
+      // planned block for the same time, an actual block always leaves a
+      // sliver of it showing on the left, so an overlap between the two
+      // reads as an overlap instead of the planned block just
+      // disappearing underneath.
+      addLaidOutActuals(
+        unmatched,
+        columnLeft + columnWidth * _actualBlockInset,
+        columnWidth * (1 - _actualBlockInset),
+      );
+
+      // Matched items sit inside their own plan's own slot instead — the
+      // same inset convention, just scaled to that slot's own width
+      // rather than the whole column, and split further if more than one
+      // actual entry somehow matches the very same plan.
+      for (final entry in matchedGroups.entries) {
+        final planSlot = plannedSlotById[entry.key]!;
+        addLaidOutActuals(
+          entry.value,
+          planSlot.left + planSlot.width * _actualBlockInset,
+          planSlot.width * (1 - _actualBlockInset),
+        );
+      }
+    }
+
+    return children;
   }
 
   Positioned _timedPositioned({
@@ -433,6 +526,35 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
       ),
     );
   }
+}
+
+/// A real [TrackedBlock] or the currently in-progress [RunningActivity],
+/// unified into one shape so both can go through the same overlap layout
+/// and matching-to-a-plan logic in [_TimeBodyGridState._buildColumnChildren]
+/// — exactly one of [tracked]/[running] is ever set. [start]/[end] are
+/// already clamped to the day column being laid out; [rawStart]/[rawEnd]
+/// stay the item's own real, unclamped span, since matching against a
+/// plan needs the real overlap, not just today's own visible portion.
+class _ActualLikeItem {
+  const _ActualLikeItem({
+    required this.start,
+    required this.end,
+    required this.rawStart,
+    required this.rawEnd,
+    required this.categoryId,
+    required this.plannedBlockId,
+    required this.tracked,
+    required this.running,
+  });
+
+  final DateTime start;
+  final DateTime end;
+  final DateTime rawStart;
+  final DateTime rawEnd;
+  final String categoryId;
+  final String? plannedBlockId;
+  final TrackedBlock? tracked;
+  final RunningActivity? running;
 }
 
 class _HourGridLine extends StatelessWidget {
