@@ -33,9 +33,10 @@ final dayViewModeProvider = StateProvider<DayViewMode>(
 
 /// Whether the timeline compresses the full 24 hours to fit the screen at
 /// once (no scrolling) instead of the normal fixed-height, scrollable
-/// timeline. Off by default — the fixed scale reads more clearly for a
-/// normal day; this is for glancing at the whole day's shape at once.
-final dayViewFullDayProvider = StateProvider<bool>((ref) => false);
+/// timeline. On by default — seeing the whole day's shape at once on
+/// entry beats opening to a scroll position and having to reach for this
+/// toggle to get the same glance.
+final dayViewFullDayProvider = StateProvider<bool>((ref) => true);
 
 /// Which kinds of blocks the Day view's timeline actually draws — lets the
 /// calendar be decluttered down to just what's planned, just what's really

@@ -199,7 +199,14 @@ void main() {
   ) async {
     await tester.pumpWidget(
       ProviderScope(
-        overrides: await _signedInOverrides(),
+        overrides: [
+          ...await _signedInOverrides(),
+          // Fixed-scale mode — full-day (the new default) compresses every
+          // block down small enough to force the compact label style,
+          // which is a different concern from this test's own (rendering
+          // without layout errors, with the block's full-style label).
+          dayViewFullDayProvider.overrideWith((ref) => false),
+        ],
         child: const CalendarTrackerApp(),
       ),
     );
@@ -302,7 +309,16 @@ void main() {
     "planned block's height just because both used to clamp to the same "
     'fixed minimum',
     (WidgetTester tester) async {
-      final container = ProviderContainer(overrides: await _signedInOverrides());
+      final container = ProviderContainer(
+        overrides: [
+          ...await _signedInOverrides(),
+          // Fixed-scale mode — this test's exact pixel-height math (30m ×
+          // 1.2 px/min = 36) assumes the fixed scale, not full-day's own
+          // scale (fit-to-viewport, which the new default would otherwise
+          // substitute here).
+          dayViewFullDayProvider.overrideWith((ref) => false),
+        ],
+      );
       addTearDown(container.dispose);
       await tester.pumpWidget(
         UncontrolledProviderScope(
@@ -4213,18 +4229,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(container.read(dayViewFullDayProvider), isFalse);
-      expect(
-        tester
-            .widget<SingleChildScrollView>(find.byType(SingleChildScrollView))
-            .physics,
-        isNot(isA<NeverScrollableScrollPhysics>()),
-      );
-
-      await tester.tap(find.text('24h'));
-      await tester.pumpAndSettle();
-
-      expect(tester.takeException(), isNull);
+      // On by default now — see dayViewFullDayProvider's own doc comment.
       expect(container.read(dayViewFullDayProvider), isTrue);
       expect(
         tester
@@ -4238,6 +4243,18 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(container.read(dayViewFullDayProvider), isFalse);
+      expect(
+        tester
+            .widget<SingleChildScrollView>(find.byType(SingleChildScrollView))
+            .physics,
+        isNot(isA<NeverScrollableScrollPhysics>()),
+      );
+
+      await tester.tap(find.text('24h'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(container.read(dayViewFullDayProvider), isTrue);
     },
   );
 
