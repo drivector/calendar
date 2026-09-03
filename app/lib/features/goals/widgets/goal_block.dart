@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../models/goal.dart';
 import '../../../models/goal_progress.dart';
 import '../../../state/categories_providers.dart';
 import '../../../theme/app_category_colors.dart';
@@ -21,9 +22,15 @@ class GoalBlock extends ConsumerWidget {
     final categories = ref.watch(categoriesProvider);
     final category = resolveCategory(categories, progress.goal.categoryId);
     final goal = progress.goal;
+    // A byDate goal has no repeating weekly pattern at all — its own
+    // total is the sum of whatever's actually entered per individual day
+    // instead (see Goal.totalTarget's own doc comment).
+    final isByDate = goal.scheduleMode == GoalScheduleMode.byDate;
     final targetLabel =
-        '${formatHours(progress.actualHours)} / ${formatDuration(goal.weeklyTarget)}';
-    final perDayCaption = goal.isUniformAcrossWeek
+        '${formatHours(progress.actualHours)} / ${formatDuration(isByDate ? goal.totalTarget : goal.weeklyTarget)}';
+    final perDayCaption = isByDate
+        ? '/ varies by day'
+        : goal.isUniformAcrossWeek
         ? '/ ${formatDuration(goal.targetForWeekday(DateTime.monday))} per day'
         : '/ varies by day';
 

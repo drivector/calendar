@@ -20,7 +20,6 @@ List<PlannedBlock> generateGoalPlannedBlocksForDate({
   required DateTime date,
 }) {
   final day = DateTime(date.year, date.month, date.day);
-  final weekday = day.weekday;
   final dateId =
       '${day.year.toString().padLeft(4, '0')}-'
       '${day.month.toString().padLeft(2, '0')}-'
@@ -30,7 +29,7 @@ List<PlannedBlock> generateGoalPlannedBlocksForDate({
   for (final goal in goals) {
     if (!goal.isActiveOn(day)) continue;
     var entryIndex = 0;
-    for (final entry in goal.entriesForWeekday(weekday)) {
+    for (final entry in goal.entriesForOccurrence(day)) {
       final index = entryIndex++;
       if (!entry.isTimeRange) continue;
       final range = entry.timeRange!;
@@ -85,12 +84,11 @@ Map<String, Duration> untimedPlannedDurationByCategoryForDate({
   required DateTime date,
 }) {
   final day = DateTime(date.year, date.month, date.day);
-  final weekday = day.weekday;
 
   final totals = <String, Duration>{};
   for (final goal in goals) {
     if (!goal.isActiveOn(day)) continue;
-    for (final entry in goal.entriesForWeekday(weekday)) {
+    for (final entry in goal.entriesForOccurrence(day)) {
       if (entry.isTimeRange) continue;
       totals.update(
         goal.categoryId,
@@ -111,12 +109,11 @@ Map<String, Duration> untimedPlannedDurationByGoalForDate({
   required DateTime date,
 }) {
   final day = DateTime(date.year, date.month, date.day);
-  final weekday = day.weekday;
 
   final totals = <String, Duration>{};
   for (final goal in goals) {
     if (!goal.isActiveOn(day)) continue;
-    for (final entry in goal.entriesForWeekday(weekday)) {
+    for (final entry in goal.entriesForOccurrence(day)) {
       if (entry.isTimeRange) continue;
       totals.update(
         goal.id,

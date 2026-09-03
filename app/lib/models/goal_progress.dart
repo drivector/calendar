@@ -33,16 +33,34 @@ class GoalProgress {
       : (expectedByNowHours / goal.weeklyTargetHours).clamp(0, 1);
 }
 
-/// Where pace "should" be right now, given each day of the week can ask for
-/// a different amount — full credit for every day already finished this
-/// week, partial credit for today based on how much of it has elapsed.
+/// Where pace "should" be right now, given each day can ask for a
+/// different amount — full credit for every day already finished,
+/// partial credit for today based on how much of it has elapsed. For
+/// [GoalScheduleMode.weekly] "already finished" means earlier this week;
+/// for [GoalScheduleMode.byDate], which has no repeating week, it means
+/// every day since the goal's own [Goal.startDate] instead — pace tracks
+/// the whole challenge, not an arbitrary week it happens to fall in.
 double expectedByNowHours(Goal goal, DateTime date) {
+  final dayFraction = (date.hour * 60 + date.minute) / (24 * 60);
+  if (goal.scheduleMode == GoalScheduleMode.byDate) {
+    var total = 0.0;
+    final start = DateTime(
+      goal.startDate.year,
+      goal.startDate.month,
+      goal.startDate.day,
+    );
+    final today = DateTime(date.year, date.month, date.day);
+    for (var day = start; day.isBefore(today); day = day.add(const Duration(days: 1))) {
+      total += goal.targetForDate(day).inMinutes / 60;
+    }
+    final todayTargetHours = goal.targetForDate(date).inMinutes / 60;
+    return total + todayTargetHours * dayFraction;
+  }
   var total = 0.0;
   for (var weekday = 1; weekday < date.weekday; weekday++) {
     total += goal.targetForWeekday(weekday).inMinutes / 60;
   }
   final todayTargetHours = goal.targetForWeekday(date.weekday).inMinutes / 60;
-  final dayFraction = (date.hour * 60 + date.minute) / (24 * 60);
   return total + todayTargetHours * dayFraction;
 }
 

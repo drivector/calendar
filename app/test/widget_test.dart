@@ -2522,6 +2522,113 @@ void main() {
     },
   );
 
+  testWidgets(
+    'Goals: editing a date-bound goal offers a per-day schedule option; '
+    'switching to it and filling in one day saves a byDate schedule',
+    (WidgetTester tester) async {
+      final container = ProviderContainer(
+        overrides: await _signedInOverrides(),
+      );
+      addTearDown(container.dispose);
+      await container.read(authStateChangesProvider.future);
+
+      final challenge = Goal(
+        id: 'goal-challenge-test',
+        name: 'Step challenge',
+        categoryId: walkingCategoryId,
+        // Short enough to read as date-bound (see Goal.isDateBound).
+        startDate: DateTime(2026, 8, 20),
+        endDate: DateTime(2026, 8, 22),
+        scheduleByWeekday: {
+          for (var weekday = 1; weekday <= 7; weekday++)
+            weekday: [const DayScheduleEntry.duration(Duration(minutes: 30))],
+        },
+      );
+      await container.read(goalsRepositoryProvider).upsert(challenge);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _tapTab(tester, 'Goals');
+      await tester.tap(find.text('Step challenge'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('EDIT'));
+      await tester.pumpAndSettle();
+      await _goalSheetNext(tester, 2); // -> step 3 (Schedule)
+
+      // Everything below is scoped inside the sheet itself — the Goals
+      // list card sitting behind this modal shows its own overlapping
+      // date range/target text, which would otherwise ambiguously match
+      // some of the same finders.
+      final inSheet = find.byType(GoalEditSheet);
+      Finder textInSheet(String text) => find.descendant(
+        of: inSheet,
+        matching: find.text(text),
+      );
+      Finder textContainingInSheet(String text) => find.descendant(
+        of: inSheet,
+        matching: find.textContaining(text),
+      );
+
+      // Date-bound, so the mode choice is offered — starts on "Repeats
+      // every week" since that's what this goal was created with.
+      expect(textInSheet('Repeats every week'), findsOneWidget);
+      expect(textInSheet('Set each day'), findsOneWidget);
+      expect(textContainingInSheet('Mon'), findsWidgets); // weekly UI showing
+
+      await tester.tap(textInSheet('Set each day'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      // One section per real date from 20 to 22 Aug — day-of-challenge
+      // number first, real date second (see _buildByDateSchedule).
+      expect(textContainingInSheet('Day 1 —'), findsOneWidget);
+      expect(textContainingInSheet('Day 2 —'), findsOneWidget);
+      expect(textContainingInSheet('Day 3 —'), findsOneWidget);
+      expect(textContainingInSheet('20 Aug'), findsOneWidget);
+      expect(textContainingInSheet('22 Aug'), findsOneWidget);
+      // Switching modes doesn't carry the weekly entries over — a fresh
+      // byDate schedule starts empty, every day reading "off".
+      expect(textInSheet('off'), findsNWidgets(3));
+
+      final day1Section = find
+          .ancestor(
+            of: textContainingInSheet('Day 1 —'),
+            matching: find.byType(Column),
+          )
+          .first;
+      await tester.tap(
+        find.descendant(of: day1Section, matching: find.text('+ duration')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(textInSheet('off'), findsNWidgets(2)); // days 2 and 3 only now
+      expect(textInSheet('30m'), findsWidgets); // day 1's new entry + TOTAL
+
+      await _goalSheetNext(tester); // -> step 4 (Reminders)
+      await tester.ensureVisible(find.text('Save changes'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save changes'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      final saved = container
+          .read(goalsProvider)
+          .firstWhere((g) => g.id == 'goal-challenge-test');
+      expect(saved.scheduleMode, GoalScheduleMode.byDate);
+      expect(
+        saved.targetForDate(DateTime(2026, 8, 20)),
+        const Duration(minutes: 30),
+      );
+      expect(saved.targetForDate(DateTime(2026, 8, 21)), Duration.zero);
+    },
+  );
+
   testWidgets('Goals: creating a new goal with per-day targets adds it', (
     WidgetTester tester,
   ) async {

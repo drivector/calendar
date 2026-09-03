@@ -43,12 +43,40 @@ Goal? goalForCategory(List<Goal> goals, String categoryId) {
   return null;
 }
 
-/// Actual hours this week = tracked blocks in the goal's category that fall
-/// within the current week. A manually tracked block only has a category,
-/// not a goal id, so when more than one goal shares a category (e.g. "job"
-/// and "side project" both under "work") it's only credited to the one
-/// [goalForCategory] would resolve that category to — otherwise the same
-/// hours would double-count toward every goal sharing the category.
+/// The window actual/planned hours are summed over for one goal — the
+/// current week for [GoalScheduleMode.weekly] (a repeating pattern only
+/// ever means "this week's worth"), or the goal's own whole
+/// [Goal.startDate]–[Goal.endDate] span for [GoalScheduleMode.byDate],
+/// since a day-by-day challenge's progress is against the challenge
+/// itself, not whichever calendar week the Day view happens to be showing.
+(DateTime start, DateTime end) _progressWindowFor(
+  Goal goal,
+  DateTime selectedDate,
+) {
+  if (goal.scheduleMode == GoalScheduleMode.byDate) {
+    final start = DateTime(
+      goal.startDate.year,
+      goal.startDate.month,
+      goal.startDate.day,
+    );
+    final end = DateTime(
+      goal.endDate.year,
+      goal.endDate.month,
+      goal.endDate.day,
+    ).add(const Duration(days: 1));
+    return (start, end);
+  }
+  final weekStart = weekStartFor(selectedDate);
+  return (weekStart, weekStart.add(const Duration(days: 7)));
+}
+
+/// Actual hours toward this goal, within [_progressWindowFor]'s own
+/// window = tracked blocks in the goal's category falling in that window.
+/// A manually tracked block only has a category, not a goal id, so when
+/// more than one goal shares a category (e.g. "job" and "side project"
+/// both under "work") it's only credited to the one [goalForCategory]
+/// would resolve that category to — otherwise the same hours would
+/// double-count toward every goal sharing the category.
 double _actualHoursForGoal(
   Goal goal,
   List<Goal> allGoals,
@@ -56,25 +84,32 @@ double _actualHoursForGoal(
   DateTime selectedDate,
 ) {
   if (goalForCategory(allGoals, goal.categoryId)?.id != goal.id) return 0;
-  final weekStart = weekStartFor(selectedDate);
-  final weekEnd = weekStart.add(const Duration(days: 7));
+  final (windowStart, windowEnd) = _progressWindowFor(goal, selectedDate);
   return allTracked
       .where(
         (b) =>
             b.categoryId == goal.categoryId &&
-            !b.start.isBefore(weekStart) &&
-            b.start.isBefore(weekEnd),
+            !b.start.isBefore(windowStart) &&
+            b.start.isBefore(windowEnd),
       )
       .fold(0.0, (total, b) => total + b.duration.inMinutes / 60);
 }
 
-/// Planned hours this week = manually planned blocks in this goal's category
-/// (seed data plus anything added since) plus the goal's own generated
-/// schedule for whichever days it was active this week — see
-/// [goalGeneratedBlocksThisWeekProvider]. As with [_actualHoursForGoal], the
-/// manual half is only credited to the goal [goalForCategory] resolves the
-/// category to, since a manually planned block carries no goal id of its
-/// own; the generated half stays goal-specific via [PlannedBlock.goalId].
+/// Planned hours toward this goal, within [_progressWindowFor]'s own
+/// window = manually planned blocks in this goal's category (seed data
+/// plus anything added since) plus the goal's own generated schedule for
+/// whichever days of that window it was active. As with
+/// [_actualHoursForGoal], the manual half is only credited to the goal
+/// [goalForCategory] resolves the category to, since a manually planned
+/// block carries no goal id of its own; the generated half stays
+/// goal-specific via [PlannedBlock.goalId].
+///
+/// [generatedThisWeek] (see [goalGeneratedBlocksThisWeekProvider]) only
+/// ever covers the *current* week, which is exactly the window a
+/// [GoalScheduleMode.weekly] goal needs here — but a
+/// [GoalScheduleMode.byDate] goal's own window can span (or sit entirely
+/// outside) the current week, so its generated blocks are recomputed
+/// fresh over its own window instead of reusing that week-scoped list.
 double _plannedHoursForGoal(
   Goal goal,
   List<Goal> allGoals,
@@ -82,8 +117,7 @@ double _plannedHoursForGoal(
   List<PlannedBlock> generatedThisWeek,
   DateTime selectedDate,
 ) {
-  final weekStart = weekStartFor(selectedDate);
-  final weekEnd = weekStart.add(const Duration(days: 7));
+  final (windowStart, windowEnd) = _progressWindowFor(goal, selectedDate);
   final manualHours =
       goalForCategory(allGoals, goal.categoryId)?.id != goal.id
       ? 0.0
@@ -91,11 +125,22 @@ double _plannedHoursForGoal(
             .where(
               (b) =>
                   b.categoryId == goal.categoryId &&
-                  !b.start.isBefore(weekStart) &&
-                  b.start.isBefore(weekEnd),
+                  !b.start.isBefore(windowStart) &&
+                  b.start.isBefore(windowEnd),
             )
             .fold(0.0, (total, b) => total + b.duration.inMinutes / 60);
-  final generatedHours = generatedThisWeek
+
+  final generatedForWindow = goal.scheduleMode == GoalScheduleMode.byDate
+      ? [
+          for (
+            var day = windowStart;
+            day.isBefore(windowEnd);
+            day = day.add(const Duration(days: 1))
+          )
+            ...generateGoalPlannedBlocksForDate(goals: [goal], date: day),
+        ]
+      : generatedThisWeek;
+  final generatedHours = generatedForWindow
       .where((b) => b.goalId == goal.id)
       .fold(0.0, (total, b) => total + b.duration.inMinutes / 60);
   return manualHours + generatedHours;

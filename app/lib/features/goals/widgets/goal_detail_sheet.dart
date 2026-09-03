@@ -245,7 +245,14 @@ class _GoalDetailSheetState extends ConsumerState<GoalDetailSheet> {
                   _StatRow(label: 'actual', value: formatHours(actualHours)),
                   _StatRow(
                     label: 'target',
-                    value: formatDuration(goal.weeklyTarget),
+                    // A byDate goal has no repeating weekly pattern to
+                    // show here — its own total across every day it's
+                    // actually been given entries for instead.
+                    value: formatDuration(
+                      goal.scheduleMode == GoalScheduleMode.byDate
+                          ? goal.totalTarget
+                          : goal.weeklyTarget,
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.s2),
                   DecoratedBox(
@@ -342,14 +349,17 @@ class _TargetPerDayRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        for (var weekday = 1; weekday <= 7; weekday++)
-          _dayColumn(weekStart.add(Duration(days: weekday - 1)), weekday),
+        for (var offset = 0; offset < 7; offset++)
+          _dayColumn(weekStart.add(Duration(days: offset))),
       ],
     );
   }
 
-  Widget _dayColumn(DateTime day, int weekday) {
-    final target = goal.targetForWeekday(weekday);
+  Widget _dayColumn(DateTime day) {
+    // targetForDate resolves correctly for either schedule mode (the
+    // weekday's own repeating target, or this exact date's own entries)
+    // — see Goal.entriesForOccurrence's own doc comment.
+    final target = goal.targetForDate(day);
     final actual = _actualForDay(day);
 
     return Expanded(

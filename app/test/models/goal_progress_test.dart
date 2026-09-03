@@ -132,6 +132,96 @@ void main() {
     });
   });
 
+  group('GoalScheduleMode.byDate', () {
+    test('entriesForOccurrence reads the exact date, not the weekday', () {
+      final challenge = Goal(
+        id: 'g',
+        name: 'Challenge',
+        categoryId: 'walking',
+        scheduleMode: GoalScheduleMode.byDate,
+        scheduleByWeekday: const {},
+        scheduleByDate: {
+          DateTime(2026, 8, 20): [
+            const DayScheduleEntry.duration(Duration(minutes: 45)),
+          ],
+        },
+        startDate: DateTime(2026, 8, 20),
+        endDate: DateTime(2026, 8, 22),
+      );
+
+      expect(
+        challenge.targetForDate(DateTime(2026, 8, 20)),
+        const Duration(minutes: 45),
+      );
+      // The 27th is also a Thursday (same weekday as the 20th) but has no
+      // entry of its own — a byDate schedule never falls back to "what
+      // this weekday usually gets."
+      expect(challenge.targetForDate(DateTime(2026, 8, 27)), Duration.zero);
+    });
+
+    test(
+      'totalTarget sums every date actually given entries, and '
+      'weeklyTargetHours resolves to the same figure',
+      () {
+        final challenge = Goal(
+          id: 'g',
+          name: 'Challenge',
+          categoryId: 'walking',
+          scheduleMode: GoalScheduleMode.byDate,
+          scheduleByWeekday: const {},
+          scheduleByDate: {
+            DateTime(2026, 8, 20): [
+              const DayScheduleEntry.duration(Duration(minutes: 30)),
+            ],
+            DateTime(2026, 8, 22): [
+              const DayScheduleEntry.duration(Duration(hours: 1)),
+            ],
+          },
+          startDate: DateTime(2026, 8, 20),
+          endDate: DateTime(2026, 8, 24),
+        );
+
+        expect(challenge.totalTarget, const Duration(hours: 1, minutes: 30));
+        expect(challenge.weeklyTargetHours, closeTo(1.5, 0.001));
+      },
+    );
+
+    test(
+      'expectedByNowHours paces against days since the goal\'s own start, '
+      'not the current calendar week',
+      () {
+        final challenge = Goal(
+          id: 'g',
+          name: 'Challenge',
+          categoryId: 'walking',
+          scheduleMode: GoalScheduleMode.byDate,
+          scheduleByWeekday: const {},
+          scheduleByDate: {
+            DateTime(2026, 8, 20): [
+              const DayScheduleEntry.duration(Duration(hours: 1)),
+            ],
+            DateTime(2026, 8, 21): [
+              const DayScheduleEntry.duration(Duration(hours: 1)),
+            ],
+            DateTime(2026, 8, 22): [
+              const DayScheduleEntry.duration(Duration(hours: 1)),
+            ],
+          },
+          startDate: DateTime(2026, 8, 20),
+          endDate: DateTime(2026, 8, 24),
+        );
+
+        // Midday on the 22nd (day 3): days 1 and 2 in full (2h) plus half
+        // of day 3's own 1h = 2.5h.
+        final hours = expectedByNowHours(
+          challenge,
+          DateTime(2026, 8, 22, 12, 0),
+        );
+        expect(hours, closeTo(2.5, 0.001));
+      },
+    );
+  });
+
   group('expectedByNowHours', () {
     // Deep work: 4h Mon–Fri, 0 on weekends.
     final deepWork = Goal(

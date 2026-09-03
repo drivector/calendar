@@ -390,11 +390,23 @@ class _LogActivitySheetState extends ConsumerState<LogActivitySheet> {
                   ),
                   if (selectedGoal != null) ...[
                     const SizedBox(height: AppSpacing.s3),
-                    _FieldLabel('Weekly target'),
-                    Text(
-                      '${formatDuration(selectedGoal.weeklyTarget)}/wk',
-                      style: AppTextStyles.mono(color: AppColors.text),
-                    ),
+                    // A byDate goal has no repeating week to speak of —
+                    // its own total across every day it's actually been
+                    // given entries for instead (see Goal.totalTarget's
+                    // own doc comment).
+                    if (selectedGoal.scheduleMode == GoalScheduleMode.byDate) ...[
+                      _FieldLabel('Total target'),
+                      Text(
+                        formatDuration(selectedGoal.totalTarget),
+                        style: AppTextStyles.mono(color: AppColors.text),
+                      ),
+                    ] else ...[
+                      _FieldLabel('Weekly target'),
+                      Text(
+                        '${formatDuration(selectedGoal.weeklyTarget)}/wk',
+                        style: AppTextStyles.mono(color: AppColors.text),
+                      ),
+                    ],
                   ],
                   const SizedBox(height: AppSpacing.s3),
                   _FieldLabel('Note'),

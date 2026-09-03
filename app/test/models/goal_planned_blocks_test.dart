@@ -350,4 +350,119 @@ void main() {
       expect(totals, isEmpty);
     });
   });
+
+  group('GoalScheduleMode.byDate', () {
+    test(
+      'generateGoalPlannedBlocksForDate uses the exact date\'s own entries, '
+      'not a repeating weekday pattern',
+      () {
+        final challenge = Goal(
+          id: 'goal-challenge',
+          name: '10k steps challenge',
+          categoryId: 'walking',
+          scheduleMode: GoalScheduleMode.byDate,
+          scheduleByWeekday: const {},
+          scheduleByDate: {
+            DateTime(2026, 8, 20): [
+              const DayScheduleEntry.timeRange(
+                ClockRange(ClockTime(7, 0), ClockTime(7, 45)),
+              ),
+            ],
+            DateTime(2026, 8, 22): [
+              const DayScheduleEntry.timeRange(
+                ClockRange(ClockTime(8, 0), ClockTime(8, 30)),
+              ),
+            ],
+          },
+          startDate: DateTime(2026, 8, 20),
+          endDate: DateTime(2026, 8, 24),
+        );
+
+        final onDay1 = generateGoalPlannedBlocksForDate(
+          goals: [challenge],
+          date: DateTime(2026, 8, 20),
+        );
+        expect(onDay1, hasLength(1));
+        expect(onDay1.single.start, DateTime(2026, 8, 20, 7, 0));
+        expect(onDay1.single.end, DateTime(2026, 8, 20, 7, 45));
+
+        // A day in range but with no entries of its own generates
+        // nothing at all — a byDate schedule has no repeating pattern to
+        // fall back to for a day it wasn't explicitly given.
+        final onDay2 = generateGoalPlannedBlocksForDate(
+          goals: [challenge],
+          date: DateTime(2026, 8, 21),
+        );
+        expect(onDay2, isEmpty);
+
+        final onDay3 = generateGoalPlannedBlocksForDate(
+          goals: [challenge],
+          date: DateTime(2026, 8, 22),
+        );
+        expect(onDay3, hasLength(1));
+        expect(onDay3.single.start, DateTime(2026, 8, 22, 8, 0));
+      },
+    );
+
+    test(
+      'a plain-duration entry for a specific date sums into '
+      'untimedPlannedDurationByCategoryForDate only on that date',
+      () {
+        final challenge = Goal(
+          id: 'goal-piano-challenge',
+          name: 'Piano practice week',
+          categoryId: 'piano',
+          scheduleMode: GoalScheduleMode.byDate,
+          scheduleByWeekday: const {},
+          scheduleByDate: {
+            DateTime(2026, 8, 20): [
+              const DayScheduleEntry.duration(Duration(minutes: 15)),
+            ],
+          },
+          startDate: DateTime(2026, 8, 20),
+          endDate: DateTime(2026, 8, 22),
+        );
+
+        expect(
+          untimedPlannedDurationByCategoryForDate(
+            goals: [challenge],
+            date: DateTime(2026, 8, 20),
+          ),
+          {'piano': const Duration(minutes: 15)},
+        );
+        expect(
+          untimedPlannedDurationByCategoryForDate(
+            goals: [challenge],
+            date: DateTime(2026, 8, 21),
+          ),
+          isEmpty,
+        );
+      },
+    );
+
+    test('still respects isActiveOn even with a byDate schedule', () {
+      final challenge = Goal(
+        id: 'goal-challenge',
+        name: 'Challenge',
+        categoryId: 'walking',
+        scheduleMode: GoalScheduleMode.byDate,
+        scheduleByWeekday: const {},
+        scheduleByDate: {
+          DateTime(2026, 8, 20): [
+            const DayScheduleEntry.timeRange(
+              ClockRange(ClockTime(7, 0), ClockTime(7, 30)),
+            ),
+          ],
+        },
+        startDate: DateTime(2026, 8, 1),
+        endDate: DateTime(2026, 8, 15), // ended before the entry's own date
+      );
+
+      final blocks = generateGoalPlannedBlocksForDate(
+        goals: [challenge],
+        date: DateTime(2026, 8, 20),
+      );
+      expect(blocks, isEmpty);
+    });
+  });
 }

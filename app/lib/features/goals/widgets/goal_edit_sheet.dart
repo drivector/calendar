@@ -146,6 +146,35 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
       ),
   };
 
+  // Which of _schedule/_scheduleByDate is actually in effect — see
+  // GoalScheduleMode's own doc comment. byDate only ever shows as an
+  // option once the goal is date-bound (see _isDateBoundNow); a goal that
+  // was byDate but has since had its end date pushed out past that
+  // threshold silently falls back to weekly (see _pickDate) rather than
+  // leaving an inaccessible mode selected.
+  late GoalScheduleMode _scheduleMode =
+      widget.existing?.scheduleMode ?? GoalScheduleMode.weekly;
+
+  // The byDate counterpart of _schedule — one entry list per real calendar
+  // date in [_startDate, _endDate], rebuilt (preserving whatever's already
+  // there for dates still in range) whenever either date changes.
+  late Map<DateTime, List<DayScheduleEntry>> _scheduleByDate =
+      _rebuildScheduleByDate(widget.existing?.scheduleByDate);
+
+  Map<DateTime, List<DayScheduleEntry>> _rebuildScheduleByDate(
+    Map<DateTime, List<DayScheduleEntry>>? preserving,
+  ) {
+    final result = <DateTime, List<DayScheduleEntry>>{};
+    final start = DateTime(_startDate.year, _startDate.month, _startDate.day);
+    final end = DateTime(_endDate.year, _endDate.month, _endDate.day);
+    for (var day = start; !day.isAfter(end); day = day.add(const Duration(days: 1))) {
+      result[day] = List.of(preserving?[day] ?? const []);
+    }
+    return result;
+  }
+
+  bool get _isDateBoundNow => _endDate.difference(_startDate) < ongoingGoalSpan;
+
   bool get _isEditing => widget.existing != null;
 
   // Captured once, right after the fields above are set up, so a later
@@ -166,9 +195,14 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
         ? 'Untitled goal'
         : _nameController.text.trim(),
     categoryId: _categoryId,
+    scheduleMode: _scheduleMode,
     scheduleByWeekday: {
       for (var weekday = 1; weekday <= 7; weekday++)
         weekday: List.of(_schedule[weekday] ?? const []),
+    },
+    scheduleByDate: {
+      for (final entry in _scheduleByDate.entries)
+        entry.key: List.of(entry.value),
     },
     startDate: _startDate,
     endDate: _endDate,
@@ -199,14 +233,23 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
     }
   }
 
-  Duration _dayTotal(int weekday) => (_schedule[weekday] ?? const []).fold(
-    Duration.zero,
-    (total, e) => total + e.effectiveDuration,
-  );
+  // Generic over the schedule's own key type (int weekday, or DateTime for
+  // a byDate schedule) so the same handful of mutation methods below drive
+  // either _schedule or _scheduleByDate without duplicating each one.
+  Duration _dayTotal<K>(Map<K, List<DayScheduleEntry>> schedule, K key) =>
+      (schedule[key] ?? const []).fold(
+        Duration.zero,
+        (total, e) => total + e.effectiveDuration,
+      );
 
   Duration get _weeklyTotal =>
-      [for (var weekday = 1; weekday <= 7; weekday++) _dayTotal(weekday)]
+      [for (var weekday = 1; weekday <= 7; weekday++) _dayTotal(_schedule, weekday)]
           .fold(Duration.zero, (a, b) => a + b);
+
+  Duration get _byDateTotal => _scheduleByDate.keys.fold(
+    Duration.zero,
+    (total, date) => total + _dayTotal(_scheduleByDate, date),
+  );
 
   @override
   void dispose() {
@@ -214,9 +257,9 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
     super.dispose();
   }
 
-  void _addDurationEntry(int weekday) {
+  void _addDurationEntry<K>(Map<K, List<DayScheduleEntry>> schedule, K key) {
     setState(() {
-      _schedule[weekday]!.add(
+      (schedule[key] ??= []).add(
         const DayScheduleEntry.duration(Duration(minutes: 30)),
       );
     });
@@ -244,7 +287,10 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
     );
   }
 
-  Future<void> _addTimeRangeEntry(int weekday) async {
+  Future<void> _addTimeRangeEntry<K>(
+    Map<K, List<DayScheduleEntry>> schedule,
+    K key,
+  ) async {
     final start = await showTimePicker(
       context: context,
       initialTime: _defaultRangeStart,
@@ -260,7 +306,7 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
     if (end == null || !mounted) return;
     if (!await _confirmIfOvernight(start, end) || !mounted) return;
     setState(() {
-      _schedule[weekday]!.add(
+      (schedule[key] ??= []).add(
         DayScheduleEntry.timeRange(
           ClockRange(
             ClockTime(start.hour, start.minute),
@@ -271,13 +317,18 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
     });
   }
 
-  void _removeEntry(int weekday, int index) {
-    setState(() => _schedule[weekday]!.removeAt(index));
+  void _removeEntry<K>(Map<K, List<DayScheduleEntry>> schedule, K key, int index) {
+    setState(() => schedule[key]!.removeAt(index));
   }
 
-  void _stepDurationEntry(int weekday, int index, int deltaMinutes) {
+  void _stepDurationEntry<K>(
+    Map<K, List<DayScheduleEntry>> schedule,
+    K key,
+    int index,
+    int deltaMinutes,
+  ) {
     setState(() {
-      final entries = _schedule[weekday]!;
+      final entries = schedule[key]!;
       final current = entries[index].duration!;
       final next = current + Duration(minutes: deltaMinutes);
       final clamped = next < _minPerEntry
@@ -287,8 +338,12 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
     });
   }
 
-  Future<void> _editRangeStart(int weekday, int index) async {
-    final current = _schedule[weekday]![index].timeRange!;
+  Future<void> _editRangeStart<K>(
+    Map<K, List<DayScheduleEntry>> schedule,
+    K key,
+    int index,
+  ) async {
+    final current = schedule[key]![index].timeRange!;
     final picked = await showTimePicker(
       context: context,
       initialTime: TimeOfDay(
@@ -300,14 +355,18 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
     final end = TimeOfDay(hour: current.end.hour, minute: current.end.minute);
     if (!await _confirmIfOvernight(picked, end) || !mounted) return;
     setState(() {
-      _schedule[weekday]![index] = DayScheduleEntry.timeRange(
+      schedule[key]![index] = DayScheduleEntry.timeRange(
         ClockRange(ClockTime(picked.hour, picked.minute), current.end),
       );
     });
   }
 
-  Future<void> _editRangeEnd(int weekday, int index) async {
-    final current = _schedule[weekday]![index].timeRange!;
+  Future<void> _editRangeEnd<K>(
+    Map<K, List<DayScheduleEntry>> schedule,
+    K key,
+    int index,
+  ) async {
+    final current = schedule[key]![index].timeRange!;
     final picked = await showTimePicker(
       context: context,
       initialTime: TimeOfDay(
@@ -322,7 +381,7 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
     );
     if (!await _confirmIfOvernight(start, picked) || !mounted) return;
     setState(() {
-      _schedule[weekday]![index] = DayScheduleEntry.timeRange(
+      schedule[key]![index] = DayScheduleEntry.timeRange(
         ClockRange(current.start, ClockTime(picked.hour, picked.minute)),
       );
     });
@@ -353,6 +412,17 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
       } else {
         _endDate = picked;
       }
+      // Reconcile the byDate schedule to the new range — preserves
+      // whatever's already entered for a date still in range, drops days
+      // that fell out of it, and adds fresh empty ones for newly-included
+      // days.
+      _scheduleByDate = _rebuildScheduleByDate(_scheduleByDate);
+      // byDate stops being a reachable option the instant the goal is no
+      // longer date-bound — fall back to weekly rather than leaving an
+      // now-hidden mode selected with nothing on screen to edit it.
+      if (!_isDateBoundNow && _scheduleMode == GoalScheduleMode.byDate) {
+        _scheduleMode = GoalScheduleMode.weekly;
+      }
     });
   }
 
@@ -371,9 +441,14 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
           ? 'Untitled goal'
           : _nameController.text.trim(),
       categoryId: _categoryId,
+      scheduleMode: _scheduleMode,
       scheduleByWeekday: {
         for (var weekday = 1; weekday <= 7; weekday++)
           weekday: List.of(_schedule[weekday] ?? const []),
+      },
+      scheduleByDate: {
+        for (final entry in _scheduleByDate.entries)
+          entry.key: List.of(entry.value),
       },
       startDate: _startDate,
       endDate: _endDate,
@@ -453,6 +528,49 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
   }
 
   Widget _buildScheduleStep(DateTime weekStart) {
+    final isWeekly = _scheduleMode == GoalScheduleMode.weekly;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Only a real choice once the goal actually has an end date close
+        // enough to enumerate — an open-ended habit has no "every day up
+        // to the end" to specify. See _isDateBoundNow's own doc comment.
+        if (_isDateBoundNow) ...[
+          _Label('Schedule type'),
+          Row(
+            children: [
+              Expanded(
+                child: _ScheduleModeOption(
+                  label: 'Repeats every week',
+                  selected: isWeekly,
+                  onTap: () =>
+                      setState(() => _scheduleMode = GoalScheduleMode.weekly),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.s2),
+              Expanded(
+                child: _ScheduleModeOption(
+                  label: 'Set each day',
+                  selected: !isWeekly,
+                  onTap: () => setState(
+                    () => _scheduleMode = GoalScheduleMode.byDate,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.s3),
+        ],
+        if (isWeekly)
+          _buildWeeklySchedule(weekStart)
+        else
+          _buildByDateSchedule(),
+      ],
+    );
+  }
+
+  Widget _buildWeeklySchedule(DateTime weekStart) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -482,14 +600,15 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
               'EEE d MMM',
             ).format(weekStart.add(Duration(days: weekday - 1))),
             entries: _schedule[weekday] ?? const [],
-            total: _dayTotal(weekday),
-            onAddDuration: () => _addDurationEntry(weekday),
-            onAddTimeRange: () => _addTimeRangeEntry(weekday),
-            onRemove: (index) => _removeEntry(weekday, index),
+            total: _dayTotal(_schedule, weekday),
+            onAddDuration: () => _addDurationEntry(_schedule, weekday),
+            onAddTimeRange: () => _addTimeRangeEntry(_schedule, weekday),
+            onRemove: (index) => _removeEntry(_schedule, weekday, index),
             onStepDuration: (index, delta) =>
-                _stepDurationEntry(weekday, index, delta),
-            onEditRangeStart: (index) => _editRangeStart(weekday, index),
-            onEditRangeEnd: (index) => _editRangeEnd(weekday, index),
+                _stepDurationEntry(_schedule, weekday, index, delta),
+            onEditRangeStart: (index) =>
+                _editRangeStart(_schedule, weekday, index),
+            onEditRangeEnd: (index) => _editRangeEnd(_schedule, weekday, index),
           ),
         const SizedBox(height: AppSpacing.s1),
         Row(
@@ -498,6 +617,57 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
             Text('WEEKLY TOTAL', style: AppTextStyles.kicker()),
             Text(
               formatDuration(_weeklyTotal),
+              style: AppTextStyles.mono(color: AppColors.text),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildByDateSchedule() {
+    final dates = _scheduleByDate.keys.toList()..sort();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _Label('Daily targets'),
+        const SizedBox(height: AppSpacing.s1),
+        Text(
+          'each day from start to end gets its own targets — mix any '
+          'number of plain durations and time ranges, same as the '
+          'weekly schedule',
+          style: AppTextStyles.mono(),
+        ),
+        const SizedBox(height: AppSpacing.s2),
+        for (var i = 0; i < dates.length; i++)
+          _DayScheduleSection(
+            // "Day 1 — Mon 7 Sep": the day-of-challenge number first,
+            // since that's what actually orients you scrolling through
+            // what could be dozens of these, the real date second.
+            label:
+                'Day ${i + 1} — ${DateFormat('EEE d MMM').format(dates[i])}',
+            entries: _scheduleByDate[dates[i]] ?? const [],
+            total: _dayTotal(_scheduleByDate, dates[i]),
+            onAddDuration: () => _addDurationEntry(_scheduleByDate, dates[i]),
+            onAddTimeRange: () =>
+                _addTimeRangeEntry(_scheduleByDate, dates[i]),
+            onRemove: (index) =>
+                _removeEntry(_scheduleByDate, dates[i], index),
+            onStepDuration: (index, delta) =>
+                _stepDurationEntry(_scheduleByDate, dates[i], index, delta),
+            onEditRangeStart: (index) =>
+                _editRangeStart(_scheduleByDate, dates[i], index),
+            onEditRangeEnd: (index) =>
+                _editRangeEnd(_scheduleByDate, dates[i], index),
+          ),
+        const SizedBox(height: AppSpacing.s1),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('TOTAL', style: AppTextStyles.kicker()),
+            Text(
+              formatDuration(_byDateTotal),
               style: AppTextStyles.mono(color: AppColors.text),
             ),
           ],
@@ -853,6 +1023,48 @@ class _Label extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 5),
       child: Text(text.toUpperCase(), style: AppTextStyles.kicker()),
+    );
+  }
+}
+
+/// One of the two schedule-type options ("Repeats every week" / "Set each
+/// day") — full-width (meant to sit inside an [Expanded] alongside its
+/// other option) rather than hugging its own text like [_ReminderChip],
+/// since exactly one of two choices reads more clearly as two matched
+/// halves than as two differently-sized chips.
+class _ScheduleModeOption extends StatelessWidget {
+  const _ScheduleModeOption({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 44),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s2),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.accent : null,
+          border: selected ? null : Border.all(color: AppColors.ink(0.3)),
+          borderRadius: AppShapes.small,
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: AppTextStyles.mono(
+            color: selected ? AppColors.bg : AppColors.accent,
+          ),
+        ),
+      ),
     );
   }
 }
