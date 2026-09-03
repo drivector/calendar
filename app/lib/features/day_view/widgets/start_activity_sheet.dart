@@ -48,7 +48,7 @@ class _StartActivitySheetState extends ConsumerState<StartActivitySheet> {
     super.dispose();
   }
 
-  void _start() {
+  Future<void> _start() async {
     final goalId = _goalId;
     if (goalId == null) {
       setState(() => _errorMessage = 'Pick a goal before starting');
@@ -60,12 +60,25 @@ class _StartActivitySheetState extends ConsumerState<StartActivitySheet> {
     final title = _titleController.text.trim().isEmpty
         ? goal.name
         : _titleController.text.trim();
-    startActivity(
-      widget.ref,
-      goalId: goal.id,
-      categoryId: goal.categoryId,
-      title: title,
-    );
+    try {
+      await startActivity(
+        widget.ref,
+        goalId: goal.id,
+        categoryId: goal.categoryId,
+        title: title,
+      );
+    } catch (_) {
+      // A write that silently fails (e.g. a permission-denied from
+      // Firestore rules not covering this collection — a real bug this
+      // exact feature shipped with once) used to leave the sheet closing
+      // as if it worked, with nothing ever actually running. Surface it
+      // instead, matching how the Account tracking-window save already
+      // handles the same class of failure.
+      if (!mounted) return;
+      setState(() => _errorMessage = 'Could not start — try again');
+      return;
+    }
+    if (!mounted) return;
     Navigator.of(context).pop();
   }
 

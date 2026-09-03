@@ -90,5 +90,20 @@ service cloud.firestore {
       allow create, update: if isOwner(uid) && request.resource.data is map;
       allow delete: if isOwner(uid);
     }
+
+    // Per-user singleton state docs that aren't "settings" — currently just
+    // 'runningActivity' (see running_activity_providers.dart), the
+    // in-progress live-activity run persisted here so it survives an app
+    // relaunch. Same permissive-map shape as the settings collection above,
+    // for the same reason. Missing this rule was a real gap: the doc write
+    // (and the read stream watching it) failed with a silent
+    // permission-denied, so starting an activity looked like it did
+    // nothing at all — the same class of bug the settings collection above
+    // already hit once.
+    match /users/{uid}/state/{docId} {
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid) && request.resource.data is map;
+      allow delete: if isOwner(uid);
+    }
   }
 }
