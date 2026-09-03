@@ -11,6 +11,7 @@ import '../../../theme/app_shapes.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../log_activity/widgets/log_activity_sheet.dart';
+import 'live_activity_button.dart';
 
 class DayHeaderBar extends ConsumerWidget {
   const DayHeaderBar({super.key});
@@ -109,6 +110,8 @@ class DayHeaderBar extends ConsumerWidget {
               onTap: () => ref.read(dayViewFullDayProvider.notifier).state =
                   !ref.read(dayViewFullDayProvider),
             ),
+            const SizedBox(width: AppSpacing.s2),
+            const LiveActivityButton(),
             const SizedBox(width: AppSpacing.s2),
             GestureDetector(
               onTap: () => showLogActivitySheet(context, ref),
