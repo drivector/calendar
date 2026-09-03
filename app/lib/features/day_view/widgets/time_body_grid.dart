@@ -71,12 +71,10 @@ class TimeBodyGrid extends ConsumerStatefulWidget {
 
 /// 72px/hour — dense enough to fit a full day on screen with modest
 /// scrolling, generous enough that a 30-minute block still reads clearly.
-const _pxPerMinute = 1.2;
-const _hourHeight = 60 * _pxPerMinute;
-// One hour past midnight, not a bare 24 — scrolling all the way down still
-// leaves a full hour of the next day visible instead of stopping dead at
-// the 00 line.
-const _dayHeight = 25 * _hourHeight;
+/// Used as-is in the normal scrollable mode; in full-day mode (see
+/// [dayViewFullDayProvider]) the scale shrinks instead to fit the whole 24
+/// hours in the available height with no scrolling at all.
+const _defaultPxPerMinute = 1.2;
 
 class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
   late final ScrollController _scrollController;
@@ -98,20 +96,36 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
   // Anchored to the user's configured default open hour (Account >
   // Details, defaults to 18:00) — the same anchor in every view mode, so
   // entering the Calendar tab (or changing date/mode) always lands there
-  // rather than wherever the day's own first event happens to be.
+  // rather than wherever the day's own first event happens to be. Only
+  // meaningful in the normal scrollable mode — full-day mode never
+  // scrolls, so this value is simply unused there.
   double get _initialScrollOffset =>
-      ref.read(userSettingsProvider).defaultOpenHour * 60 * _pxPerMinute;
+      ref.read(userSettingsProvider).defaultOpenHour * 60 * _defaultPxPerMinute;
 
-  // Always logs an actual entry — with Plan and Actual sharing one slot
-  // now, there's no separate Plan-only region left to tap for a manual
-  // planned block; planned blocks come from a goal's own schedule instead.
-  void _handleEmptySpaceTap(TapUpDetails details, DateTime date) {
-    final minutes = (details.localPosition.dy / _pxPerMinute).round();
+  // Logs an actual entry for a past or ongoing slot — with Plan and Actual
+  // sharing one slot, there's no separate Plan-only region to tap for a
+  // manual planned block otherwise. A tap on a slot that hasn't happened
+  // yet opens as a plan instead: logging something as already done before
+  // it's even occurred doesn't make sense, and it saves a trip to a goal's
+  // schedule just to pencil in a one-off future activity.
+  void _handleEmptySpaceTap(
+    TapUpDetails details,
+    DateTime date,
+    double pxPerMinute,
+  ) {
+    final minutes = (details.localPosition.dy / pxPerMinute).round();
     final rounded = ((minutes / 15).round() * 15).clamp(0, 24 * 60 - 30);
+    final tappedTime = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      rounded ~/ 60,
+      rounded % 60,
+    );
     showAddBlockSheet(
       context,
       ref,
-      isPlan: false,
+      isPlan: tappedTime.isAfter(DateTime.now()),
       date: date,
       initialStart: TimeOfDay(hour: rounded ~/ 60, minute: rounded % 60),
     );
@@ -133,11 +147,19 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
       if (previous?.defaultOpenHour == next.defaultOpenHour) return;
       _jumpToInitialOffset();
     });
+    // Switching back out of full-day mode leaves the scroll position
+    // wherever it happened to be while full-day (usually 0, since nothing
+    // scrolls there) — re-center on the default hour like a fresh entry.
+    ref.listen<bool>(dayViewFullDayProvider, (previous, next) {
+      if (previous == next || next) return;
+      _jumpToInitialOffset();
+    });
 
     final dates = ref.watch(visibleDatesProvider);
     final dayBlocks = ref.watch(visibleDayBlocksProvider);
     final categories = ref.watch(categoriesProvider);
     final goals = ref.watch(goalsProvider);
+    final fullDay = ref.watch(dayViewFullDayProvider);
 
     return DateSwipeNav(
       onPrevious: () => stepDayViewWindow(ref, forward: false),
@@ -145,16 +167,39 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final layouts = columnLayoutsFor(constraints.maxWidth, dates.length);
+          // 25 hours fill the available height either way — one hour past
+          // midnight, so a full-day glance (no scrolling) and the normal
+          // scrollable mode both leave a sliver of the next day visible
+          // instead of stopping dead at the 00 line. Full day just shrinks
+          // the scale to fit those 25 hours in the available height instead
+          // of using the fixed per-minute scale.
+          final pxPerMinute = fullDay
+              ? constraints.maxHeight / (25 * 60)
+              : _defaultPxPerMinute;
+          final dayHeight = fullDay
+              ? constraints.maxHeight
+              : 25 * 60 * pxPerMinute;
 
           return SingleChildScrollView(
             controller: _scrollController,
+            physics: fullDay ? const NeverScrollableScrollPhysics() : null,
             child: SizedBox(
-              height: _dayHeight,
+              height: dayHeight,
               width: double.infinity,
               child: Stack(
                 children: [
-                  for (var hour = 0; hour <= 24; hour++)
-                    _HourGridLine(hour: hour, gutterWidth: kGutterWidth),
+                  // Full day draws all the way through the "01" line, so
+                  // the sliver of the next day it leaves visible actually
+                  // reads as one — the normal scrollable mode leaves the
+                  // same sliver of room below "00" but without a label on
+                  // it, since it's reached by scrolling rather than seen
+                  // all at once.
+                  for (var hour = 0; hour <= (fullDay ? 25 : 24); hour++)
+                    _HourGridLine(
+                      hour: hour,
+                      gutterWidth: kGutterWidth,
+                      hourHeight: 60 * pxPerMinute,
+                    ),
                   // A hairline between adjacent day-columns — only when
                   // there's more than one to tell apart (3 Day/Working
                   // week/Week); Day mode has just the one column, nothing
@@ -165,7 +210,7 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
                         left: layouts[i].left,
                         top: 0,
                         width: 1,
-                        height: _dayHeight,
+                        height: dayHeight,
                         child: IgnorePointer(
                           child: ColoredBox(color: AppColors.divider),
                         ),
@@ -178,11 +223,11 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
                       left: layouts[i].left,
                       top: 0,
                       width: layouts[i].width,
-                      height: _dayHeight,
+                      height: dayHeight,
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTapUp: (details) =>
-                            _handleEmptySpaceTap(details, dates[i]),
+                            _handleEmptySpaceTap(details, dates[i], pxPerMinute),
                         child: const SizedBox.expand(),
                       ),
                     ),
@@ -195,6 +240,7 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
                         end: block.end,
                         left: layouts[i].left,
                         width: layouts[i].width,
+                        pxPerMinute: pxPerMinute,
                         // Opens the same add-actual sheet an empty-space
                         // tap does, prefilled from the plan itself (time,
                         // title, goal) — logging what was already planned
@@ -238,6 +284,7 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
                         // disappearing underneath.
                         left: layouts[i].left + layouts[i].width * _actualBlockInset,
                         width: layouts[i].width * (1 - _actualBlockInset),
+                        pxPerMinute: pxPerMinute,
                         childBuilder: (labelStyle) => ActualBlockWidget(
                           block: block,
                           category: resolveCategory(
@@ -279,28 +326,26 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
   // matched when they didn't.
   static const _twoLineMinHeight = 52.0;
 
-  // 28px — the least a single compact line can fit in without clipping.
-  // Below this, there's no room for a label at all — see
-  // [BlockLabelStyle.hidden].
-  static const _oneLineMinHeight = 28.0;
-
   Positioned _timedPositioned({
     required DateTime start,
     required DateTime end,
     required double left,
     required double width,
+    required double pxPerMinute,
     required Widget Function(BlockLabelStyle labelStyle) childBuilder,
   }) {
     final startMinute = start.hour * 60 + start.minute;
     final durationMinutes = end.difference(start).inMinutes;
-    final height = durationMinutes * _pxPerMinute;
+    final height = durationMinutes * pxPerMinute;
+    // Compact always renders below the two-line floor, even on a block
+    // shorter than one text line — its label overflows past the block's
+    // own tiny box rather than going missing (see BlockLabelStyle's own
+    // doc comment).
     final labelStyle = height >= _twoLineMinHeight
         ? BlockLabelStyle.full
-        : height >= _oneLineMinHeight
-        ? BlockLabelStyle.compact
-        : BlockLabelStyle.hidden;
+        : BlockLabelStyle.compact;
     return Positioned(
-      top: startMinute * _pxPerMinute,
+      top: startMinute * pxPerMinute,
       left: left,
       width: width,
       height: height,
@@ -313,15 +358,20 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
 }
 
 class _HourGridLine extends StatelessWidget {
-  const _HourGridLine({required this.hour, required this.gutterWidth});
+  const _HourGridLine({
+    required this.hour,
+    required this.gutterWidth,
+    required this.hourHeight,
+  });
 
   final int hour;
   final double gutterWidth;
+  final double hourHeight;
 
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      top: hour * _hourHeight,
+      top: hour * hourHeight,
       left: 0,
       right: 0,
       child: IgnorePointer(

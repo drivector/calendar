@@ -54,7 +54,7 @@ class ActualBlockWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final durationLabel = formatDuration(block.duration);
-    Widget? label;
+    Widget label;
     switch (labelStyle) {
       case BlockLabelStyle.full:
         label = Column(
@@ -80,16 +80,21 @@ class ActualBlockWidget extends StatelessWidget {
           ],
         );
       case BlockLabelStyle.compact:
-        label = Text(
-          '$durationLabel · ${block.title}',
-          style: AppTextStyles.mono(),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+        // Deliberately not clipped to the block's own (possibly much
+        // shorter) height — see BlockLabelStyle.compact's own doc comment.
+        // OverflowBox lets this one line spill past a tiny block's real
+        // bounds rather than the label going missing.
+        label = OverflowBox(
+          minHeight: 0,
+          maxHeight: double.infinity,
+          alignment: Alignment.topLeft,
+          child: Text(
+            '$durationLabel · ${block.title}',
+            style: AppTextStyles.mono(),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
         );
-      case BlockLabelStyle.hidden:
-        // Too short for even one line — a plain colored bar, no text,
-        // rather than clipped, illegible characters.
-        label = null;
     }
     final content = Container(
       alignment: labelStyle == BlockLabelStyle.full
@@ -100,9 +105,7 @@ class ActualBlockWidget extends StatelessWidget {
         border: Border(left: BorderSide(color: category.color, width: 3)),
         borderRadius: AppShapes.small,
       ),
-      padding: label == null
-          ? EdgeInsets.zero
-          : const EdgeInsets.all(AppSpacing.s1),
+      padding: const EdgeInsets.all(AppSpacing.s1),
       // maxLines/ellipsis throughout — a narrow multi-day column (Working
       // week/Week mode) is narrow enough that unbounded text would wrap
       // onto more lines than the block's own height fits, overflowing it.

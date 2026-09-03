@@ -56,8 +56,10 @@ class DriftFooter extends ConsumerWidget {
               style: AppTextStyles.kicker(),
             ),
             const SizedBox(height: AppSpacing.s1),
+            // Only goals still short of their plan are "drift" — one that's
+            // met or exceeded it is fine, not something to flag here.
             for (final entry in drift)
-              if (entry.delta.inMinutes != 0)
+              if (entry.delta.inMinutes < 0)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 2),
                   child: Row(

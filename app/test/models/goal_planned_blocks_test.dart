@@ -174,6 +174,41 @@ void main() {
       expect(blocks[1].end, DateTime(2026, 8, 20, 18, 0));
     });
 
+    test(
+      'an overnight entry (end earlier in the day than start) rolls its '
+      'end into the next calendar day, instead of a negative duration',
+      () {
+        final walking = Goal(
+          id: 'goal-walking',
+          name: 'Walking',
+          categoryId: 'walking',
+          startDate: _ongoingStart,
+          endDate: _ongoingEnd,
+          scheduleByWeekday: {
+            DateTime.friday: [
+              const DayScheduleEntry.timeRange(
+                ClockRange(ClockTime(23, 0), ClockTime(0, 10)),
+              ),
+            ],
+          },
+        );
+
+        final blocks = generateGoalPlannedBlocksForDate(
+          goals: [walking],
+          date: DateTime(2026, 9, 4), // a Friday
+        );
+
+        expect(blocks, hasLength(1));
+        expect(blocks.single.start, DateTime(2026, 9, 4, 23, 0));
+        // Not DateTime(2026, 9, 4, 0, 10) — that would be *before* start,
+        // producing a negative Duration once end.difference(start) runs
+        // (the exact bug: it read as +22h50m of unplanned-but-"tracked"
+        // drift for a goal nothing was ever logged against).
+        expect(blocks.single.end, DateTime(2026, 9, 5, 0, 10));
+        expect(blocks.single.duration, const Duration(hours: 1, minutes: 10));
+      },
+    );
+
     test('a day mixing a time range and extra duration only generates a block for the time range', () {
       final work = Goal(
         id: 'goal-work',

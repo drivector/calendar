@@ -104,6 +104,12 @@ class DayHeaderBar extends ConsumerWidget {
                   ref.read(dayViewModeProvider.notifier).state = value,
             ),
             const SizedBox(width: AppSpacing.s2),
+            _FullDayToggle(
+              active: ref.watch(dayViewFullDayProvider),
+              onTap: () => ref.read(dayViewFullDayProvider.notifier).state =
+                  !ref.read(dayViewFullDayProvider),
+            ),
+            const SizedBox(width: AppSpacing.s2),
             GestureDetector(
               onTap: () => showLogActivitySheet(context, ref),
               behavior: HitTestBehavior.opaque,
@@ -125,6 +131,43 @@ class DayHeaderBar extends ConsumerWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Toggles [dayViewFullDayProvider] — compressing the whole 24 hours into
+/// the visible height (no scrolling) versus the normal fixed-scale,
+/// scrollable timeline. Bordered, not filled — "+ Log" is already this
+/// screen's one filled accent button.
+class _FullDayToggle extends StatelessWidget {
+  const _FullDayToggle({required this.active, required this.onTap});
+
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 32, minWidth: 32),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s2),
+        decoration: BoxDecoration(
+          color: active ? AppColors.accent100 : AppColors.surface,
+          border: Border.all(
+            color: active ? AppColors.accent : AppColors.neutral500,
+          ),
+          borderRadius: AppShapes.small,
+        ),
+        child: Text(
+          '24h',
+          style: AppTextStyles.small(
+            color: active ? AppColors.accent : AppColors.text,
+          ),
         ),
       ),
     );

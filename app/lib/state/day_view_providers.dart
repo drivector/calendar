@@ -31,6 +31,12 @@ final dayViewModeProvider = StateProvider<DayViewMode>(
   (ref) => DayViewMode.day,
 );
 
+/// Whether the timeline compresses the full 24 hours to fit the screen at
+/// once (no scrolling) instead of the normal fixed-height, scrollable
+/// timeline. Off by default — the fixed scale reads more clearly for a
+/// normal day; this is for glancing at the whole day's shape at once.
+final dayViewFullDayProvider = StateProvider<bool>((ref) => false);
+
 /// The dates the timeline currently shows, one per column — "3 Day" starts
 /// at whatever day is selected; "Working week"/"Week" always anchor to the
 /// Monday of the selected day's week (so which weekday within the week is

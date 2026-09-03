@@ -34,7 +34,6 @@ Future<void> showDayPreviewSheet(
 
 const double _pxPerMinute = 0.4;
 const double _twoLineMinHeight = 52;
-const double _oneLineMinHeight = 28;
 const double _gutterWidth = 34;
 
 class _DayPreviewDialog extends StatelessWidget {
@@ -190,9 +189,7 @@ class _DayPreviewDialog extends StatelessWidget {
     final height = durationMinutes * _pxPerMinute;
     final labelStyle = height >= _twoLineMinHeight
         ? BlockLabelStyle.full
-        : height >= _oneLineMinHeight
-        ? BlockLabelStyle.compact
-        : BlockLabelStyle.hidden;
+        : BlockLabelStyle.compact;
 
     return Positioned(
       top: startMinute * _pxPerMinute,

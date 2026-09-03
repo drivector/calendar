@@ -1,3 +1,4 @@
+import 'clock_time.dart';
 import 'goal.dart';
 import 'planned_block.dart';
 
@@ -40,13 +41,21 @@ List<PlannedBlock> generateGoalPlannedBlocksForDate({
         range.start.hour,
         range.start.minute,
       );
+      // A genuinely overnight entry (e.g. a night-shift goal scheduled
+      // 22:00–06:00) has its end time roll into the next calendar day —
+      // GoalEditSheet's own overnight-confirmation prompt is what lets one
+      // be saved deliberately, so this has to honor the same wrap-around
+      // semantics ClockTime.difference already uses, or the resulting
+      // block ends up with a negative duration (end time earlier in the
+      // day than start) instead of the real elapsed time.
+      final overnight = isOvernightRange(range.start, range.end);
       final end = DateTime(
         day.year,
         day.month,
         day.day,
         range.end.hour,
         range.end.minute,
-      );
+      ).add(overnight ? const Duration(days: 1) : Duration.zero);
       generated.add(
         PlannedBlock(
           id: 'goal-${goal.id}-$dateId-$index',

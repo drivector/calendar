@@ -205,11 +205,6 @@ class _AddBlockSheetState extends State<_AddBlockSheet> {
   }
 
   void _save() {
-    final title = _titleController.text.trim();
-    if (title.isEmpty) {
-      setState(() => _errorMessage = 'Enter an activity name before saving');
-      return;
-    }
     final goalId = _goalId;
     if (goalId == null) {
       setState(() => _errorMessage = 'Set a goal before saving');
@@ -238,6 +233,11 @@ class _AddBlockSheetState extends State<_AddBlockSheet> {
 
     final goals = widget.ref.read(goalsProvider);
     final goal = goals.firstWhere((g) => g.id == goalId);
+    // An activity name is optional, same as Log Activity — a blank one
+    // just falls back to the goal's own name rather than blocking the
+    // save, since the goal already says what this is.
+    final typedTitle = _titleController.text.trim();
+    final title = typedTitle.isEmpty ? goal.name : typedTitle;
     final id =
         '${widget.isPlan ? 'plan' : 'actual'}-${DateTime.now().microsecondsSinceEpoch}';
 
