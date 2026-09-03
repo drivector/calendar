@@ -6,6 +6,7 @@ import '../../../theme/app_colors.dart';
 import '../../../theme/app_shapes.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../theme/app_text_styles.dart';
+import '../../../utils/duration_format.dart';
 import 'start_activity_sheet.dart';
 
 /// "▶ Start" when nothing's running; once something is, becomes a single
@@ -22,6 +23,12 @@ class LiveActivityButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final running = ref.watch(runningActivityProvider);
+    // Forces this widget to rebuild once a second while something's
+    // running — see liveActivityTickProvider's own doc comment. Nothing
+    // reads its value; it exists purely to make `elapsed` below actually
+    // count up instead of only updating whenever something unrelated
+    // happens to rebuild this widget.
+    ref.watch(liveActivityTickProvider);
     if (running == null) {
       return GestureDetector(
         onTap: () => showStartActivitySheet(context, ref),
@@ -40,14 +47,10 @@ class LiveActivityButton extends ConsumerWidget {
       );
     }
 
-    // No self-driven per-second ticker on purpose — a repeating Timer/
-    // Stream tied to a widget shown on every screen would fire for as long
-    // as something is running, which is exactly the kind of timer
-    // flutter_test's `pumpAndSettle` (used throughout this app's test
-    // suite) can never settle around. Elapsed is instead computed fresh at
-    // whatever moment this widget happens to rebuild (a Firestore change,
-    // navigating tabs, ...) — not literally live to the second, but never
-    // stale by more than that, and with no risk of a runaway timer.
+    // Recomputed fresh every rebuild — the liveActivityTickProvider watch
+    // above is what makes that happen once a second while running, rather
+    // than only whenever something unrelated (a Firestore change,
+    // navigating tabs, ...) happens to rebuild this widget.
     final elapsed = DateTime.now().difference(running.startedAt);
 
     return GestureDetector(
@@ -62,23 +65,10 @@ class LiveActivityButton extends ConsumerWidget {
           borderRadius: AppShapes.small,
         ),
         child: Text(
-          '■ ${_formatElapsed(elapsed)} Stop',
+          '■ ${formatElapsedClock(elapsed)} Stop',
           style: AppTextStyles.small(color: AppColors.surface),
         ),
       ),
     );
   }
-}
-
-/// "12:34" (mm:ss) below an hour, "1:02:34" (h:mm:ss) once it runs long —
-/// a live stopwatch reads seconds, unlike this app's usual "1h 45m" format
-/// for a completed duration.
-String _formatElapsed(Duration elapsed) {
-  final totalSeconds = elapsed.inSeconds.abs();
-  final hours = totalSeconds ~/ 3600;
-  final minutes = (totalSeconds % 3600) ~/ 60;
-  final seconds = totalSeconds % 60;
-  final mm = minutes.toString().padLeft(2, '0');
-  final ss = seconds.toString().padLeft(2, '0');
-  return hours > 0 ? '$hours:$mm:$ss' : '$mm:$ss';
 }

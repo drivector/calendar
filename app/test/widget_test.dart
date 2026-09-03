@@ -15,6 +15,7 @@ import 'package:calendar_tracker/features/day_view/widgets/actual_block_widget.d
 import 'package:calendar_tracker/features/day_view/widgets/day_header_bar.dart';
 import 'package:calendar_tracker/features/day_view/widgets/legend_row.dart';
 import 'package:calendar_tracker/features/day_view/widgets/live_activity_button.dart';
+import 'package:calendar_tracker/features/day_view/widgets/live_activity_running_block.dart';
 import 'package:calendar_tracker/features/day_view/widgets/start_activity_sheet.dart';
 import 'package:calendar_tracker/features/day_view/widgets/plan_block_widget.dart';
 import 'package:calendar_tracker/features/day_view/widgets/time_body_grid.dart';
@@ -4787,6 +4788,85 @@ void main() {
       expect(running.title, 'Walking');
       expect(find.textContaining('Stop'), findsOneWidget);
       expect(find.text('▶ Start'), findsNothing);
+
+      // Stop the run before the test ends — liveActivityTickProvider's own
+      // once-a-second timer stays alive for as long as something's
+      // running, and flutter_test asserts no timer is still pending once
+      // the widget tree is disposed at teardown.
+      await tester.tap(find.byType(LiveActivityButton));
+      await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets(
+    "Live activity: the run itself shows up on today's calendar grid while "
+    "it's still going, sized to its own real elapsed duration, and tapping "
+    'it stops the run same as the header pill does',
+    (WidgetTester tester) async {
+      final container = ProviderContainer(
+        overrides: [
+          ...await _signedInOverrides(),
+          // _signedInOverrides pins the Day view to the fixture's own
+          // mock day (20 Aug 2026) — a run "started just now" needs
+          // today actually on screen to show up at all.
+          selectedDateProvider.overrideWith((ref) => DateTime.now()),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Nothing to show yet — findsNothing rather than an error, since the
+      // widget simply isn't built at all while nothing's running.
+      expect(find.byType(LiveActivityRunningBlock), findsNothing);
+
+      Future<void> startedMinutesAgo(int minutes) =>
+          container.read(runningActivityDocProvider).set(
+            RunningActivity(
+              startedAt: DateTime.now().subtract(Duration(minutes: minutes)),
+              goalId: 'goal-walking',
+              categoryId: walkingCategoryId,
+              title: 'Walking',
+            ).toMap(),
+          );
+
+      await startedMinutesAgo(2);
+      await tester.pumpAndSettle();
+
+      final block = find.byType(LiveActivityRunningBlock);
+      expect(block, findsOneWidget);
+      final shortHeight = tester
+          .widget<Positioned>(
+            find.ancestor(of: block, matching: find.byType(Positioned)).first,
+          )
+          .height!;
+
+      // A run that's been going five times as long renders taller, in
+      // real proportion to its own elapsed duration — not frozen at some
+      // fixed placeholder size regardless of how long it's actually run
+      // (DateTime.now() isn't virtualized by flutter_test, so this checks
+      // two known elapsed durations rather than trying to simulate real
+      // time passing mid-test).
+      await startedMinutesAgo(10);
+      await tester.pumpAndSettle();
+      final longHeight = tester
+          .widget<Positioned>(
+            find.ancestor(of: block, matching: find.byType(Positioned)).first,
+          )
+          .height!;
+      expect(longHeight, greaterThan(shortHeight));
+
+      await tester.tap(block);
+      await tester.pumpAndSettle();
+
+      expect(container.read(runningActivityProvider), isNull);
+      expect(find.byType(LiveActivityRunningBlock), findsNothing);
     },
   );
 

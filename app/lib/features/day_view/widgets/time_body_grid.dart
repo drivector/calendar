@@ -8,12 +8,14 @@ import '../../../shared/widgets/date_swipe_nav.dart';
 import '../../../state/categories_providers.dart';
 import '../../../state/day_view_providers.dart';
 import '../../../state/goals_providers.dart';
+import '../../../state/running_activity_providers.dart';
 import '../../../state/user_settings_providers.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import 'actual_block_widget.dart';
 import 'add_block_sheet.dart';
 import 'block_label_style.dart';
+import 'live_activity_running_block.dart';
 import 'plan_block_widget.dart';
 
 /// Left gutter reserved for the hour labels ("06", "07", ...).
@@ -24,6 +26,17 @@ const kGutterWidth = 38.0;
 /// the full column, so this sliver is what keeps a planned block visible
 /// (not fully covered) when an actual block overlaps it in time.
 const _actualBlockInset = 0.1;
+
+/// The live activity block's own end — "now", unless the run has somehow
+/// crossed into the next day, in which case it's clamped to [date]'s own
+/// midnight so the block never overflows past the bottom of its own
+/// day-column (a run that's still going the next morning shows up fresh
+/// on that day's own column instead, once it's viewed).
+DateTime _clampToDayEnd(DateTime date) {
+  final now = DateTime.now();
+  final dayEnd = DateTime(date.year, date.month, date.day + 1);
+  return now.isBefore(dayEnd) ? now : dayEnd;
+}
 
 /// One day-column's horizontal slot within the timeline — shared by
 /// [TimeBodyGrid] and the per-column date-label header above it so the two
@@ -161,6 +174,13 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
     final goals = ref.watch(goalsProvider);
     final fullDay = ref.watch(dayViewFullDayProvider);
     final blockFilter = ref.watch(dayViewBlockFilterProvider);
+    final running = ref.watch(runningActivityProvider);
+    // Forces this whole grid to rebuild once a second while something's
+    // running, so the live block below actually grows over time instead
+    // of freezing at whatever height it had when this widget first built
+    // — see liveActivityTickProvider's own doc comment. A no-op (no
+    // rebuilds at all) whenever nothing is running.
+    ref.watch(liveActivityTickProvider);
 
     return DateSwipeNav(
       onPrevious: () => stepDayViewWindow(ref, forward: false),
@@ -310,6 +330,31 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
                             labelStyle: labelStyle,
                           ),
                         ),
+                    // The in-progress activity itself, drawn live on
+                    // whichever day column it started on — see
+                    // LiveActivityRunningBlock's own doc comment. Same
+                    // filter gating as the tracked blocks above: it's a
+                    // real in-progress "actual", just not registered yet.
+                    if (blockFilter != DayViewBlockFilter.plannedOnly &&
+                        running != null &&
+                        isSameDay(running.startedAt, dates[i]))
+                      _timedPositioned(
+                        start: running.startedAt,
+                        end: _clampToDayEnd(dates[i]),
+                        left:
+                            layouts[i].left +
+                            layouts[i].width * _actualBlockInset,
+                        width: layouts[i].width * (1 - _actualBlockInset),
+                        pxPerMinute: pxPerMinute,
+                        childBuilder: (labelStyle) => LiveActivityRunningBlock(
+                          running: running,
+                          category: resolveCategory(
+                            categories,
+                            running.categoryId,
+                          ),
+                          labelStyle: labelStyle,
+                        ),
+                      ),
                   ],
                 ],
               ),

@@ -35,6 +35,19 @@ final runningActivityProvider = Provider<RunningActivity?>((ref) {
   return ref.watch(runningActivityStreamProvider).valueOrNull;
 });
 
+/// Ticks once a second while — and only while — something is actually
+/// running, so anything showing a live activity's elapsed time or its
+/// growing extent on the calendar (see [ActualBlockWidget]'s live
+/// counterpart) rebuilds on its own instead of only whenever something
+/// else happens to trigger a rebuild. Watching [runningActivityProvider]
+/// to gate the stream means this is a genuinely dead timer — not just an
+/// unused one — the instant nothing is running, rather than a ticker that
+/// keeps firing in the background regardless.
+final liveActivityTickProvider = StreamProvider<void>((ref) {
+  if (ref.watch(runningActivityProvider) == null) return const Stream.empty();
+  return Stream<void>.periodic(const Duration(seconds: 1), (_) {});
+});
+
 Future<void> startActivity(
   WidgetRef ref, {
   required String goalId,
