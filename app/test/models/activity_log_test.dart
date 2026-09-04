@@ -12,7 +12,7 @@ TrackedBlock _block({
   start: start,
   end: start.add(Duration(minutes: minutes)),
   title: id,
-  categoryId: 'walking',
+  goalId: 'goal-walking',
   sourceId: 'manual',
 );
 

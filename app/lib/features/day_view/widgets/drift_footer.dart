@@ -13,14 +13,13 @@ import '../../../theme/app_spacing.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../utils/duration_format.dart';
 
-/// The goal's own name when [entry] resolved to one, lowercased to match
-/// this footer's own style; otherwise the category's name, for the rare
-/// row backed by no goal at all (e.g. its goal was since deleted).
+/// The goal's own name, lowercased to match this footer's own style —
+/// every [GoalDrift] entry now resolves to a real goal (see
+/// `computeDrift`'s own doc comment), so this falls back to the category's
+/// name only if that goal has since gone missing from [goals] entirely.
 String _driftLabel(List<Goal> goals, List<Category> categories, GoalDrift entry) {
-  if (entry.goalId != null) {
-    for (final goal in goals) {
-      if (goal.id == entry.goalId) return goal.name.toLowerCase();
-    }
+  for (final goal in goals) {
+    if (goal.id == entry.goalId) return goal.name.toLowerCase();
   }
   return resolveCategory(categories, entry.categoryId).name.toLowerCase();
 }

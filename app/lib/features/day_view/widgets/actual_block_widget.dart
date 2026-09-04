@@ -146,7 +146,7 @@ class _DetailDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final goal = goalForCategory(ref.read(goalsProvider), block.categoryId);
+    final goal = goalById(ref.read(goalsProvider), block.goalId);
     return Dialog(
       backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(borderRadius: AppShapes.medium),

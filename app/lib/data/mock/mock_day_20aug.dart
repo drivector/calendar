@@ -1,6 +1,5 @@
 import '../../models/planned_block.dart';
 import '../../models/tracked_block.dart';
-import 'mock_categories.dart';
 
 /// A fixed illustrative day reproducing the reference screenshot
 /// (`screenshots/day-view-3a.png`) — not tied to the session's actual
@@ -21,35 +20,35 @@ final mockPlannedBlocks = <PlannedBlock>[
     start: _at(7, 0),
     end: _at(7, 45),
     title: 'Walk 45 m',
-    categoryId: walkingCategoryId,
+    goalId: 'goal-walking',
   ),
   PlannedBlock(
     id: 'plan-deep-work',
     start: _at(9, 0),
     end: _at(12, 0),
     title: 'Deep work 3 h',
-    categoryId: deepWorkCategoryId,
+    goalId: 'goal-deep-work',
   ),
   PlannedBlock(
     id: 'plan-lunch',
     start: _at(12, 0),
     end: _at(13, 10),
     title: 'Lunch',
-    categoryId: adminCategoryId,
+    goalId: 'goal-admin',
   ),
   PlannedBlock(
     id: 'plan-reviews',
     start: _at(14, 0),
     end: _at(15, 30),
     title: 'Reviews 1 h 30',
-    categoryId: meetingsCategoryId,
+    goalId: 'goal-meetings',
   ),
   PlannedBlock(
     id: 'plan-admin',
     start: _at(17, 0),
     end: _at(17, 30),
     title: 'Admin 30 m',
-    categoryId: adminCategoryId,
+    goalId: 'goal-admin',
   ),
 ];
 
@@ -59,7 +58,7 @@ final mockTrackedBlocks = <TrackedBlock>[
     start: _at(7, 0),
     end: _at(7, 48),
     title: 'Walk 48 m',
-    categoryId: walkingCategoryId,
+    goalId: 'goal-walking',
     sourceId: 'health',
     plannedBlockId: 'plan-walk',
   ),
@@ -68,7 +67,7 @@ final mockTrackedBlocks = <TrackedBlock>[
     start: _at(9, 0),
     end: _at(10, 45),
     title: 'Deep work 1 h 45',
-    categoryId: deepWorkCategoryId,
+    goalId: 'goal-deep-work',
     sourceId: 'jira',
     plannedBlockId: 'plan-deep-work',
   ),
@@ -77,7 +76,7 @@ final mockTrackedBlocks = <TrackedBlock>[
     start: _at(10, 45),
     end: _at(11, 25),
     title: 'Unplanned call 40 m',
-    categoryId: meetingsCategoryId,
+    goalId: 'goal-meetings',
     sourceId: 'calendar',
   ),
   // Nothing tracked over the 12:00–13:10 Lunch plan block — resolves to a
@@ -87,7 +86,7 @@ final mockTrackedBlocks = <TrackedBlock>[
     start: _at(14, 0),
     end: _at(16, 5),
     title: 'Reviews + 1:1 2 h 05',
-    categoryId: meetingsCategoryId,
+    goalId: 'goal-meetings',
     sourceId: 'calendar',
     plannedBlockId: 'plan-reviews',
   ),
@@ -96,7 +95,7 @@ final mockTrackedBlocks = <TrackedBlock>[
     start: _at(17, 0),
     end: _at(17, 40),
     title: 'Admin 40 m',
-    categoryId: adminCategoryId,
+    goalId: 'goal-admin',
     sourceId: 'manual',
     plannedBlockId: 'plan-admin',
   ),

@@ -27,20 +27,18 @@ Goal _goal({String id = 'goal-walking', String categoryId = 'walking'}) => Goal(
 PlannedBlock _plannedBlock({
   required String id,
   required DateTime start,
-  String categoryId = 'walking',
-  String? goalId,
+  String goalId = 'goal-walking',
 }) => PlannedBlock(
   id: id,
   start: start,
   end: start.add(const Duration(minutes: 30)),
   title: 'Walk',
-  categoryId: categoryId,
   goalId: goalId,
 );
 
 void main() {
   group('pendingPlannedBlocksForGoal', () {
-    test('a manual planned block in the goal\'s category and week with no tracked block is pending', () {
+    test('a manual planned block belonging to the goal, in-week, with no tracked block is pending', () {
       final goal = _goal();
       final planned = [
         _plannedBlock(
@@ -78,7 +76,7 @@ void main() {
             start: _weekStart.add(const Duration(hours: 8)),
             end: _weekStart.add(const Duration(hours: 8, minutes: 30)),
             title: 'Walk',
-            categoryId: 'walking',
+            goalId: 'goal-walking',
             sourceId: 'manual',
             plannedBlockId: 'plan-1',
           ),
@@ -165,13 +163,13 @@ void main() {
       expect(pending, isEmpty);
     });
 
-    test('a planned block in a different category is not pending', () {
-      final goal = _goal(categoryId: 'walking');
+    test('a planned block belonging to a different goal is not pending', () {
+      final goal = _goal();
       final planned = [
         _plannedBlock(
           id: 'plan-1',
           start: _weekStart.add(const Duration(hours: 8)),
-          categoryId: 'deep-work',
+          goalId: 'goal-deep-work',
         ),
       ];
 
@@ -244,7 +242,7 @@ void main() {
       expect(block.start, pending.single.start);
       expect(block.end, pending.single.end);
       expect(block.title, pending.single.title);
-      expect(block.categoryId, pending.single.categoryId);
+      expect(block.goalId, pending.single.goalId);
       expect(block.plannedBlockId, 'plan-1');
       expect(block.sourceId, 'auto');
     });

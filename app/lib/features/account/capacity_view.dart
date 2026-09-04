@@ -221,8 +221,12 @@ class _DayCapacityRow extends StatelessWidget {
         windowEnd.isAfter(windowStart);
 
     return GestureDetector(
-      onTap: () =>
-          showDayPreviewSheet(context, day: day, categories: categories),
+      onTap: () => showDayPreviewSheet(
+        context,
+        day: day,
+        categories: categories,
+        goals: goals,
+      ),
       behavior: HitTestBehavior.opaque,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.s1),
@@ -302,8 +306,9 @@ class _TimelineBar extends StatelessWidget {
 
     final timedByCategory = <String, double>{};
     for (final b in blocks) {
+      final blockCategoryId = goalById(goals, b.goalId)?.categoryId ?? '';
       timedByCategory.update(
-        b.categoryId,
+        blockCategoryId,
         (h) => h + b.duration.inMinutes / 60,
         ifAbsent: () => b.duration.inMinutes / 60,
       );
@@ -335,11 +340,12 @@ class _TimelineBar extends StatelessWidget {
       if (gapMinutes > 0) segments.add(hatch(gapMinutes));
 
       final blockMinutes = end.difference(start).inMinutes;
+      final blockCategoryId = goalById(goals, block.goalId)?.categoryId ?? '';
       segments.add(
         colored(
           blockMinutes,
-          resolveCategory(categories, block.categoryId).color,
-          _labelFor(goals, categories, block.categoryId, goalId: block.goalId),
+          resolveCategory(categories, blockCategoryId).color,
+          _labelFor(goals, categories, blockCategoryId, goalId: block.goalId),
         ),
       );
       cursor = end;

@@ -7,26 +7,20 @@ PlannedBlock _planned({
   required String id,
   required DateTime start,
   required DateTime end,
-  String categoryId = 'walking',
-}) => PlannedBlock(
-  id: id,
-  start: start,
-  end: end,
-  title: 'Plan',
-  categoryId: categoryId,
-);
+  String goalId = 'goal-walking',
+}) => PlannedBlock(id: id, start: start, end: end, title: 'Plan', goalId: goalId);
 
 TrackedBlock _tracked({
   required DateTime start,
   required DateTime end,
-  String categoryId = 'walking',
+  String goalId = 'goal-walking',
   String? plannedBlockId,
 }) => TrackedBlock(
   id: 'tracked-1',
   start: start,
   end: end,
   title: 'Actual',
-  categoryId: categoryId,
+  goalId: goalId,
   sourceId: 'manual',
   plannedBlockId: plannedBlockId,
 );
@@ -43,7 +37,7 @@ void main() {
       expect(trackedBlockWasPlanned(tracked, const []), isTrue);
     });
 
-    test('true when a planned block shares the category and overlaps the time range', () {
+    test('true when a planned block shares the goal and overlaps the time range', () {
       final planned = [
         _planned(
           id: 'plan-1',
@@ -59,13 +53,13 @@ void main() {
       expect(trackedBlockWasPlanned(tracked, planned), isTrue);
     });
 
-    test('false when the categories differ, even with identical time ranges', () {
+    test('false when the goals differ, even with identical time ranges', () {
       final planned = [
         _planned(
           id: 'plan-1',
           start: DateTime(2026, 8, 20, 16, 0),
           end: DateTime(2026, 8, 20, 16, 30),
-          categoryId: 'deep-work',
+          goalId: 'goal-deep-work',
         ),
       ];
       final tracked = _tracked(
@@ -76,7 +70,7 @@ void main() {
       expect(trackedBlockWasPlanned(tracked, planned), isFalse);
     });
 
-    test('false when the same-category block does not overlap in time', () {
+    test('false when the same-goal block does not overlap in time', () {
       final planned = [
         _planned(
           id: 'plan-1',
@@ -125,7 +119,7 @@ void main() {
           id: 'plan-other-category',
           start: DateTime(2026, 8, 20, 16, 0),
           end: DateTime(2026, 8, 20, 16, 30),
-          categoryId: 'deep-work',
+          goalId: 'goal-deep-work',
         ),
       ];
       final tracked = _tracked(

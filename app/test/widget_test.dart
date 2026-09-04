@@ -277,7 +277,7 @@ void main() {
           start: DateTime(2026, 8, 20, 16, 0),
           end: DateTime(2026, 8, 20, 16, 30),
           title: 'Test plan',
-          categoryId: walkingCategoryId,
+          goalId: 'goal-walking',
         ),
       );
       await container.read(trackedBlocksRepositoryProvider).upsert(
@@ -286,7 +286,7 @@ void main() {
           start: DateTime(2026, 8, 20, 16, 5),
           end: DateTime(2026, 8, 20, 16, 25),
           title: 'Test actual',
-          categoryId: walkingCategoryId,
+          goalId: 'goal-walking',
           sourceId: 'manual',
         ),
       );
@@ -335,7 +335,7 @@ void main() {
           start: DateTime(2026, 8, 20, 14, 0),
           end: DateTime(2026, 8, 20, 14, 30), // 30m
           title: 'Test plan',
-          categoryId: walkingCategoryId,
+          goalId: 'goal-walking',
         ),
       );
       await container.read(trackedBlocksRepositoryProvider).upsert(
@@ -345,7 +345,7 @@ void main() {
           end: DateTime(2026, 8, 20, 14, 15), // 15m — half the plan's own
           // duration, so its rendered height should be too.
           title: 'Test actual',
-          categoryId: walkingCategoryId,
+          goalId: 'goal-walking',
           sourceId: 'manual',
         ),
       );
@@ -427,7 +427,7 @@ void main() {
           start: DateTime(2026, 8, 19, 23, 0),
           end: DateTime(2026, 8, 20, 1, 30), // 2h30m total
           title: 'Overnight walk',
-          categoryId: walkingCategoryId,
+          goalId: 'goal-walking',
           sourceId: 'manual',
         ),
       );
@@ -516,7 +516,7 @@ void main() {
           start: DateTime(2026, 8, 20, 6, 0),
           end: DateTime(2026, 8, 20, 6, 30),
           title: 'Reference',
-          categoryId: walkingCategoryId,
+          goalId: 'goal-walking',
         ),
       );
       await repo.upsert(
@@ -525,7 +525,7 @@ void main() {
           start: DateTime(2026, 8, 20, 10, 0),
           end: DateTime(2026, 8, 20, 11, 0),
           title: 'Overlap A',
-          categoryId: walkingCategoryId,
+          goalId: 'goal-walking',
         ),
       );
       await repo.upsert(
@@ -534,7 +534,7 @@ void main() {
           start: DateTime(2026, 8, 20, 10, 30),
           end: DateTime(2026, 8, 20, 11, 30),
           title: 'Overlap B',
-          categoryId: deepWorkCategoryId,
+          goalId: 'goal-deep-work',
         ),
       );
       await tester.pumpAndSettle();
@@ -593,7 +593,7 @@ void main() {
           start: DateTime(2026, 8, 20, 10, 0),
           end: DateTime(2026, 8, 20, 11, 0),
           title: 'Walking plan',
-          categoryId: walkingCategoryId,
+          goalId: 'goal-walking',
         ),
       );
       await container.read(plannedBlocksRepositoryProvider).upsert(
@@ -602,7 +602,7 @@ void main() {
           start: DateTime(2026, 8, 20, 10, 15),
           end: DateTime(2026, 8, 20, 10, 45),
           title: 'Deep work plan',
-          categoryId: deepWorkCategoryId,
+          goalId: 'goal-deep-work',
         ),
       );
       await container.read(trackedBlocksRepositoryProvider).upsert(
@@ -611,7 +611,7 @@ void main() {
           start: DateTime(2026, 8, 20, 10, 5),
           end: DateTime(2026, 8, 20, 10, 35),
           title: 'Walking actual',
-          categoryId: walkingCategoryId,
+          goalId: 'goal-walking',
           sourceId: 'manual',
         ),
       );
@@ -1254,7 +1254,7 @@ void main() {
               start: DateTime(2026, 8, 17, 6, 0),
               end: DateTime(2026, 8, 17, 18, 0),
               title: 'Everything',
-              categoryId: walkingCategoryId,
+              goalId: 'goal-walking',
             ),
           );
       await tester.pump();
@@ -1374,7 +1374,7 @@ void main() {
         start: DateTime(2026, 8, 21, 6, 0),
         end: DateTime(2026, 8, 21, 6, 20),
         title: 'Extra walk',
-        categoryId: walkingCategoryId,
+        goalId: 'goal-walking',
       );
       await firestore
           .collection('users')
@@ -1402,10 +1402,23 @@ void main() {
 
       await _tapTab(tester, 'Goals');
 
-      // Only Walking has anything pending — Deep work's planned blocks are
-      // all already covered.
-      final completeButton = find.byWidgetPredicate(
-        (w) => w is CompleteGoalButton,
+      // Scoped to the row containing the Walking goal's own card — the
+      // fixture's Admin and Meetings goals (added so every mock category
+      // has somewhere for its activities to attach a goalId to) also have
+      // their own genuinely unfinished planned blocks, so more than one
+      // CompleteGoalButton is expected on screen; this test only cares
+      // about Walking's own. GoalBlock and CompleteGoalButton are
+      // siblings under the same row, not nested, hence the ancestor Row
+      // scope rather than a descendant search from the GoalBlock itself.
+      final walkingBlock = find.byWidgetPredicate(
+        (w) => w is GoalBlock && w.progress.goal.name == 'Walking',
+      );
+      final walkingRow = find
+          .ancestor(of: walkingBlock, matching: find.byType(Row))
+          .first;
+      final completeButton = find.descendant(
+        of: walkingRow,
+        matching: find.byWidgetPredicate((w) => w is CompleteGoalButton),
       );
       expect(completeButton, findsOneWidget);
 
@@ -1413,9 +1426,12 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      // The gap is filled — nothing left pending anywhere.
+      // The gap is filled — nothing left pending for Walking specifically.
       expect(
-        find.byWidgetPredicate((w) => w is CompleteGoalButton),
+        find.descendant(
+          of: walkingRow,
+          matching: find.byWidgetPredicate((w) => w is CompleteGoalButton),
+        ),
         findsNothing,
       );
       // A tracked block now exists mirroring the planned one — "Extra
@@ -2268,7 +2284,15 @@ void main() {
     await tester.tap(find.text('Delete goal'));
     await tester.pumpAndSettle();
 
+    // Walking has real linked activity in the standard fixture, so this
+    // can't be a hard delete — it deactivates instead, after confirming.
+    expect(find.text('Deactivate goal?'), findsOneWidget);
+    await tester.tap(find.text('Deactivate'));
+    await tester.pumpAndSettle();
+
     expect(tester.takeException(), isNull);
+    // Deactivated goals disappear from the Goals list, same as a real
+    // delete would have, from this test's own point of view.
     expect(find.text('Walking'), findsNothing);
   });
 
@@ -3622,7 +3646,7 @@ void main() {
                 30,
               ),
               title: 'Evening walk',
-              categoryId: walkingCategoryId,
+              goalId: 'goal-walking',
             ),
           );
       await tester.pump();
@@ -3663,14 +3687,14 @@ void main() {
       // _signedInOnboardedNoActivityOverrides seeds 'goal-1' ("Test goal",
       // category "cat-1"/"Work") with a duration-only schedule, which never
       // generates a block (see generateGoalPlannedBlocksForDate), so its
-      // own plannedHours is driven purely by manually planned blocks in
-      // "cat-1". Add a second goal in the same category with no schedule
-      // of its own, then manually plan one block in "cat-1" — a manually
-      // planned block only ever carries a category, never a goal id, so
-      // before the fix that block's hours got credited to *both* goals,
-      // making their plannedHours identical (the exact bug: a real user's
-      // new "side project" goal read the same planned hours as "job",
-      // both sharing "work").
+      // own plannedHours is driven purely by manually planned blocks whose
+      // goalId names it. Add a second goal in the same category with no
+      // schedule of its own, then manually plan one block naming only
+      // "goal-1" — since a manually planned block now always carries a
+      // real goalId (never inferred from a shared category), it's
+      // structurally impossible for its hours to double-count onto both
+      // goals the way a real user once hit when two goals ("job" and a
+      // "side project") shared one category.
       final secondGoal = Goal(
         id: 'goal-2',
         name: 'Side project',
@@ -3702,7 +3726,7 @@ void main() {
                 0,
               ),
               title: 'Deep work',
-              categoryId: 'cat-1',
+              goalId: 'goal-1',
             ),
           );
       await tester.pumpAndSettle();
@@ -3715,13 +3739,10 @@ void main() {
         (p) => p.goal.id == 'goal-2',
       );
 
-      // Exactly one of the two goals is credited with the 2h manual block
-      // — never both, and never neither.
-      final plannedTotals = [
-        firstGoalProgress.plannedHours,
-        secondGoalProgress.plannedHours,
-      ]..sort();
-      expect(plannedTotals, [0.0, 2.0]);
+      // Only the goal actually named by the block's own goalId is
+      // credited — never both, and never neither.
+      expect(firstGoalProgress.plannedHours, 2.0);
+      expect(secondGoalProgress.plannedHours, 0.0);
     },
   );
 
@@ -3807,7 +3828,7 @@ void main() {
                 45,
               ),
               title: 'Test goal',
-              categoryId: 'cat-1',
+              goalId: 'goal-1',
               sourceId: 'manual',
             ),
           );
@@ -4143,10 +4164,10 @@ void main() {
           .read(allTrackedBlocksProvider)
           .where((b) => b.title == 'Morning walk');
       expect(plannedMatch.length + trackedMatch.length, 1);
-      final categoryId = plannedMatch.isNotEmpty
-          ? plannedMatch.single.categoryId
-          : trackedMatch.single.categoryId;
-      expect(categoryId, 'cat-1'); // the goal's own category
+      final goalId = plannedMatch.isNotEmpty
+          ? plannedMatch.single.goalId
+          : trackedMatch.single.goalId;
+      expect(goalId, 'goal-1'); // the picked goal
     },
   );
 
@@ -4253,7 +4274,7 @@ void main() {
           start: DateTime(2026, 8, 20, 12, 0),
           end: DateTime(2026, 8, 20, 12, 30),
           title: 'Team sync',
-          categoryId: 'cat-1',
+          goalId: 'goal-1',
         ),
       );
       await tester.pumpAndSettle();
@@ -4298,7 +4319,7 @@ void main() {
       expect(tester.takeException(), isNull);
       final created = container
           .read(allTrackedBlocksProvider)
-          .where((b) => b.categoryId == 'cat-1');
+          .where((b) => b.goalId == 'goal-1');
       expect(created, hasLength(1));
       expect(created.single.title, 'Team sync');
       expect(created.single.start, DateTime(2026, 8, 20, 12, 0));
@@ -4345,7 +4366,7 @@ void main() {
             30,
           ),
           title: 'Future sync',
-          categoryId: 'cat-1',
+          goalId: 'goal-1',
         ),
       );
       await tester.pumpAndSettle();
@@ -4419,7 +4440,7 @@ void main() {
             30,
           ),
           title: 'Future sync',
-          categoryId: 'cat-1',
+          goalId: 'goal-1',
         ),
       );
       await tester.pumpAndSettle();
@@ -5379,7 +5400,6 @@ void main() {
       final running = container.read(runningActivityProvider);
       expect(running, isNotNull);
       expect(running!.goalId, 'goal-walking');
-      expect(running.categoryId, walkingCategoryId);
       expect(running.title, 'Walking');
       expect(find.textContaining('Stop'), findsOneWidget);
       expect(find.text('▶ Start'), findsNothing);
@@ -5426,7 +5446,6 @@ void main() {
             RunningActivity(
               startedAt: DateTime.now().subtract(Duration(minutes: minutes)),
               goalId: 'goal-walking',
-              categoryId: walkingCategoryId,
               title: 'Walking',
             ).toMap(),
           );
@@ -5503,7 +5522,7 @@ void main() {
       expect(all.length, beforeCount + 1);
       final logged = all.firstWhere((b) => b.sourceId == 'manual' && b.id.startsWith('live-'));
       expect(logged.title, 'Walking');
-      expect(logged.categoryId, walkingCategoryId);
+      expect(logged.goalId, 'goal-walking');
       expect(logged.end.isBefore(logged.start), isFalse);
     },
   );
@@ -5543,7 +5562,6 @@ void main() {
             RunningActivity(
               startedAt: DateTime.now().subtract(const Duration(minutes: 5)),
               goalId: 'goal-walking',
-              categoryId: walkingCategoryId,
               title: 'Walking',
             ).toMap(),
           );
@@ -5571,7 +5589,6 @@ void main() {
 
       expect(running, isNotNull);
       expect(running!.goalId, 'goal-walking');
-      expect(running.categoryId, walkingCategoryId);
       expect(running.title, 'Walking');
     },
   );

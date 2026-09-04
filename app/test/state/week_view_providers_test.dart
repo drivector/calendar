@@ -9,11 +9,14 @@ import 'package:calendar_tracker/state/auth_providers.dart';
 import 'package:calendar_tracker/state/day_view_providers.dart';
 import 'package:calendar_tracker/state/derived_providers.dart';
 import 'package:calendar_tracker/state/firestore_providers.dart';
+import 'package:calendar_tracker/state/goals_providers.dart';
 import 'package:calendar_tracker/state/week_view_providers.dart';
 
 import '../support/firestore_test_fixtures.dart';
 
-Future<ProviderContainer> _signedInContainer() async {
+Future<ProviderContainer> _signedInContainer({
+  List<Override> extraOverrides = const [],
+}) async {
   const uid = 'test-uid';
   final firestore = await seededFirestore(uid);
   final container = ProviderContainer(
@@ -22,15 +25,21 @@ Future<ProviderContainer> _signedInContainer() async {
         MockFirebaseAuth(signedIn: true, mockUser: MockUser(uid: uid)),
       ),
       firestoreProvider.overrideWithValue(firestore),
+      ...extraOverrides,
     ],
   );
   // The mock auth stream's first emission is asynchronous, and every
   // per-user repository provider depends on it via currentUidProvider — so
   // wait for that first, then for the first Firestore snapshot on each
   // collection this suite reads, before any synchronous `container.read`.
+  // Goals in particular matter now: every block's category is resolved by
+  // looking up its goalId in the live goals list, not stored on the block
+  // itself, so a summary computed before goals has loaded would silently
+  // resolve every category to nothing.
   await container.read(authStateChangesProvider.future);
   await container.read(allPlannedBlocksStreamProvider.future);
   await container.read(allTrackedBlocksStreamProvider.future);
+  await container.read(goalsStreamProvider.future);
   return container;
 }
 
@@ -113,7 +122,14 @@ void main() {
     });
 
     test('a week with no logged activity reports honest empty days', () async {
-      final container = await _signedInContainer();
+      // The fixture's own Walking/Deep work goals are ongoing (a 2020–2099
+      // span), so they'd otherwise still contribute their own daily
+      // untimed schedule to any date's planned hours regardless of how far
+      // it is from any actual logged/manual data — overridden away here so
+      // this test isolates the thing it actually means to check.
+      final container = await _signedInContainer(
+        extraOverrides: [goalsProvider.overrideWith((ref) => const [])],
+      );
       addTearDown(container.dispose);
       // Far from any seeded mock/dummy data.
       container.read(selectedDateProvider.notifier).state = DateTime(

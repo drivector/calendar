@@ -7,20 +7,15 @@ import 'tracked_block.dart';
 /// a "side project" both under "work"), and lumping their drift together
 /// under one category row would hide which one is actually behind.
 ///
-/// A manually created [PlannedBlock] or a [TrackedBlock] only ever carries
-/// a category, never a goal id (only a goal-generated [PlannedBlock] does
-/// — see [PlannedBlock.goalId]), so [computeDrift] resolves those to
-/// "whichever goal [goals] resolves that category to" — same first-match
-/// rule as `goalForCategory` in `state/goals_providers.dart`, kept in sync
-/// with the [categoryId]-scoped counting `_plannedHoursForGoal`/
-/// `_actualHoursForGoal` in that file already use. A category with no goal
-/// of its own (e.g. its goal was deleted) has [goalId] left null and falls
-/// back to its own row, keyed and labeled by category instead.
+/// Every [PlannedBlock]/[TrackedBlock] carries a real [PlannedBlock.goalId]
+/// /[TrackedBlock.goalId] now, so no category-based fallback lookup is
+/// needed — [categoryId] here is just [goals]' own category for that goal,
+/// resolved once and carried along for display.
 class GoalDrift {
-  const GoalDrift({required this.categoryId, this.goalId, required this.delta});
+  const GoalDrift({required this.categoryId, required this.goalId, required this.delta});
 
   final String categoryId;
-  final String? goalId;
+  final String goalId;
 
   /// Positive = tracked more than planned; negative = tracked less.
   final Duration delta;
@@ -38,65 +33,44 @@ List<GoalDrift> computeDrift({
   // per-goal totals built below.
   Map<String, Duration> untimedPlannedByGoal = const {},
 }) {
-  String? goalIdForCategory(String categoryId) {
-    for (final goal in goals) {
-      if (goal.categoryId == categoryId) return goal.id;
-    }
-    return null;
-  }
-
   final categoryOfGoal = {for (final goal in goals) goal.id: goal.categoryId};
 
   final plannedTotals = <String, Duration>{};
   final trackedTotals = <String, Duration>{};
-  final categoryOfKey = <String, String>{};
-  final goalOfKey = <String, String?>{};
 
-  void bucket(
-    Map<String, Duration> totals,
-    String? goalId,
-    String categoryId,
-    Duration duration,
-  ) {
-    final key = goalId ?? categoryId;
-    categoryOfKey[key] = categoryId;
-    goalOfKey[key] = goalId;
-    totals.update(key, (total) => total + duration, ifAbsent: () => duration);
+  void bucket(Map<String, Duration> totals, String goalId, Duration duration) {
+    totals.update(
+      goalId,
+      (total) => total + duration,
+      ifAbsent: () => duration,
+    );
   }
 
   for (final block in planned) {
-    bucket(
-      plannedTotals,
-      block.goalId ?? goalIdForCategory(block.categoryId),
-      block.categoryId,
-      block.duration,
-    );
+    bucket(plannedTotals, block.goalId, block.duration);
   }
   for (final entry in untimedPlannedByGoal.entries) {
-    final categoryId = categoryOfGoal[entry.key];
-    if (categoryId == null) continue; // goal not in [goals] — nothing to key by
-    bucket(plannedTotals, entry.key, categoryId, entry.value);
+    if (!categoryOfGoal.containsKey(entry.key)) {
+      continue; // goal not in [goals] — nothing to key by
+    }
+    bucket(plannedTotals, entry.key, entry.value);
   }
 
   for (final block in tracked) {
-    bucket(
-      trackedTotals,
-      goalIdForCategory(block.categoryId),
-      block.categoryId,
-      block.duration,
-    );
+    bucket(trackedTotals, block.goalId, block.duration);
   }
 
   final keys = {...plannedTotals.keys, ...trackedTotals.keys};
 
   return [
-    for (final key in keys)
-      GoalDrift(
-        categoryId: categoryOfKey[key]!,
-        goalId: goalOfKey[key],
-        delta:
-            (trackedTotals[key] ?? Duration.zero) -
-            (plannedTotals[key] ?? Duration.zero),
-      ),
+    for (final goalId in keys)
+      if (categoryOfGoal.containsKey(goalId))
+        GoalDrift(
+          categoryId: categoryOfGoal[goalId]!,
+          goalId: goalId,
+          delta:
+              (trackedTotals[goalId] ?? Duration.zero) -
+              (plannedTotals[goalId] ?? Duration.zero),
+        ),
   ];
 }

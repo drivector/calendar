@@ -472,8 +472,45 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
     Navigator.of(context).pop();
   }
 
-  void _delete() {
-    widget.ref.read(goalsRepositoryProvider).remove(widget.existing!.id);
+  Future<void> _delete() async {
+    final goal = widget.existing!;
+    // A goal with any linked activity can't be hard-deleted — doing so
+    // would orphan every PlannedBlock/TrackedBlock whose goalId points at
+    // it (every activity now belongs to a goal, see Goal.status's own doc
+    // comment) — deactivated instead, which keeps those activities
+    // resolving correctly while hiding the goal from lists and pickers.
+    final hasLinkedActivity =
+        widget.ref
+            .read(allPlannedBlocksProvider)
+            .any((b) => b.goalId == goal.id) ||
+        widget.ref
+            .read(allTrackedBlocksProvider)
+            .any((b) => b.goalId == goal.id);
+
+    if (hasLinkedActivity) {
+      final confirmed = await showConfirmDialog(
+        context,
+        title: 'Deactivate goal?',
+        message:
+            '"${goal.name}" has activity logged against it, so it can\'t '
+            'be deleted. Deactivating stops it from planning new time and '
+            'hides it from goal pickers — its past activity stays intact.',
+        confirmLabel: 'Deactivate',
+      );
+      if (!confirmed || !mounted) return;
+      widget.ref
+          .read(goalsRepositoryProvider)
+          .upsert(goal.copyWithStatus(GoalLifecycleStatus.deactivated));
+    } else {
+      final confirmed = await showConfirmDeleteDialog(
+        context,
+        title: 'Delete goal?',
+        message: 'This permanently removes "${goal.name}".',
+      );
+      if (!confirmed || !mounted) return;
+      widget.ref.read(goalsRepositoryProvider).remove(goal.id);
+    }
+    if (!mounted) return;
     Navigator.of(context).pop();
   }
 

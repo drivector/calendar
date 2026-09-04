@@ -4,8 +4,10 @@ import 'package:intl/intl.dart';
 
 import '../../models/category.dart';
 import '../../models/day_capacity.dart';
+import '../../models/goal.dart';
 import '../../models/planned_block.dart';
 import '../../state/categories_providers.dart';
+import '../../state/goals_providers.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_shapes.dart';
 import '../../theme/app_spacing.dart';
@@ -25,10 +27,12 @@ Future<void> showDayPreviewSheet(
   BuildContext context, {
   required DayCapacity day,
   required List<Category> categories,
+  required List<Goal> goals,
 }) {
   return showDialog<void>(
     context: context,
-    builder: (context) => _DayPreviewDialog(day: day, categories: categories),
+    builder: (context) =>
+        _DayPreviewDialog(day: day, categories: categories, goals: goals),
   );
 }
 
@@ -37,10 +41,15 @@ const double _twoLineMinHeight = 52;
 const double _gutterWidth = 34;
 
 class _DayPreviewDialog extends StatelessWidget {
-  const _DayPreviewDialog({required this.day, required this.categories});
+  const _DayPreviewDialog({
+    required this.day,
+    required this.categories,
+    required this.goals,
+  });
 
   final DayCapacity day;
   final List<Category> categories;
+  final List<Goal> goals;
 
   @override
   Widget build(BuildContext context) {
@@ -198,7 +207,10 @@ class _DayPreviewDialog extends StatelessWidget {
       height: height,
       child: PlanBlockWidget(
         block: block,
-        category: resolveCategory(categories, block.categoryId),
+        category: resolveCategory(
+          categories,
+          goalById(goals, block.goalId)?.categoryId ?? '',
+        ),
         labelStyle: labelStyle,
       ),
     );

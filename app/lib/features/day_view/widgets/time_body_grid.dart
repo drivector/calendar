@@ -363,12 +363,11 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
                     initialStart: TimeOfDay.fromDateTime(block.start),
                     initialEnd: TimeOfDay.fromDateTime(block.end),
                     initialTitle: block.title,
-                    initialGoalId:
-                        goalForCategory(goals, block.categoryId)?.id,
+                    initialGoalId: block.goalId,
                     fromPlan: true,
                   );
-                } else if (block.goalId != null) {
-                  showGoalDetailSheet(context, ref, block.goalId!);
+                } else if (block.isGoalGenerated) {
+                  showGoalDetailSheet(context, ref, block.goalId);
                 } else {
                   showAddBlockSheet(
                     context,
@@ -378,15 +377,17 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
                     initialStart: TimeOfDay.fromDateTime(block.start),
                     initialEnd: TimeOfDay.fromDateTime(block.end),
                     initialTitle: block.title,
-                    initialGoalId:
-                        goalForCategory(goals, block.categoryId)?.id,
+                    initialGoalId: block.goalId,
                     editingId: block.id,
                   );
                 }
               },
               child: PlanBlockWidget(
                 block: block,
-                category: resolveCategory(categories, block.categoryId),
+                category: resolveCategory(
+                  categories,
+                  goalById(goals, block.goalId)?.categoryId ?? '',
+                ),
                 labelStyle: labelStyle,
               ),
             ),
@@ -405,7 +406,7 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
             end: clampEnd(block.end),
             rawStart: block.start,
             rawEnd: block.end,
-            categoryId: block.categoryId,
+            goalId: block.goalId,
             plannedBlockId: block.plannedBlockId,
             tracked: block,
             running: null,
@@ -421,7 +422,7 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
             end: clampEnd(DateTime.now()),
             rawStart: running.startedAt,
             rawEnd: DateTime.now(),
-            categoryId: running.categoryId,
+            goalId: running.goalId,
             plannedBlockId: null,
             tracked: null,
             running: running,
@@ -439,7 +440,7 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
             ? matchingPlannedBlockForRange(
                 start: item.rawStart,
                 end: item.rawEnd,
-                categoryId: item.categoryId,
+                goalId: item.goalId,
                 planned: dayBlocks.planned,
                 plannedBlockId: item.plannedBlockId,
               )
@@ -456,14 +457,20 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
         if (liveRunning != null) {
           return LiveActivityRunningBlock(
             running: liveRunning,
-            category: resolveCategory(categories, liveRunning.categoryId),
+            category: resolveCategory(
+              categories,
+              goalById(goals, liveRunning.goalId)?.categoryId ?? '',
+            ),
             labelStyle: labelStyle,
           );
         }
         final block = item.tracked!;
         return ActualBlockWidget(
           block: block,
-          category: resolveCategory(categories, block.categoryId),
+          category: resolveCategory(
+            categories,
+            goalById(goals, block.goalId)?.categoryId ?? '',
+          ),
           wasPlanned: matchingPlannedBlockFor(block, dayBlocks.planned) != null,
           ref: ref,
           labelStyle: labelStyle,
@@ -568,7 +575,7 @@ class _ActualLikeItem {
     required this.end,
     required this.rawStart,
     required this.rawEnd,
-    required this.categoryId,
+    required this.goalId,
     required this.plannedBlockId,
     required this.tracked,
     required this.running,
@@ -578,7 +585,7 @@ class _ActualLikeItem {
   final DateTime end;
   final DateTime rawStart;
   final DateTime rawEnd;
-  final String categoryId;
+  final String goalId;
   final String? plannedBlockId;
   final TrackedBlock? tracked;
   final RunningActivity? running;

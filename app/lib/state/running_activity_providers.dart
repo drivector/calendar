@@ -51,7 +51,6 @@ final liveActivityTickProvider = StreamProvider<void>((ref) {
 Future<void> startActivity(
   WidgetRef ref, {
   required String goalId,
-  required String categoryId,
   required String title,
 }) {
   return ref
@@ -60,7 +59,6 @@ Future<void> startActivity(
         RunningActivity(
           startedAt: DateTime.now(),
           goalId: goalId,
-          categoryId: categoryId,
           title: title,
         ).toMap(),
       );
@@ -83,7 +81,7 @@ Future<void> stopActivity(WidgetRef ref, RunningActivity running) async {
               ? now
               : running.startedAt.add(const Duration(minutes: 1)),
           title: running.title,
-          categoryId: running.categoryId,
+          goalId: running.goalId,
           sourceId: 'manual',
         ),
       );

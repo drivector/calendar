@@ -27,6 +27,7 @@ List<PlannedBlock> generateGoalPlannedBlocksForDate({
 
   final generated = <PlannedBlock>[];
   for (final goal in goals) {
+    if (goal.status != GoalLifecycleStatus.active) continue;
     if (!goal.isActiveOn(day)) continue;
     var entryIndex = 0;
     for (final entry in goal.entriesForOccurrence(day)) {
@@ -61,8 +62,8 @@ List<PlannedBlock> generateGoalPlannedBlocksForDate({
           start: start,
           end: end,
           title: goal.name,
-          categoryId: goal.categoryId,
           goalId: goal.id,
+          isGoalGenerated: true,
         ),
       );
     }
@@ -87,6 +88,7 @@ Map<String, Duration> untimedPlannedDurationByCategoryForDate({
 
   final totals = <String, Duration>{};
   for (final goal in goals) {
+    if (goal.status != GoalLifecycleStatus.active) continue;
     if (!goal.isActiveOn(day)) continue;
     for (final entry in goal.entriesForOccurrence(day)) {
       if (entry.isTimeRange) continue;
@@ -112,6 +114,7 @@ Map<String, Duration> untimedPlannedDurationByGoalForDate({
 
   final totals = <String, Duration>{};
   for (final goal in goals) {
+    if (goal.status != GoalLifecycleStatus.active) continue;
     if (!goal.isActiveOn(day)) continue;
     for (final entry in goal.entriesForOccurrence(day)) {
       if (entry.isTimeRange) continue;

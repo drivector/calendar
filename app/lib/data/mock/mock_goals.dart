@@ -25,8 +25,12 @@ Map<int, List<DayScheduleEntry>> _durationSchedule(
 /// 21:00) only made sense as cap goals — a ceiling to stay under — which
 /// this app no longer models, and recasting them as targets (a minimum to
 /// reach) would misrepresent them: nobody wants a *minimum* amount of
-/// screen time. Dropped rather than fabricated into something they never
-/// were.
+/// screen time. Given no schedule of their own (an empty
+/// `scheduleByWeekday`, so they generate no planned blocks and count
+/// toward no weekly target) purely so `dummy_data.dart`'s
+/// meetings/admin/screen-time entries — which every activity now needs a
+/// goal to attach to — have somewhere real to point their `goalId` at,
+/// without fabricating a target that was never real.
 final mockGoals = [
   Goal(
     id: 'goal-walking',
@@ -61,5 +65,29 @@ final mockGoals = [
       DateTime.saturday: Duration.zero,
       DateTime.sunday: Duration.zero,
     }),
+  ),
+  Goal(
+    id: 'goal-meetings',
+    startDate: _ongoingStart,
+    endDate: _ongoingEnd,
+    name: 'Meetings',
+    categoryId: meetingsCategoryId,
+    scheduleByWeekday: const {},
+  ),
+  Goal(
+    id: 'goal-admin',
+    startDate: _ongoingStart,
+    endDate: _ongoingEnd,
+    name: 'Admin',
+    categoryId: adminCategoryId,
+    scheduleByWeekday: const {},
+  ),
+  Goal(
+    id: 'goal-screen-time',
+    startDate: _ongoingStart,
+    endDate: _ongoingEnd,
+    name: 'Screen time',
+    categoryId: screenTimeCategoryId,
+    scheduleByWeekday: const {},
   ),
 ];

@@ -51,10 +51,11 @@ class _ActivitiesListState extends ConsumerState<ActivitiesList> {
     final filtered = query.isEmpty
         ? allBlocks
         : allBlocks.where((block) {
-            final goalName = goalForCategory(goals, block.categoryId)?.name ?? '';
+            final blockGoal = goalById(goals, block.goalId);
+            final goalName = blockGoal?.name ?? '';
             final categoryName = resolveCategory(
               categories,
-              block.categoryId,
+              blockGoal?.categoryId ?? '',
             ).name;
             return block.title.toLowerCase().contains(query) ||
                 goalName.toLowerCase().contains(query) ||
@@ -101,9 +102,9 @@ class _ActivitiesListState extends ConsumerState<ActivitiesList> {
                             block: block,
                             color: resolveCategory(
                               categories,
-                              block.categoryId,
+                              goalById(goals, block.goalId)?.categoryId ?? '',
                             ).color,
-                            goal: goalForCategory(goals, block.categoryId),
+                            goal: goalById(goals, block.goalId),
                             onTapGoal: (goal) =>
                                 showGoalDetailSheet(context, ref, goal.id),
                             onEdit: () => showLogActivitySheet(

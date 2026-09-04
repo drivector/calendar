@@ -95,10 +95,7 @@ class _LogActivitySheetState extends ConsumerState<LogActivitySheet> {
         // Editing — the draft always starts empty on a fresh open, so
         // this fully repopulates it from the block being edited rather
         // than just defaulting the date.
-        final goal = goalForCategory(
-          widget.ref.read(goalsProvider),
-          existing.categoryId,
-        );
+        final goal = goalById(widget.ref.read(goalsProvider), existing.goalId);
         notifier
           ..setDate(
             DateTime(
@@ -190,7 +187,7 @@ class _LogActivitySheetState extends ConsumerState<LogActivitySheet> {
             start: startDt,
             end: endDt,
             title: title,
-            categoryId: goal.categoryId,
+            goalId: goal.id,
             // Editing keeps the block's real provenance (a health/calendar
             // import stays that, not relabeled "manual" just because it
             // was touched) and its link back to a plan, if it had one.
@@ -370,7 +367,9 @@ class _LogActivitySheetState extends ConsumerState<LogActivitySheet> {
                       // screen-time goal is excluded since it's auto-tracked,
                       // not something you'd manually log.
                       for (final goal in goals.where(
-                        (g) => g.categoryId != screenTimeCategoryId,
+                        (g) =>
+                            g.categoryId != screenTimeCategoryId &&
+                            g.status == GoalLifecycleStatus.active,
                       ))
                         CategoryChip(
                           label: goal.name.toLowerCase(),

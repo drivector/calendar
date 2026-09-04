@@ -24,7 +24,7 @@ import '../../../utils/time_of_day_utils.dart';
 /// Log activity sheet: screen time is auto-tracked, never something you'd
 /// manually plan or log by hand.
 List<Goal> _eligibleGoals(WidgetRef ref) => ref
-    .read(goalsProvider)
+    .read(statusActiveGoalsProvider)
     .where((g) => g.categoryId != screenTimeCategoryId)
     .toList();
 
@@ -262,7 +262,7 @@ class _AddBlockSheetState extends State<_AddBlockSheet> {
               start: startDt,
               end: endDt,
               title: title,
-              categoryId: goal.categoryId,
+              goalId: goal.id,
             ),
           );
     } else {
@@ -274,7 +274,7 @@ class _AddBlockSheetState extends State<_AddBlockSheet> {
               start: startDt,
               end: endDt,
               title: title,
-              categoryId: goal.categoryId,
+              goalId: goal.id,
               sourceId: 'manual',
             ),
           );

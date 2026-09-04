@@ -64,7 +64,6 @@ class _StartActivitySheetState extends ConsumerState<StartActivitySheet> {
       await startActivity(
         widget.ref,
         goalId: goal.id,
-        categoryId: goal.categoryId,
         title: title,
       );
     } catch (_) {
@@ -85,7 +84,7 @@ class _StartActivitySheetState extends ConsumerState<StartActivitySheet> {
   @override
   Widget build(BuildContext context) {
     final categories = ref.watch(categoriesProvider);
-    final goals = ref.watch(goalsProvider);
+    final goals = ref.watch(statusActiveGoalsProvider);
 
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),

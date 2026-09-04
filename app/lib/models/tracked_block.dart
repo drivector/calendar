@@ -1,17 +1,17 @@
 import 'planned_block.dart';
 
-/// The specific [PlannedBlock] a [start, end) span in [categoryId]
+/// The specific [PlannedBlock] a [start, end) span belonging to [goalId]
 /// corresponds to, if any — either explicitly linked via [plannedBlockId]
 /// (set by the goal list's "complete" button, for a [TrackedBlock]), or
-/// whichever planned block it overlaps in the same category (the first
-/// one found, if more than one). The primitive form behind both
+/// whichever planned block it overlaps for the same goal (the first one
+/// found, if more than one). The primitive form behind both
 /// [matchingPlannedBlockFor] (a completed [TrackedBlock]) and the
 /// in-progress live activity's own matching in `TimeBodyGrid` — a running
 /// activity has no [TrackedBlock] yet to call the other overload with.
 PlannedBlock? matchingPlannedBlockForRange({
   required DateTime start,
   required DateTime end,
-  required String categoryId,
+  required String goalId,
   required List<PlannedBlock> planned,
   String? plannedBlockId,
 }) {
@@ -21,9 +21,7 @@ PlannedBlock? matchingPlannedBlockForRange({
     }
   }
   for (final p in planned) {
-    if (p.categoryId == categoryId &&
-        p.start.isBefore(end) &&
-        start.isBefore(p.end)) {
+    if (p.goalId == goalId && p.start.isBefore(end) && start.isBefore(p.end)) {
       return p;
     }
   }
@@ -42,7 +40,7 @@ PlannedBlock? matchingPlannedBlockFor(
 ) => matchingPlannedBlockForRange(
   start: tracked.start,
   end: tracked.end,
-  categoryId: tracked.categoryId,
+  goalId: tracked.goalId,
   planned: planned,
   plannedBlockId: tracked.plannedBlockId,
 );
@@ -83,7 +81,7 @@ class TrackedBlock {
     required this.start,
     required this.end,
     required this.title,
-    required this.categoryId,
+    required this.goalId,
     required this.sourceId,
     this.confidence = 1.0,
     this.plannedBlockId,
@@ -95,7 +93,12 @@ class TrackedBlock {
   final DateTime start;
   final DateTime end;
   final String title;
-  final String categoryId;
+
+  /// Every tracked activity belongs to a goal — its category is looked up
+  /// via `goalById` in `state/goals_providers.dart`, never stored on this
+  /// class directly. See [PlannedBlock.goalId]'s doc comment for the same
+  /// reasoning applied here.
+  final String goalId;
 
   /// e.g. "health", "jira", "calendar", "manual".
   final String sourceId;
@@ -121,7 +124,7 @@ class TrackedBlock {
     start: start,
     end: end,
     title: title,
-    categoryId: categoryId,
+    goalId: goalId,
     sourceId: sourceId,
     confidence: confidence,
     plannedBlockId: plannedBlockId,
@@ -135,7 +138,7 @@ class TrackedBlock {
         start: DateTime.parse(map['start'] as String),
         end: DateTime.parse(map['end'] as String),
         title: map['title'] as String,
-        categoryId: map['categoryId'] as String,
+        goalId: map['goalId'] as String,
         sourceId: map['sourceId'] as String,
         confidence: (map['confidence'] as num?)?.toDouble() ?? 1.0,
         plannedBlockId: map['plannedBlockId'] as String?,
@@ -150,7 +153,7 @@ class TrackedBlock {
     'start': start.toIso8601String(),
     'end': end.toIso8601String(),
     'title': title,
-    'categoryId': categoryId,
+    'goalId': goalId,
     'sourceId': sourceId,
     'confidence': confidence,
     'plannedBlockId': plannedBlockId,

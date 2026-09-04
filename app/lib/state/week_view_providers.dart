@@ -69,7 +69,12 @@ final weekDaySummariesProvider = Provider<List<WeekDaySummary>>((ref) {
         .toList();
 
     final plannedByCategory = groupByCategory(
-      dayPlanned.map((b) => (categoryId: b.categoryId, duration: b.duration)),
+      dayPlanned.map(
+        (b) => (
+          categoryId: goalById(goals, b.goalId)?.categoryId ?? '',
+          duration: b.duration,
+        ),
+      ),
     );
     for (final entry
         in untimedPlannedDurationByCategoryForDate(
@@ -104,7 +109,12 @@ final weekDaySummariesProvider = Provider<List<WeekDaySummary>>((ref) {
       date: date,
       plannedHoursByCategory: plannedByCategory,
       actualHoursByCategory: groupByCategory(
-        dayTracked.map((b) => (categoryId: b.categoryId, duration: b.duration)),
+        dayTracked.map(
+          (b) => (
+            categoryId: goalById(goals, b.goalId)?.categoryId ?? '',
+            duration: b.duration,
+          ),
+        ),
       ),
       untrackedHours: untrackedHours,
       plannedBlocks: dayPlanned,

@@ -60,6 +60,17 @@ class DayScheduleEntry {
 /// individual days up to.
 enum GoalScheduleMode { weekly, byDate }
 
+/// Whether a goal still generates new planned blocks and shows up in goal
+/// pickers. A goal with linked activities (see `goal_edit_sheet.dart`'s
+/// delete flow) can't be hard-deleted — deleting it would orphan every
+/// `PlannedBlock`/`TrackedBlock` that points at its id via [PlannedBlock
+/// .goalId]/[TrackedBlock.goalId] — so it's deactivated instead. A
+/// deactivated goal's own activities keep rendering (looked up by id
+/// regardless of status), it just stops producing new ones and disappears
+/// from lists/pickers. [active] is the default, including for every
+/// already-written document that predates this field entirely.
+enum GoalLifecycleStatus { active, deactivated }
+
 class Goal {
   const Goal({
     required this.id,
@@ -71,11 +82,13 @@ class Goal {
     this.scheduleMode = GoalScheduleMode.weekly,
     this.scheduleByDate = const {},
     this.reminderMinutesBefore,
+    this.status = GoalLifecycleStatus.active,
   });
 
   final String id;
   final String name;
   final String categoryId;
+  final GoalLifecycleStatus status;
 
   /// Which schedule below is actually in effect. Both fields are always
   /// present on a [Goal] regardless of mode (the inactive one just stays
@@ -229,11 +242,32 @@ class Goal {
     startDate: DateTime.parse(map['startDate'] as String),
     endDate: DateTime.parse(map['endDate'] as String),
     reminderMinutesBefore: map['reminderMinutesBefore'] as int?,
+    status: GoalLifecycleStatus.values.firstWhere(
+      (s) => s.name == map['status'],
+      orElse: () => GoalLifecycleStatus.active,
+    ),
+  );
+
+  /// A copy with [status] changed — used to deactivate a goal that has
+  /// linked activities instead of hard-deleting it. Every other field is
+  /// reconstructed in full, same convention as `TrackedBlock.copyWithStatus`.
+  Goal copyWithStatus(GoalLifecycleStatus status) => Goal(
+    id: id,
+    name: name,
+    categoryId: categoryId,
+    scheduleByWeekday: scheduleByWeekday,
+    startDate: startDate,
+    endDate: endDate,
+    scheduleMode: scheduleMode,
+    scheduleByDate: scheduleByDate,
+    reminderMinutesBefore: reminderMinutesBefore,
+    status: status,
   );
 
   Map<String, dynamic> toMap() => {
     'name': name,
     'categoryId': categoryId,
+    'status': status.name,
     'scheduleMode': scheduleMode == GoalScheduleMode.byDate
         ? 'byDate'
         : 'weekly',

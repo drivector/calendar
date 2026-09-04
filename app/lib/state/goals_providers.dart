@@ -30,15 +30,28 @@ final goalsProvider = Provider<List<Goal>>((ref) {
   return ref.watch(goalsStreamProvider).valueOrNull ?? [];
 });
 
-/// The goal a category counts toward, if any — a [TrackedBlock] only ever
-/// stores its category, not which goal it was logged against, so anything
-/// that wants to show "which goal is this" (the Activities list) has to
-/// work backwards from the category. A category can in principle back more
-/// than one goal, but nothing in the app's own UI (Log activity's goal
-/// chips, category creation) ever sets that up, so the first match is it.
+/// The goal a category counts toward, if any — still used where something
+/// only has a category in hand and needs "which goal is this" (e.g.
+/// coloring a goal-picker dropdown by its category). A category can in
+/// principle back more than one goal, so the first match is it.
 Goal? goalForCategory(List<Goal> goals, String categoryId) {
   for (final goal in goals) {
     if (goal.categoryId == categoryId) return goal;
+  }
+  return null;
+}
+
+/// The goal a [PlannedBlock]/[TrackedBlock]/[RunningActivity]'s own
+/// [goalId] points at — the actual lookup every block's category now goes
+/// through, since none of them store `categoryId` directly any more. `null`
+/// only if the goal has since been hard-deleted out from under a block that
+/// still references it (shouldn't happen in practice — a goal with linked
+/// activities is deactivated, not deleted — but blocks reference goals by
+/// id, not by a live object, so this stays a lookup rather than a
+/// guarantee).
+Goal? goalById(List<Goal> goals, String goalId) {
+  for (final goal in goals) {
+    if (goal.id == goalId) return goal;
   }
   return null;
 }
@@ -71,24 +84,18 @@ Goal? goalForCategory(List<Goal> goals, String categoryId) {
 }
 
 /// Actual hours toward this goal, within [_progressWindowFor]'s own
-/// window = tracked blocks in the goal's category falling in that window.
-/// A manually tracked block only has a category, not a goal id, so when
-/// more than one goal shares a category (e.g. "job" and "side project"
-/// both under "work") it's only credited to the one [goalForCategory]
-/// would resolve that category to — otherwise the same hours would
-/// double-count toward every goal sharing the category.
+/// window = tracked blocks whose [TrackedBlock.goalId] matches, falling in
+/// that window.
 double _actualHoursForGoal(
   Goal goal,
-  List<Goal> allGoals,
   List<TrackedBlock> allTracked,
   DateTime selectedDate,
 ) {
-  if (goalForCategory(allGoals, goal.categoryId)?.id != goal.id) return 0;
   final (windowStart, windowEnd) = _progressWindowFor(goal, selectedDate);
   return allTracked
       .where(
         (b) =>
-            b.categoryId == goal.categoryId &&
+            b.goalId == goal.id &&
             !b.start.isBefore(windowStart) &&
             b.start.isBefore(windowEnd),
       )
@@ -96,13 +103,9 @@ double _actualHoursForGoal(
 }
 
 /// Planned hours toward this goal, within [_progressWindowFor]'s own
-/// window = manually planned blocks in this goal's category (seed data
-/// plus anything added since) plus the goal's own generated schedule for
-/// whichever days of that window it was active. As with
-/// [_actualHoursForGoal], the manual half is only credited to the goal
-/// [goalForCategory] resolves the category to, since a manually planned
-/// block carries no goal id of its own; the generated half stays
-/// goal-specific via [PlannedBlock.goalId].
+/// window = manually planned blocks whose [PlannedBlock.goalId] matches
+/// (seed data plus anything added since) plus the goal's own generated
+/// schedule for whichever days of that window it was active.
 ///
 /// [generatedThisWeek] (see [goalGeneratedBlocksThisWeekProvider]) only
 /// ever covers the *current* week, which is exactly the window a
@@ -112,23 +115,19 @@ double _actualHoursForGoal(
 /// fresh over its own window instead of reusing that week-scoped list.
 double _plannedHoursForGoal(
   Goal goal,
-  List<Goal> allGoals,
   List<PlannedBlock> allPlanned,
   List<PlannedBlock> generatedThisWeek,
   DateTime selectedDate,
 ) {
   final (windowStart, windowEnd) = _progressWindowFor(goal, selectedDate);
-  final manualHours =
-      goalForCategory(allGoals, goal.categoryId)?.id != goal.id
-      ? 0.0
-      : allPlanned
-            .where(
-              (b) =>
-                  b.categoryId == goal.categoryId &&
-                  !b.start.isBefore(windowStart) &&
-                  b.start.isBefore(windowEnd),
-            )
-            .fold(0.0, (total, b) => total + b.duration.inMinutes / 60);
+  final manualHours = allPlanned
+      .where(
+        (b) =>
+            b.goalId == goal.id &&
+            !b.start.isBefore(windowStart) &&
+            b.start.isBefore(windowEnd),
+      )
+      .fold(0.0, (total, b) => total + b.duration.inMinutes / 60);
 
   final generatedForWindow = goal.scheduleMode == GoalScheduleMode.byDate
       ? [
@@ -146,11 +145,22 @@ double _plannedHoursForGoal(
   return manualHours + generatedHours;
 }
 
-/// Goals list, filtered to only those active on [selectedDate] — a
-/// date-bound goal (a challenge with a start/end date) simply doesn't show
-/// up outside its window, the same way it wouldn't in a real habit tracker.
-final activeGoalsProvider = Provider<List<Goal>>((ref) {
+/// Goals that haven't been deactivated (see [GoalLifecycleStatus]) — the filter
+/// every goal-picker dropdown uses, and the base every other "which goals
+/// should show up" provider below builds on. Distinct from
+/// [activeGoalsProvider]'s "active" (which means active *on a date*,
+/// unrelated to this status).
+final statusActiveGoalsProvider = Provider<List<Goal>>((ref) {
   final goals = ref.watch(goalsProvider);
+  return goals.where((goal) => goal.status == GoalLifecycleStatus.active).toList();
+});
+
+/// Goals list, filtered to only those not deactivated and active on
+/// [selectedDate] — a date-bound goal (a challenge with a start/end date)
+/// simply doesn't show up outside its window, the same way it wouldn't in
+/// a real habit tracker.
+final activeGoalsProvider = Provider<List<Goal>>((ref) {
+  final goals = ref.watch(statusActiveGoalsProvider);
   final selectedDate = ref.watch(selectedDateProvider);
   return goals.where((goal) => goal.isActiveOn(selectedDate)).toList();
 });
@@ -246,15 +256,9 @@ final goalProgressListProvider = Provider<List<GoalProgress>>((ref) {
     for (final goal in goals)
       computeGoalProgress(
         goal: goal,
-        actualHours: _actualHoursForGoal(
-          goal,
-          goals,
-          allTracked,
-          selectedDate,
-        ),
+        actualHours: _actualHoursForGoal(goal, allTracked, selectedDate),
         plannedHours: _plannedHoursForGoal(
           goal,
-          goals,
           allPlanned,
           generatedThisWeek,
           selectedDate,

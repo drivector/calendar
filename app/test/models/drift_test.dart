@@ -19,16 +19,17 @@ void main() {
   );
 
   test(
-    'with no goals, drift is tracked minus planned per category, signed — '
-    'a category backed by no goal at all falls back to its own row',
+    'drift is tracked minus planned per goal, signed — every block now '
+    'carries its own goalId directly',
     () {
+      final deepWork = goal(id: 'goal-deep-work', categoryId: 'deep_work');
       final planned = [
         PlannedBlock(
           id: 'p1',
           start: at(9, 0),
           end: at(12, 0),
           title: 'Deep work 3 h',
-          categoryId: 'deep_work',
+          goalId: 'goal-deep-work',
         ),
       ];
       final tracked = [
@@ -37,33 +38,62 @@ void main() {
           start: at(9, 0),
           end: at(10, 45),
           title: 'Deep work 1 h 45',
-          categoryId: 'deep_work',
+          goalId: 'goal-deep-work',
           sourceId: 'jira',
         ),
       ];
 
-      final drift = computeDrift(planned: planned, tracked: tracked);
+      final drift = computeDrift(
+        planned: planned,
+        tracked: tracked,
+        goals: [deepWork],
+      );
 
       expect(drift, hasLength(1));
       expect(drift.single.categoryId, 'deep_work');
-      expect(drift.single.goalId, isNull);
+      expect(drift.single.goalId, 'goal-deep-work');
       expect(drift.single.delta, const Duration(hours: -1, minutes: -15));
     },
   );
 
-  test('a category with only tracked time yields positive drift', () {
+  test(
+    'a block whose goal is not in the given goals list contributes no row '
+    '— computeDrift can only label what it can resolve a category for',
+    () {
+      final planned = [
+        PlannedBlock(
+          id: 'p1',
+          start: at(9, 0),
+          end: at(12, 0),
+          title: 'Deep work 3 h',
+          goalId: 'goal-deep-work',
+        ),
+      ];
+
+      final drift = computeDrift(planned: planned, tracked: const []);
+
+      expect(drift, isEmpty);
+    },
+  );
+
+  test('a goal with only tracked time yields positive drift', () {
+    final meetings = goal(id: 'goal-meetings', categoryId: 'meetings');
     final tracked = [
       TrackedBlock(
         id: 't1',
         start: at(10, 45),
         end: at(11, 25),
         title: 'Unplanned call 40 m',
-        categoryId: 'meetings',
+        goalId: 'goal-meetings',
         sourceId: 'calendar',
       ),
     ];
 
-    final drift = computeDrift(planned: const [], tracked: tracked);
+    final drift = computeDrift(
+      planned: const [],
+      tracked: tracked,
+      goals: [meetings],
+    );
 
     expect(drift.single.categoryId, 'meetings');
     expect(drift.single.delta, const Duration(minutes: 40));
@@ -95,7 +125,7 @@ void main() {
         start: at(9, 0),
         end: at(12, 0),
         title: 'Work 3 h',
-        categoryId: 'work',
+        goalId: 'goal-work',
       ),
     ];
     final tracked = [
@@ -104,7 +134,7 @@ void main() {
         start: at(9, 0),
         end: at(12, 0),
         title: 'Work 3 h',
-        categoryId: 'work',
+        goalId: 'goal-work',
         sourceId: 'manual',
       ),
     ];
@@ -123,22 +153,21 @@ void main() {
   });
 
   test(
-    'two goals sharing a category get separate drift rows, not one merged '
+    "two goals sharing a category get separate drift rows, not one merged "
     "row — the exact bug a real user hit with two goals ('job' and a "
     "'side project') both under 'work'",
     () {
       final job = goal(id: 'goal-job', categoryId: 'work');
       final sideProject = goal(id: 'goal-side-project', categoryId: 'work');
 
-      // A goal-generated block carries its own goal id directly, so it's
-      // never ambiguous which goal it belongs to.
+      // Every block carries its own goalId directly now, so there's never
+      // any ambiguity about which of the two goals it belongs to.
       final planned = [
         PlannedBlock(
           id: 'p-job',
           start: at(9, 0),
           end: at(11, 0),
           title: 'Job',
-          categoryId: 'work',
           goalId: 'goal-job',
         ),
         PlannedBlock(
@@ -146,20 +175,16 @@ void main() {
           start: at(20, 0),
           end: at(20, 30),
           title: 'Side project',
-          categoryId: 'work',
           goalId: 'goal-side-project',
         ),
       ];
-      // A manually logged block only ever carries a category — it's
-      // resolved to whichever goal `goals` first matches that category to
-      // ('job', first in the list), never split across both.
       final tracked = [
         TrackedBlock(
           id: 't-work',
           start: at(9, 0),
           end: at(10, 0),
           title: 'Some work',
-          categoryId: 'work',
+          goalId: 'goal-job',
           sourceId: 'manual',
         ),
       ];
@@ -175,8 +200,7 @@ void main() {
       final byGoal = {for (final d in drift) d.goalId: d.delta};
       // job: 1h tracked against its own 2h planned block.
       expect(byGoal['goal-job'], const Duration(hours: -1));
-      // side project: nothing tracked against it — the manual block's hour
-      // landed entirely on "job", not split or duplicated onto both goals.
+      // side project: nothing tracked against it.
       expect(byGoal['goal-side-project'], const Duration(minutes: -30));
     },
   );

@@ -25,9 +25,7 @@ List<PlannedBlock> pendingPlannedBlocksForGoal({
       !start.isBefore(weekStart) && start.isBefore(weekEnd);
 
   final planned = [
-    ...allPlanned.where(
-      (b) => b.categoryId == goal.categoryId && inWeek(b.start),
-    ),
+    ...allPlanned.where((b) => b.goalId == goal.id && inWeek(b.start)),
     ...generatedThisWeek.where((b) => b.goalId == goal.id),
   ];
 
@@ -58,7 +56,7 @@ List<TrackedBlock> trackedBlocksCompletingPlan(List<PlannedBlock> pending) => [
       start: block.start,
       end: block.end,
       title: block.title,
-      categoryId: block.categoryId,
+      goalId: block.goalId,
       sourceId: 'auto',
       plannedBlockId: block.id,
     ),
