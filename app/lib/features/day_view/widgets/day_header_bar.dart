@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart'
-    show PopupMenuButton, PopupMenuItem, showDatePicker;
+    show PopupMenuButton, PopupMenuDivider, PopupMenuItem, showDatePicker;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -99,22 +99,16 @@ class DayHeaderBar extends ConsumerWidget {
               ),
             ),
             const SizedBox(width: AppSpacing.s2),
-            _ViewModeButton(
+            _OverflowMenuButton(
               mode: mode,
-              onChanged: (value) =>
+              onModeChanged: (value) =>
                   ref.read(dayViewModeProvider.notifier).state = value,
-            ),
-            const SizedBox(width: AppSpacing.s2),
-            _BlockFilterButton(
               filter: ref.watch(dayViewBlockFilterProvider),
-              onChanged: (value) =>
+              onFilterChanged: (value) =>
                   ref.read(dayViewBlockFilterProvider.notifier).state = value,
-            ),
-            const SizedBox(width: AppSpacing.s2),
-            _FullDayToggle(
-              active: ref.watch(dayViewFullDayProvider),
-              onTap: () => ref.read(dayViewFullDayProvider.notifier).state =
-                  !ref.read(dayViewFullDayProvider),
+              fullDay: ref.watch(dayViewFullDayProvider),
+              onFullDayChanged: (value) =>
+                  ref.read(dayViewFullDayProvider.notifier).state = value,
             ),
             const SizedBox(width: AppSpacing.s2),
             const LiveActivityButton(),
@@ -140,43 +134,6 @@ class DayHeaderBar extends ConsumerWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Toggles [dayViewFullDayProvider] — compressing the whole 24 hours into
-/// the visible height (no scrolling) versus the normal fixed-scale,
-/// scrollable timeline. Bordered, not filled — "+ Log" is already this
-/// screen's one filled accent button.
-class _FullDayToggle extends StatelessWidget {
-  const _FullDayToggle({required this.active, required this.onTap});
-
-  final bool active;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 32, minWidth: 32),
-        alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s2),
-        decoration: BoxDecoration(
-          color: active ? AppColors.accent100 : AppColors.surface,
-          border: Border.all(
-            color: active ? AppColors.accent : AppColors.neutral500,
-          ),
-          borderRadius: AppShapes.small,
-        ),
-        child: Text(
-          '24h',
-          style: AppTextStyles.small(
-            color: active ? AppColors.accent : AppColors.text,
-          ),
         ),
       ),
     );
@@ -210,55 +167,83 @@ const _blockFilterOptions = [
   (value: DayViewBlockFilter.registeredOnly, label: 'Registered'),
 ];
 
-/// A single bordered button showing the active view range, opening a
-/// dropdown menu of the other options on tap — the same "one button, tap
-/// for a menu" pattern a calendar app's own view switcher uses, replacing
-/// the previous 4-option segmented control (which fit in tests but
-/// overflowed a real phone's width).
-class _ViewModeButton extends StatelessWidget {
-  const _ViewModeButton({required this.mode, required this.onChanged});
+/// Wraps a callback so [PopupMenuButton] can carry three different action
+/// shapes (pick a view mode, pick a filter, toggle full-day) through one
+/// `onSelected`, without a combined enum every unrelated caller has to
+/// pattern-match through.
+class _MenuChoice {
+  const _MenuChoice(this.onSelect);
+
+  final VoidCallback onSelect;
+}
+
+/// One bordered "⋮" button opening every other header control that isn't
+/// date navigation or the two primary actions (Start, + Log) — the view
+/// mode, the Plan/Registered filter, and the full-day toggle, previously
+/// three separate buttons crowding this header on top of those. A single
+/// entry point, sectioned by [_MenuSectionHeader], each still a one-tap
+/// selection that closes the menu — same interaction each control already
+/// had on its own.
+class _OverflowMenuButton extends StatelessWidget {
+  const _OverflowMenuButton({
+    required this.mode,
+    required this.onModeChanged,
+    required this.filter,
+    required this.onFilterChanged,
+    required this.fullDay,
+    required this.onFullDayChanged,
+  });
 
   final DayViewMode mode;
-  final ValueChanged<DayViewMode> onChanged;
+  final ValueChanged<DayViewMode> onModeChanged;
+  final DayViewBlockFilter filter;
+  final ValueChanged<DayViewBlockFilter> onFilterChanged;
+  final bool fullDay;
+  final ValueChanged<bool> onFullDayChanged;
 
   @override
   Widget build(BuildContext context) {
-    final currentLabel = _viewModeOptions
-        .firstWhere((option) => option.value == mode)
-        .label;
-
-    return PopupMenuButton<DayViewMode>(
-      initialValue: mode,
-      onSelected: onChanged,
+    return PopupMenuButton<_MenuChoice>(
+      onSelected: (choice) => choice.onSelect(),
       color: AppColors.surface,
-      // A real flyout now — Fluent floats menus above the page with
-      // shadow8 rather than pinning them flat against it.
       elevation: 8,
       padding: EdgeInsets.zero,
       shape: const RoundedRectangleBorder(borderRadius: AppShapes.medium),
       itemBuilder: (context) => [
+        const PopupMenuItem<_MenuChoice>(
+          enabled: false,
+          padding: EdgeInsets.zero,
+          height: 28,
+          child: _MenuSectionHeader('VIEW'),
+        ),
         for (final option in _viewModeOptions)
-          PopupMenuItem<DayViewMode>(
-            value: option.value,
+          PopupMenuItem<_MenuChoice>(
+            value: _MenuChoice(() => onModeChanged(option.value)),
             padding: EdgeInsets.zero,
             height: 40,
-            child: Container(
-              width: double.infinity,
-              alignment: Alignment.centerLeft,
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s3),
-              color: option.value == mode ? AppColors.accent100 : null,
-              child: Text(
-                option.label,
-                style: AppTextStyles.label(
-                  color: option.value == mode ? AppColors.accent : null,
-                ).copyWith(
-                  fontWeight: option.value == mode
-                      ? FontWeight.w600
-                      : FontWeight.w400,
-                ),
-              ),
-            ),
+            child: _MenuRow(label: option.label, selected: option.value == mode),
           ),
+        const PopupMenuDivider(height: 1),
+        const PopupMenuItem<_MenuChoice>(
+          enabled: false,
+          padding: EdgeInsets.zero,
+          height: 28,
+          child: _MenuSectionHeader('SHOW'),
+        ),
+        for (final option in _blockFilterOptions)
+          PopupMenuItem<_MenuChoice>(
+            value: _MenuChoice(() => onFilterChanged(option.value)),
+            padding: EdgeInsets.zero,
+            height: 40,
+            child: _MenuRow(label: option.label, selected: option.value == filter),
+          ),
+        const PopupMenuDivider(height: 1),
+        PopupMenuItem<_MenuChoice>(
+          value: _MenuChoice(() => onFullDayChanged(!fullDay)),
+          padding: EdgeInsets.zero,
+          height: 40,
+          child: _MenuRow(label: 'Full day (24h)', selected: fullDay),
+        ),
       ],
       child: Container(
         // No `alignment` here — Container treats a non-null alignment as
@@ -266,97 +251,68 @@ class _ViewModeButton extends StatelessWidget {
         // child within it," which under the header's stretched Column
         // silently turned this into a full-width button. mainAxisSize.min
         // on the Row below already keeps this hugging its own content.
-        constraints: const BoxConstraints(minHeight: 32),
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.s2,
-          vertical: AppSpacing.s1,
-        ),
+        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+        alignment: Alignment.center,
         decoration: BoxDecoration(
           color: AppColors.surface,
           border: Border.all(color: AppColors.neutral500),
           borderRadius: AppShapes.small,
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Text(currentLabel, style: AppTextStyles.small(color: AppColors.text)),
-            const SizedBox(width: 4),
-            Text('▾', style: AppTextStyles.small(color: AppColors.text)),
-          ],
-        ),
+        child: Text('⋮', style: AppTextStyles.label(color: AppColors.text)),
       ),
     );
   }
 }
 
-/// Same "one bordered button, tap for a menu" pattern as [_ViewModeButton]
-/// — filters which of Plan/Actual the timeline below actually draws (see
-/// [DayViewBlockFilter]'s own doc comment for what it does and doesn't
-/// affect).
-class _BlockFilterButton extends StatelessWidget {
-  const _BlockFilterButton({required this.filter, required this.onChanged});
+class _MenuSectionHeader extends StatelessWidget {
+  const _MenuSectionHeader(this.text);
 
-  final DayViewBlockFilter filter;
-  final ValueChanged<DayViewBlockFilter> onChanged;
+  final String text;
 
   @override
   Widget build(BuildContext context) {
-    final currentLabel = _blockFilterOptions
-        .firstWhere((option) => option.value == filter)
-        .label;
+    return Container(
+      width: double.infinity,
+      alignment: Alignment.centerLeft,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s3),
+      child: Text(text, style: AppTextStyles.kicker()),
+    );
+  }
+}
 
-    return PopupMenuButton<DayViewBlockFilter>(
-      initialValue: filter,
-      onSelected: onChanged,
-      color: AppColors.surface,
-      elevation: 8,
-      padding: EdgeInsets.zero,
-      shape: const RoundedRectangleBorder(borderRadius: AppShapes.medium),
-      itemBuilder: (context) => [
-        for (final option in _blockFilterOptions)
-          PopupMenuItem<DayViewBlockFilter>(
-            value: option.value,
-            padding: EdgeInsets.zero,
-            height: 40,
-            child: Container(
-              width: double.infinity,
-              alignment: Alignment.centerLeft,
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s3),
-              color: option.value == filter ? AppColors.accent100 : null,
-              child: Text(
-                option.label,
-                style: AppTextStyles.label(
-                  color: option.value == filter ? AppColors.accent : null,
-                ).copyWith(
-                  fontWeight: option.value == filter
-                      ? FontWeight.w600
-                      : FontWeight.w400,
-                ),
+/// One selectable row inside the overflow menu — a checkmark when
+/// [selected], matching how a real menu (not a segmented control) shows
+/// the current choice among several, rather than this app's usual
+/// highlighted-background convention which doesn't read as clearly at
+/// this row height.
+class _MenuRow extends StatelessWidget {
+  const _MenuRow({required this.label, required this.selected});
+
+  final String label;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      alignment: Alignment.centerLeft,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s3),
+      color: selected ? AppColors.accent100 : null,
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: AppTextStyles.label(
+                color: selected ? AppColors.accent : null,
+              ).copyWith(
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
               ),
             ),
           ),
-      ],
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 32),
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.s2,
-          vertical: AppSpacing.s1,
-        ),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          border: Border.all(color: AppColors.neutral500),
-          borderRadius: AppShapes.small,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Text(currentLabel, style: AppTextStyles.small(color: AppColors.text)),
-            const SizedBox(width: 4),
-            Text('▾', style: AppTextStyles.small(color: AppColors.text)),
-          ],
-        ),
+          if (selected)
+            Text('✓', style: AppTextStyles.label(color: AppColors.accent)),
+        ],
       ),
     );
   }

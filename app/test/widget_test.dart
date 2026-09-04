@@ -176,18 +176,18 @@ Future<void> _tapTab(WidgetTester tester, String label) async {
   await tester.pumpAndSettle();
 }
 
-/// The Day view's mode switcher is a single button (showing the current
-/// mode) that opens a dropdown menu of the other options — tap the button,
-/// then the target option's menu item.
+/// The Day view's mode/filter/full-day controls all live behind one "⋮"
+/// overflow menu button now (see DayHeaderBar's own doc comment) — tap it,
+/// then the target option's row inside.
 Future<void> _selectDayViewMode(WidgetTester tester, String label) async {
-  await tester.tap(find.byType(PopupMenuButton<DayViewMode>));
+  await tester.tap(find.byWidgetPredicate((w) => w is PopupMenuButton));
   await tester.pumpAndSettle();
   await tester.tap(find.text(label).last);
   await tester.pumpAndSettle();
 }
 
 Future<void> _selectBlockFilter(WidgetTester tester, String label) async {
-  await tester.tap(find.byType(PopupMenuButton<DayViewBlockFilter>));
+  await tester.tap(find.byWidgetPredicate((w) => w is PopupMenuButton));
   await tester.pumpAndSettle();
   await tester.tap(find.text(label).last);
   await tester.pumpAndSettle();
@@ -4946,7 +4946,11 @@ void main() {
         isA<NeverScrollableScrollPhysics>(),
       );
 
-      await tester.tap(find.text('24h'));
+      // The toggle now lives inside the header's single "⋮" overflow menu,
+      // as "Full day (24h)".
+      await tester.tap(find.byWidgetPredicate((w) => w is PopupMenuButton));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Full day (24h)'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
@@ -4958,7 +4962,9 @@ void main() {
         isNot(isA<NeverScrollableScrollPhysics>()),
       );
 
-      await tester.tap(find.text('24h'));
+      await tester.tap(find.byWidgetPredicate((w) => w is PopupMenuButton));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Full day (24h)'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
