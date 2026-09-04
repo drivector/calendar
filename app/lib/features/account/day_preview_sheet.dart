@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../models/category.dart';
 import '../../models/day_capacity.dart';
 import '../../models/goal.dart';
+import '../../models/goal_planned_blocks.dart';
 import '../../models/planned_block.dart';
 import '../../state/categories_providers.dart';
 import '../../state/goals_providers.dart';
@@ -12,6 +13,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_shapes.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
+import '../../utils/duration_format.dart';
 import '../day_view/widgets/block_label_style.dart';
 import '../day_view/widgets/plan_block_widget.dart';
 
@@ -84,6 +86,17 @@ class _DayPreviewDialog extends StatelessWidget {
     }
     final hourMarks = _hourMarksBetween(axisStart, axisEnd);
 
+    // Goal-targeted time with no fixed clock slot for this day (e.g.
+    // "piano, 15 min, any time") — never becomes a PlannedBlock (see
+    // generateGoalPlannedBlocksForDate), so it has no place on the
+    // timeline above; listed separately instead, one row per goal.
+    final unscheduled =
+        untimedPlannedDurationByGoalForDate(goals: goals, date: day.date).entries
+            .map((entry) => (goal: goalById(goals, entry.key), duration: entry.value))
+            .where((e) => e.goal != null)
+            .toList()
+          ..sort((a, b) => b.duration.compareTo(a.duration));
+
     return Dialog(
       backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(borderRadius: AppShapes.medium),
@@ -126,7 +139,7 @@ class _DayPreviewDialog extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: AppSpacing.s2),
-              if (blocks.isEmpty)
+              if (blocks.isEmpty && unscheduled.isEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: AppSpacing.s3),
                   child: Text(
@@ -134,7 +147,7 @@ class _DayPreviewDialog extends StatelessWidget {
                     style: AppTextStyles.mono(),
                   ),
                 )
-              else
+              else if (blocks.isNotEmpty)
                 SizedBox(
                   height: timelineHeight,
                   child: Stack(
@@ -146,6 +159,33 @@ class _DayPreviewDialog extends StatelessWidget {
                     ],
                   ),
                 ),
+              if (unscheduled.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.s3),
+                Text('UNSCHEDULED', style: AppTextStyles.kicker()),
+                const SizedBox(height: AppSpacing.s1),
+                for (final entry in unscheduled)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          entry.goal!.name.toLowerCase(),
+                          style: AppTextStyles.mono(
+                            color: resolveCategory(
+                              categories,
+                              entry.goal!.categoryId,
+                            ).color,
+                          ),
+                        ),
+                        Text(
+                          formatDuration(entry.duration),
+                          style: AppTextStyles.mono(color: AppColors.text),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
             ],
           ),
         ),

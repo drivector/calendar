@@ -1217,6 +1217,51 @@ void main() {
   );
 
   testWidgets(
+    'Capacity: tapping a day opens a preview showing its unscheduled goal '
+    'time below the timeline — goal-targeted duration with no fixed clock '
+    'slot, which never becomes a plotted block',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: await _signedInOverrides(),
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _tapTab(tester, 'Planning');
+      await tester.pumpAndSettle();
+
+      // Monday 17 Aug — the mock Walking/Deep work goals both have plain
+      // duration-only schedule entries (no fixed clock time), so they
+      // never generate a plotted PlannedBlock for any day, this one
+      // included.
+      await tester.tap(find.text('MON 17'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(Dialog), findsOneWidget);
+      expect(find.text('UNSCHEDULED'), findsOneWidget);
+      expect(
+        find.descendant(of: find.byType(Dialog), matching: find.text('walking')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: find.byType(Dialog), matching: find.text('deep work')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: find.byType(Dialog), matching: find.text('1h')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: find.byType(Dialog), matching: find.text('4h')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
     'Capacity: a day planned past its window reports overplanned instead of negative free time',
     (WidgetTester tester) async {
       final container = ProviderContainer(
