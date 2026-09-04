@@ -10,7 +10,7 @@ const fullDayWindow = ClockRange(ClockTime(0, 0), ClockTime(24, 0));
 
 /// Which hours of the day count as "trackable" — feeds the Capacity page's
 /// planned-vs-available breakdown and the untracked-gap calculation (see
-/// `dayWindowFor` in `state/derived_providers.dart`), both of which used to
+/// `dayWindowsFor` in `state/derived_providers.dart`), both of which used to
 /// hardcode a single 07:00–18:00 window for every day alike. Per-weekday
 /// now, and each day can hold more than one range (e.g. 06:00–09:00 and
 /// 17:00–22:00, skipping a midday gap) — same shape as a goal's own

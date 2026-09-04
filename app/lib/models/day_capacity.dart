@@ -1,8 +1,9 @@
 import 'planned_block.dart';
 
-/// The tracked window's length in hours — matches `dayWindowFor`
-/// (07:00–18:00) in `state/derived_providers.dart`, the same window the Day
-/// view already uses to decide what counts as an "untracked" gap. Reused
+/// The tracked window's length in hours — matches the default window
+/// produced by `dayWindowsFor` in `state/derived_providers.dart`, the same
+/// windows the Day view already uses to decide what counts as an
+/// "untracked" gap. Reused
 /// here as the day's plannable capacity, so "available" means the same
 /// thing across the app rather than introducing a second definition of a
 /// normal day.
