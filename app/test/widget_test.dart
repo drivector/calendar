@@ -4307,6 +4307,205 @@ void main() {
   );
 
   testWidgets(
+    'Day view: tapping a future manually-added planned block opens an '
+    'edit sheet for the plan itself, never an add-actual sheet — nothing '
+    'can have happened yet',
+    (WidgetTester tester) async {
+      final futureDate = DateTime.now().add(const Duration(days: 30));
+      final container = ProviderContainer(
+        overrides: [
+          ...await _signedInOnboardedNoActivityOverrides(),
+          selectedDateProvider.overrideWith((ref) => futureDate),
+        ],
+      );
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await container.read(plannedBlocksRepositoryProvider).upsert(
+        PlannedBlock(
+          id: 'plan-future-test',
+          start: DateTime(
+            futureDate.year,
+            futureDate.month,
+            futureDate.day,
+            12,
+            0,
+          ),
+          end: DateTime(
+            futureDate.year,
+            futureDate.month,
+            futureDate.day,
+            12,
+            30,
+          ),
+          title: 'Future sync',
+          categoryId: 'cat-1',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final planBlock = find.byWidgetPredicate(
+        (w) => w is PlanBlockWidget && w.block.id == 'plan-future-test',
+      );
+      await tester.ensureVisible(planBlock);
+      await tester.tap(planBlock);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Edit planned activity'), findsOneWidget);
+      expect(find.text('New actual activity'), findsNothing);
+      final sheet = find.byType(BottomSheet);
+      expect(
+        find.descendant(of: sheet, matching: find.text('Future sync')),
+        findsOneWidget,
+      );
+      expect(find.text('Delete planned activity'), findsOneWidget);
+
+      // Editing the title and saving updates the same document in place —
+      // no duplicate plan added alongside it.
+      await tester.enterText(find.byType(TextField).first, 'Renamed sync');
+      await tester.tap(find.text('save'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      final planned = container.read(allPlannedBlocksProvider);
+      expect(planned, hasLength(1));
+      expect(planned.single.id, 'plan-future-test');
+      expect(planned.single.title, 'Renamed sync');
+    },
+  );
+
+  testWidgets(
+    "Day view: the edit-planned sheet's delete option confirms before "
+    'removing the plan',
+    (WidgetTester tester) async {
+      final futureDate = DateTime.now().add(const Duration(days: 30));
+      final container = ProviderContainer(
+        overrides: [
+          ...await _signedInOnboardedNoActivityOverrides(),
+          selectedDateProvider.overrideWith((ref) => futureDate),
+        ],
+      );
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await container.read(plannedBlocksRepositoryProvider).upsert(
+        PlannedBlock(
+          id: 'plan-future-delete-test',
+          start: DateTime(
+            futureDate.year,
+            futureDate.month,
+            futureDate.day,
+            12,
+            0,
+          ),
+          end: DateTime(
+            futureDate.year,
+            futureDate.month,
+            futureDate.day,
+            12,
+            30,
+          ),
+          title: 'Future sync',
+          categoryId: 'cat-1',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final planBlock = find.byWidgetPredicate(
+        (w) => w is PlanBlockWidget && w.block.id == 'plan-future-delete-test',
+      );
+      await tester.ensureVisible(planBlock);
+      await tester.tap(planBlock);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Delete planned activity'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Delete planned activity?'), findsOneWidget);
+      // Cancelling leaves the plan untouched.
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(container.read(allPlannedBlocksProvider), hasLength(1));
+
+      await tester.tap(find.text('Delete planned activity'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(container.read(allPlannedBlocksProvider), isEmpty);
+    },
+  );
+
+  testWidgets(
+    'Day view: tapping a future goal-generated planned block opens that '
+    "goal's own detail instead — there's no standalone document behind "
+    "it to edit, since it's derived fresh from the goal's own recurring "
+    'schedule',
+    (WidgetTester tester) async {
+      final futureDate = DateTime.now().add(const Duration(days: 30));
+      final container = ProviderContainer(
+        overrides: [
+          ...await _signedInOnboardedNoActivityOverrides(),
+          selectedDateProvider.overrideWith((ref) => futureDate),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final workGoal = Goal(
+        id: 'goal-work-future-test',
+        name: 'Work',
+        categoryId: 'cat-1',
+        startDate: DateTime(2020, 1, 1),
+        endDate: DateTime(2099, 12, 31),
+        scheduleByWeekday: {
+          for (var weekday = 1; weekday <= 7; weekday++)
+            weekday: [
+              const DayScheduleEntry.timeRange(
+                ClockRange(ClockTime(9, 0), ClockTime(18, 0)),
+              ),
+            ],
+        },
+      );
+      await container.read(goalsRepositoryProvider).upsert(workGoal);
+      await tester.pumpAndSettle();
+
+      final planBlock = find.byWidgetPredicate(
+        (w) => w is PlanBlockWidget && w.block.goalId == 'goal-work-future-test',
+      );
+      await tester.ensureVisible(planBlock);
+      await tester.tap(planBlock);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(GoalDetailSheet), findsOneWidget);
+      expect(find.text('Edit planned activity'), findsNothing);
+      expect(find.text('New actual activity'), findsNothing);
+    },
+  );
+
+  testWidgets(
     'Day view: the add-block sheet shows a computed duration next to '
     'its title',
     (WidgetTester tester) async {

@@ -7,6 +7,7 @@ import '../../../models/category.dart';
 import '../../../models/goal.dart';
 import '../../../models/planned_block.dart';
 import '../../../models/tracked_block.dart';
+import '../../../shared/widgets/confirm_delete_dialog.dart';
 import '../../../shared/widgets/dashed_border.dart';
 import '../../../shared/widgets/inline_form_error.dart';
 import '../../../state/categories_providers.dart';
@@ -42,6 +43,11 @@ Future<void> showAddBlockSheet(
   String? initialTitle,
   String? initialGoalId,
   bool fromPlan = false,
+  // Set when opening this sheet by tapping an existing manually-added
+  // planned block that hasn't happened yet (see TimeBodyGrid) — turns this
+  // from "create a new plan" into "edit this one", saving back to the same
+  // document (and offering to delete it) instead of adding a duplicate.
+  String? editingId,
 }) {
   // Nothing to file a block under yet — a brand-new account starts with no
   // goals, so tell the user to create one first rather than opening a form
@@ -73,6 +79,7 @@ Future<void> showAddBlockSheet(
       initialTitle: initialTitle,
       initialGoalId: initialGoalId,
       fromPlan: fromPlan,
+      editingId: editingId,
     ),
   );
 }
@@ -87,6 +94,7 @@ class _AddBlockSheet extends StatefulWidget {
     this.initialTitle,
     this.initialGoalId,
     this.fromPlan = false,
+    this.editingId,
   });
 
   final bool isPlan;
@@ -106,6 +114,10 @@ class _AddBlockSheet extends StatefulWidget {
   // icon next to the title flagging that this entry matches a plan, rather
   // than being a fresh manual entry.
   final bool fromPlan;
+
+  // Set when editing an existing planned block rather than creating a new
+  // one — see showAddBlockSheet's own doc comment on this param.
+  final String? editingId;
 
   @override
   State<_AddBlockSheet> createState() => _AddBlockSheetState();
@@ -238,7 +250,7 @@ class _AddBlockSheetState extends State<_AddBlockSheet> {
     // save, since the goal already says what this is.
     final typedTitle = _titleController.text.trim();
     final title = typedTitle.isEmpty ? goal.name : typedTitle;
-    final id =
+    final id = widget.editingId ??
         '${widget.isPlan ? 'plan' : 'actual'}-${DateTime.now().microsecondsSinceEpoch}';
 
     if (widget.isPlan) {
@@ -267,6 +279,20 @@ class _AddBlockSheetState extends State<_AddBlockSheet> {
             ),
           );
     }
+    Navigator.of(context).pop();
+  }
+
+  Future<void> _delete() async {
+    final confirmed = await showConfirmDeleteDialog(
+      context,
+      title: 'Delete planned activity?',
+      message: 'This removes "${_titleController.text}" from your plan.',
+    );
+    if (!confirmed || !mounted) return;
+    await widget.ref
+        .read(plannedBlocksRepositoryProvider)
+        .remove(widget.editingId!);
+    if (!mounted) return;
     Navigator.of(context).pop();
   }
 
@@ -317,7 +343,9 @@ class _AddBlockSheetState extends State<_AddBlockSheet> {
                           textBaseline: TextBaseline.alphabetic,
                           children: [
                             Text(
-                              widget.isPlan
+                              widget.editingId != null
+                                  ? 'Edit planned activity'
+                                  : widget.isPlan
                                   ? 'New planned activity'
                                   : 'New actual activity',
                               style: AppTextStyles.title(),
@@ -390,6 +418,22 @@ class _AddBlockSheetState extends State<_AddBlockSheet> {
                         _errorMessage = null;
                       }),
                     ),
+                    if (widget.editingId != null) ...[
+                      const SizedBox(height: AppSpacing.s3),
+                      GestureDetector(
+                        onTap: _delete,
+                        behavior: HitTestBehavior.opaque,
+                        child: Container(
+                          width: double.infinity,
+                          constraints: const BoxConstraints(minHeight: 44),
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Delete planned activity',
+                            style: AppTextStyles.small(color: AppColors.accent),
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

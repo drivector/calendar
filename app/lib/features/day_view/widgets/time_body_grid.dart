@@ -16,6 +16,7 @@ import '../../../state/user_settings_providers.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../utils/overlap_layout.dart';
+import '../../goals/widgets/goal_detail_sheet.dart';
 import 'actual_block_widget.dart';
 import 'add_block_sheet.dart';
 import 'block_label_style.dart';
@@ -340,23 +341,49 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
             left: slotLeft,
             width: slotWidth,
             pxPerMinute: pxPerMinute,
-            // Opens the same add-actual sheet an empty-space tap does,
-            // prefilled from the plan itself (time, title, goal) —
-            // logging what was already planned shouldn't mean retyping
-            // it.
+            // A plan that hasn't happened yet can't have an actual entry
+            // logged against it — nothing has occurred to log. Tapping it
+            // instead opens something to edit the plan itself: for a
+            // manually-added one, this sheet in edit mode; for one derived
+            // from a goal's own recurring schedule (no standalone document
+            // to edit), the goal's own detail, where that schedule lives.
+            // Only a plan that's already started (or finished) opens the
+            // add-actual sheet, prefilled from the plan itself (time,
+            // title, goal) — logging what was already planned shouldn't
+            // mean retyping it.
             childBuilder: (labelStyle) => GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: () => showAddBlockSheet(
-                context,
-                ref,
-                isPlan: false,
-                date: date,
-                initialStart: TimeOfDay.fromDateTime(block.start),
-                initialEnd: TimeOfDay.fromDateTime(block.end),
-                initialTitle: block.title,
-                initialGoalId: goalForCategory(goals, block.categoryId)?.id,
-                fromPlan: true,
-              ),
+              onTap: () {
+                if (!block.start.isAfter(DateTime.now())) {
+                  showAddBlockSheet(
+                    context,
+                    ref,
+                    isPlan: false,
+                    date: date,
+                    initialStart: TimeOfDay.fromDateTime(block.start),
+                    initialEnd: TimeOfDay.fromDateTime(block.end),
+                    initialTitle: block.title,
+                    initialGoalId:
+                        goalForCategory(goals, block.categoryId)?.id,
+                    fromPlan: true,
+                  );
+                } else if (block.goalId != null) {
+                  showGoalDetailSheet(context, ref, block.goalId!);
+                } else {
+                  showAddBlockSheet(
+                    context,
+                    ref,
+                    isPlan: true,
+                    date: date,
+                    initialStart: TimeOfDay.fromDateTime(block.start),
+                    initialEnd: TimeOfDay.fromDateTime(block.end),
+                    initialTitle: block.title,
+                    initialGoalId:
+                        goalForCategory(goals, block.categoryId)?.id,
+                    editingId: block.id,
+                  );
+                }
+              },
               child: PlanBlockWidget(
                 block: block,
                 category: resolveCategory(categories, block.categoryId),
