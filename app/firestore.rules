@@ -53,25 +53,31 @@ service cloud.firestore {
 
     match /users/{uid}/plannedBlocks/{docId} {
       allow read: if isOwner(uid);
+      // categoryId dropped, goalId added when every activity became
+      // goal-owned (category is now derived from the linked goal, not
+      // stored on the block itself) — this rule has to track that same
+      // schema, or every write from the app's own current code fails
+      // validation here regardless of anything the client does right.
       allow create, update: if isOwner(uid)
-          && request.resource.data.keys().hasAll(['start', 'end', 'title', 'categoryId'])
+          && request.resource.data.keys().hasAll(['start', 'end', 'title', 'goalId'])
           && request.resource.data.start is string
           && request.resource.data.end is string
           && isReasonableString(request.resource.data.title)
-          && isReasonableString(request.resource.data.categoryId);
+          && isReasonableString(request.resource.data.goalId);
       allow delete: if isOwner(uid);
     }
 
     match /users/{uid}/trackedBlocks/{docId} {
       allow read: if isOwner(uid);
+      // Same categoryId -> goalId schema change as plannedBlocks above.
       allow create, update: if isOwner(uid)
           && request.resource.data.keys().hasAll(
-               ['start', 'end', 'title', 'categoryId', 'sourceId']
+               ['start', 'end', 'title', 'goalId', 'sourceId']
              )
           && request.resource.data.start is string
           && request.resource.data.end is string
           && isReasonableString(request.resource.data.title)
-          && isReasonableString(request.resource.data.categoryId)
+          && isReasonableString(request.resource.data.goalId)
           && isReasonableString(request.resource.data.sourceId);
       allow delete: if isOwner(uid);
     }
