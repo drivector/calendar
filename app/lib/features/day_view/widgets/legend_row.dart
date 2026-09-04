@@ -2,13 +2,16 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/widgets/dashed_border.dart';
+import '../../../state/categories_providers.dart';
 import '../../../state/day_view_providers.dart';
 import '../../../state/derived_providers.dart';
+import '../../../state/goals_providers.dart';
 import '../../../theme/app_category_colors.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../utils/duration_format.dart';
+import 'unscheduled_dialog.dart';
 
 /// Three items, plus a fourth shown only when relevant: a plain bordered
 /// swatch for "tracked" (the user's own configured tracking window — see
@@ -26,7 +29,9 @@ import '../../../utils/duration_format.dart';
 /// by default (the word prefixes are what reliably overflow a real phone
 /// width once totals get long, e.g. "registered 7h 15m" — only caught live
 /// on-device, not by the default wide test viewport); tap one to reveal
-/// its own word too.
+/// its own word too — except "unscheduled", which opens a breakdown
+/// dialog instead (see [showUnscheduledDialog]), in every mode, Day
+/// included.
 class LegendRow extends ConsumerStatefulWidget {
   const LegendRow({super.key});
 
@@ -42,6 +47,13 @@ class _LegendRowState extends ConsumerState<LegendRow> {
     final (plannedTotal, trackedTotal, registeredTotal, unscheduledTotal) =
         ref.watch(dayTotalsProvider);
     final isDayMode = ref.watch(dayViewModeProvider) == DayViewMode.day;
+
+    void openUnscheduledDialog() => showUnscheduledDialog(
+      context,
+      byGoal: ref.read(unscheduledByGoalProvider),
+      goals: ref.read(goalsProvider),
+      categories: ref.read(categoriesProvider),
+    );
 
     final items = [
       (
@@ -115,7 +127,9 @@ class _LegendRowState extends ConsumerState<LegendRow> {
                       word: item.word,
                       value: item.value,
                       showWord: true,
-                      onTap: null,
+                      onTap: item.word == 'unscheduled'
+                          ? openUnscheduledDialog
+                          : null,
                     ),
                 ],
               )
@@ -128,11 +142,13 @@ class _LegendRowState extends ConsumerState<LegendRow> {
                       word: items[i].word,
                       value: items[i].value,
                       showWord: _revealedIndex == i,
-                      onTap: () => setState(
-                        () => _revealedIndex = _revealedIndex == i
-                            ? null
-                            : i,
-                      ),
+                      onTap: items[i].word == 'unscheduled'
+                          ? openUnscheduledDialog
+                          : () => setState(
+                              () => _revealedIndex = _revealedIndex == i
+                                  ? null
+                                  : i,
+                            ),
                     ),
                   ],
                 ],

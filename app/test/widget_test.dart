@@ -3937,15 +3937,61 @@ void main() {
 
       await tester.tap(legendTaps.at(3)); // unscheduled
       await tester.pumpAndSettle();
-      // Tapping reveals the word alongside the same value.
-      expect(find.text('unscheduled 1h 30m'), findsOneWidget);
-      expect(find.text('1h 30m'), findsNothing);
+      // Unlike the other three items, tapping "unscheduled" opens its own
+      // breakdown dialog instead of just revealing the word — see
+      // showUnscheduledDialog. Its own total matches the legend's.
+      expect(find.text('Unscheduled'), findsOneWidget);
+      // Scoped to the dialog — the legend row behind it still has its own
+      // "1h 30m" value in the tree too, just visually covered.
+      expect(
+        find.descendant(of: find.byType(Dialog), matching: find.text('1h 30m')),
+        findsNWidgets(2), // the Total row and the one goal's own row
+      );
+      await tester.tap(find.text('close'));
+      await tester.pumpAndSettle();
 
       await tester.tap(legendTaps.at(0)); // tracked
       await tester.pumpAndSettle();
       // "tracked" (the window) sums the same way — 3 days at the default
       // full 24h each (formatDuration doesn't roll over into "days").
       expect(find.text('tracked 72h'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Day view: tapping "unscheduled" in the header legend opens a dialog '
+    'listing the goal(s) it comes from, with a total at the top',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: await _signedInOnboardedNoActivityOverrides(),
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Day mode already shows the word inline ("unscheduled 30m") — this
+      // covers that tapping it still opens the dialog rather than being
+      // inert, unlike the other three legend items in this mode.
+      expect(find.text('unscheduled 30m'), findsOneWidget);
+      await tester.tap(find.text('unscheduled 30m'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Unscheduled'), findsOneWidget);
+      final dialog = find.byType(Dialog);
+      expect(
+        find.descendant(of: dialog, matching: find.text('Total')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: dialog, matching: find.text('30m')),
+        findsNWidgets(2), // the Total row and the goal's own row
+      );
+      expect(
+        find.descendant(of: dialog, matching: find.text('test goal')),
+        findsOneWidget,
+      );
     },
   );
 

@@ -161,7 +161,21 @@ class _DayPreviewDialog extends StatelessWidget {
                 ),
               if (unscheduled.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.s3),
-                Text('UNSCHEDULED', style: AppTextStyles.kicker()),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('UNSCHEDULED', style: AppTextStyles.kicker()),
+                    Text(
+                      formatDuration(
+                        unscheduled.fold(
+                          Duration.zero,
+                          (total, e) => total + e.duration,
+                        ),
+                      ),
+                      style: AppTextStyles.kicker(),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: AppSpacing.s1),
                 for (final entry in unscheduled)
                   Padding(

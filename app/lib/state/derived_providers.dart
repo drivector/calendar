@@ -170,3 +170,25 @@ final dayTotalsProvider =
       }
       return (plannedTotal, windowTotal, registeredTotal, unscheduledTotal);
     });
+
+/// [dayTotalsProvider]'s own `unscheduled` figure, broken down per goal
+/// rather than summed into one total — the exact goal-level breakdown the
+/// legend's "unscheduled" popup lists. Keyed by goal id (not category), so
+/// two goals sharing a category never merge into one row.
+final unscheduledByGoalProvider = Provider<Map<String, Duration>>((ref) {
+  final dates = ref.watch(visibleDatesProvider);
+  final goals = ref.watch(goalsProvider);
+
+  final totals = <String, Duration>{};
+  for (final date in dates) {
+    for (final entry
+        in untimedPlannedDurationByGoalForDate(goals: goals, date: date).entries) {
+      totals.update(
+        entry.key,
+        (total) => total + entry.value,
+        ifAbsent: () => entry.value,
+      );
+    }
+  }
+  return totals;
+});
