@@ -122,10 +122,7 @@ class _TrackingWindowSheetState extends State<_TrackingWindowSheet> {
       if (mounted) Navigator.of(context).pop();
     } catch (_) {
       if (mounted) {
-        setState(
-          () => _errorMessage =
-              "Couldn't save — check your connection and try again.",
-        );
+        setState(() => _errorMessage = kSaveFailedMessage);
       }
     } finally {
       if (mounted) setState(() => _saving = false);

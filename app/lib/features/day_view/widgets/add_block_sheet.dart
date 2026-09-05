@@ -186,7 +186,7 @@ class _AddBlockSheetState extends State<_AddBlockSheet> {
     if (!mounted) return;
     switch (action) {
       case _ExitAction.save:
-        _save();
+        await _save();
       case _ExitAction.cancel:
         Navigator.of(context).pop();
       case null:
@@ -215,7 +215,7 @@ class _AddBlockSheetState extends State<_AddBlockSheet> {
     });
   }
 
-  void _save() {
+  Future<void> _save() async {
     final goalId = _goalId;
     if (goalId == null) {
       setState(() => _errorMessage = 'Set a goal before saving');
@@ -252,32 +252,44 @@ class _AddBlockSheetState extends State<_AddBlockSheet> {
     final id = widget.editingId ??
         '${widget.isPlan ? 'plan' : 'actual'}-${DateTime.now().microsecondsSinceEpoch}';
 
-    if (widget.isPlan) {
-      widget.ref
-          .read(plannedBlocksRepositoryProvider)
-          .upsert(
-            PlannedBlock(
-              id: id,
-              start: startDt,
-              end: endDt,
-              title: title,
-              goalId: goal.id,
-            ),
-          );
-    } else {
-      widget.ref
-          .read(trackedBlocksRepositoryProvider)
-          .upsert(
-            TrackedBlock(
-              id: id,
-              start: startDt,
-              end: endDt,
-              title: title,
-              goalId: goal.id,
-              sourceId: 'manual',
-            ),
-          );
+    try {
+      if (widget.isPlan) {
+        await widget.ref
+            .read(plannedBlocksRepositoryProvider)
+            .upsert(
+              PlannedBlock(
+                id: id,
+                start: startDt,
+                end: endDt,
+                title: title,
+                goalId: goal.id,
+              ),
+            );
+      } else {
+        await widget.ref
+            .read(trackedBlocksRepositoryProvider)
+            .upsert(
+              TrackedBlock(
+                id: id,
+                start: startDt,
+                end: endDt,
+                title: title,
+                goalId: goal.id,
+                sourceId: 'manual',
+              ),
+            );
+      }
+    } catch (_) {
+      // The write used to be fired and forgotten, with the sheet closing
+      // immediately either way — so a rejected write (the real case:
+      // Firestore rules validating a field the app had stopped writing)
+      // looked exactly like a successful save that produced nothing.
+      // Surface it and stay open instead, matching the Start-activity
+      // sheet and the Account tracking-window save.
+      if (mounted) setState(() => _errorMessage = kSaveFailedMessage);
+      return;
     }
+    if (!mounted) return;
     Navigator.of(context).pop();
   }
 

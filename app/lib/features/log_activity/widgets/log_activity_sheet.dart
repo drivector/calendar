@@ -131,7 +131,7 @@ class _LogActivitySheetState extends ConsumerState<LogActivitySheet> {
     Navigator.of(context).pop();
   }
 
-  void _save() {
+  Future<void> _save() async {
     final draft = widget.ref.read(draftLogEntryProvider);
     final date = draft.date;
     final start = draft.start;
@@ -179,26 +179,37 @@ class _LogActivitySheetState extends ConsumerState<LogActivitySheet> {
         : draft.activity.trim();
 
     final existing = widget.existing;
-    widget.ref
-        .read(trackedBlocksRepositoryProvider)
-        .upsert(
-          TrackedBlock(
-            id: existing?.id ?? 'manual-${DateTime.now().microsecondsSinceEpoch}',
-            start: startDt,
-            end: endDt,
-            title: title,
-            goalId: goal.id,
-            // Editing keeps the block's real provenance (a health/calendar
-            // import stays that, not relabeled "manual" just because it
-            // was touched) and its link back to a plan, if it had one.
-            sourceId: existing?.sourceId ?? 'manual',
-            confidence: existing?.confidence ?? 1.0,
-            plannedBlockId: existing?.plannedBlockId,
-            note: draft.note.trim().isEmpty ? null : draft.note.trim(),
-          ),
-        );
+    try {
+      await widget.ref
+          .read(trackedBlocksRepositoryProvider)
+          .upsert(
+            TrackedBlock(
+              id: existing?.id ??
+                  'manual-${DateTime.now().microsecondsSinceEpoch}',
+              start: startDt,
+              end: endDt,
+              title: title,
+              goalId: goal.id,
+              // Editing keeps the block's real provenance (a health/calendar
+              // import stays that, not relabeled "manual" just because it
+              // was touched) and its link back to a plan, if it had one.
+              sourceId: existing?.sourceId ?? 'manual',
+              confidence: existing?.confidence ?? 1.0,
+              plannedBlockId: existing?.plannedBlockId,
+              note: draft.note.trim().isEmpty ? null : draft.note.trim(),
+            ),
+          );
+    } catch (_) {
+      // Not awaited before, so a rejected write closed this sheet exactly
+      // as a successful one did — the entry simply never appeared in the
+      // Activities list. The draft is deliberately left intact so the
+      // retry doesn't start from a blank form.
+      if (mounted) setState(() => _errorMessage = kSaveFailedMessage);
+      return;
+    }
 
     widget.ref.read(draftLogEntryProvider.notifier).reset();
+    if (!mounted) return;
     Navigator.of(context).pop();
   }
 

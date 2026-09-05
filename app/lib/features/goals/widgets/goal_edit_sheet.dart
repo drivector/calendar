@@ -9,6 +9,7 @@ import '../../../models/goal.dart';
 import '../../../models/goal_progress.dart';
 import '../../../shared/widgets/category_chip.dart';
 import '../../../shared/widgets/confirm_delete_dialog.dart';
+import '../../../shared/widgets/inline_form_error.dart';
 import '../../../state/categories_providers.dart';
 import '../../../state/day_view_providers.dart';
 import '../../../state/goals_providers.dart';
@@ -112,6 +113,12 @@ class GoalEditSheet extends StatefulWidget {
 }
 
 class _GoalEditSheetState extends State<GoalEditSheet> {
+  // Only ever set by a failed write — every other way this sheet can't
+  // save (an empty name, a schedule with no time on any day) is already
+  // handled by falling back to a default rather than blocking. Shown
+  // inline, not as a SnackBar: see InlineFormError's own doc comment.
+  String? _saveError;
+
   late final _nameController = TextEditingController(
     text: widget.existing?.name ?? '',
   );
@@ -224,7 +231,7 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
     if (!mounted) return;
     switch (action) {
       case _ExitAction.save:
-        _save();
+        await _save();
       case _ExitAction.discard:
         Navigator.of(context).pop();
       case _ExitAction.keepEditing:
@@ -446,7 +453,7 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
 
   void _back() => setState(() => _step = (_step - 1).clamp(1, _stepCount));
 
-  void _save() {
+  Future<void> _save() async {
     final goal = Goal(
       id:
           widget.existing?.id ??
@@ -468,7 +475,15 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
       endDate: _endDate,
       reminderMinutesBefore: _reminderMinutesBefore,
     );
-    widget.ref.read(goalsRepositoryProvider).upsert(goal);
+    try {
+      await widget.ref.read(goalsRepositoryProvider).upsert(goal);
+    } catch (_) {
+      // Fire-and-forget before, so a rejected write closed the sheet as if
+      // the goal had been created — it just never showed up in the list.
+      if (mounted) setState(() => _saveError = kSaveFailedMessage);
+      return;
+    }
+    if (!mounted) return;
     Navigator.of(context).pop();
   }
 
@@ -781,6 +796,10 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (_saveError != null) ...[
+          InlineFormError(_saveError!),
+          const SizedBox(height: AppSpacing.s2),
+        ],
         // Back and Next/Save share one row once there's a Back to show —
         // stacked full-width blocks read as two separate decisions instead
         // of one forward/backward pair.
