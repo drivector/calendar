@@ -96,6 +96,77 @@ void main() {
     );
 
     test(
+      'a planned block a hand-logged activity overlaps is not pending',
+      () {
+        final goal = _goal();
+        final planned = [
+          _plannedBlock(
+            id: 'plan-1',
+            start: _weekStart.add(const Duration(hours: 10)),
+          ),
+        ];
+        // Logged by hand at 10:00 rather than via "complete", so it has no
+        // plannedBlockId — completing the goal used to add a second,
+        // identical block over the top of it.
+        final tracked = [
+          TrackedBlock(
+            id: 'manual-1',
+            start: _weekStart.add(const Duration(hours: 10)),
+            end: _weekStart.add(const Duration(hours: 10, minutes: 30)),
+            title: 'Walk',
+            goalId: 'goal-walking',
+            sourceId: 'manual',
+          ),
+        ];
+
+        final pending = pendingPlannedBlocksForGoal(
+          goal: goal,
+          allPlanned: planned,
+          generatedThisWeek: const [],
+          allTracked: tracked,
+          weekStart: _weekStart,
+          now: _now,
+        );
+
+        expect(pending, isEmpty);
+      },
+    );
+
+    test(
+      'a tracked block for a different goal in the same slot leaves the plan pending',
+      () {
+        final goal = _goal();
+        final planned = [
+          _plannedBlock(
+            id: 'plan-1',
+            start: _weekStart.add(const Duration(hours: 10)),
+          ),
+        ];
+        final tracked = [
+          TrackedBlock(
+            id: 'manual-1',
+            start: _weekStart.add(const Duration(hours: 10)),
+            end: _weekStart.add(const Duration(hours: 10, minutes: 30)),
+            title: 'Something else',
+            goalId: 'goal-other',
+            sourceId: 'manual',
+          ),
+        ];
+
+        final pending = pendingPlannedBlocksForGoal(
+          goal: goal,
+          allPlanned: planned,
+          generatedThisWeek: const [],
+          allTracked: tracked,
+          weekStart: _weekStart,
+          now: _now,
+        );
+
+        expect(pending, hasLength(1));
+      },
+    );
+
+    test(
       'a goal-generated block for this goal, not yet tracked, is pending',
       () {
         final goal = _goal();

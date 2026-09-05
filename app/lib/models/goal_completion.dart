@@ -9,9 +9,9 @@ import 'tracked_block.dart';
 /// in one tap. A block still in progress or entirely in the future is left
 /// out: "complete" fills in what you actually did, not what you're merely
 /// scheduled to do later. A [TrackedBlock] counts as already covering a
-/// planned block when its [TrackedBlock.plannedBlockId] matches, so a
-/// second tap (or a block the user already logged by hand) never
-/// double-creates anything.
+/// planned block when its [TrackedBlock.plannedBlockId] matches *or* when
+/// it simply overlaps the plan for the same goal, so neither a second tap
+/// nor a block the user already logged by hand double-creates anything.
 List<PlannedBlock> pendingPlannedBlocksForGoal({
   required Goal goal,
   required List<PlannedBlock> allPlanned,
@@ -34,9 +34,26 @@ List<PlannedBlock> pendingPlannedBlocksForGoal({
       .whereType<String>()
       .toSet();
 
+  // An entry logged by hand (or registered by Start/Stop) never carries a
+  // [TrackedBlock.plannedBlockId] — nothing in the app sets one outside
+  // this file — so the id set alone doesn't see it, and "complete" used to
+  // create a second, identical block over the top of a slot the user had
+  // already filled in themselves. Overlap is the same signal the rest of
+  // the app already treats as "this tracked block corresponds to that
+  // plan" (see [matchingPlannedBlockFor]).
+  bool coveredByOverlap(PlannedBlock plan) => allTracked.any(
+    (t) =>
+        t.goalId == plan.goalId &&
+        t.start.isBefore(plan.end) &&
+        plan.start.isBefore(t.end),
+  );
+
   return planned
       .where(
-        (b) => !coveredPlannedBlockIds.contains(b.id) && b.end.isBefore(now),
+        (b) =>
+            !coveredPlannedBlockIds.contains(b.id) &&
+            !coveredByOverlap(b) &&
+            b.end.isBefore(now),
       )
       .toList()
     ..sort((a, b) => a.start.compareTo(b.start));
