@@ -14,6 +14,7 @@ import 'package:calendar_tracker/models/category.dart';
 import 'package:calendar_tracker/models/goal.dart';
 import 'package:calendar_tracker/models/tracked_block.dart';
 import 'package:calendar_tracker/shared/widgets/app_tab_bar.dart';
+import 'package:calendar_tracker/shared/widgets/goal_dropdown.dart';
 import 'package:calendar_tracker/shared/widgets/inline_form_error.dart';
 import 'package:calendar_tracker/state/categories_providers.dart';
 import 'package:calendar_tracker/state/day_view_providers.dart';
@@ -55,8 +56,7 @@ void main() {
       expect(find.text('New actual activity'), findsOneWidget);
 
       await tester.enterText(find.byType(TextField).first, 'Deep work');
-      await tester.tap(_goalInSheet('test goal'));
-      await tester.pumpAndSettle();
+      await _pickGoal(tester, ancestor: find.byType(BottomSheet));
       await tester.tap(find.text('save'));
       await tester.pumpAndSettle();
 
@@ -98,8 +98,7 @@ void main() {
       expect(find.text('New planned activity'), findsOneWidget);
 
       await tester.enterText(find.byType(TextField).first, 'Review');
-      await tester.tap(_goalInSheet('test goal'));
-      await tester.pumpAndSettle();
+      await _pickGoal(tester, ancestor: find.byType(BottomSheet));
       await tester.tap(find.text('save'));
       await tester.pumpAndSettle();
 
@@ -229,11 +228,10 @@ void main() {
 
         await tester.tap(find.text('▶ Start'));
         await tester.pumpAndSettle();
-        await tester.tap(
-          find.descendant(
-            of: find.byType(StartActivitySheet),
-            matching: find.text('walking'),
-          ),
+        await _pickGoal(
+          tester,
+          ancestor: find.byType(StartActivitySheet),
+          goalName: 'Walking',
         );
         await tester.tap(find.text('Start'));
         await tester.pumpAndSettle();
@@ -296,8 +294,7 @@ void main() {
       await tester.tapAt(tester.getCenter(find.byType(TimeBodyGrid)));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField).first, 'Deep work');
-      await tester.tap(_goalInSheet('test goal'));
-      await tester.pumpAndSettle();
+      await _pickGoal(tester, ancestor: find.byType(BottomSheet));
       await tester.tap(find.text('save'));
       await tester.pumpAndSettle();
 
@@ -469,10 +466,23 @@ final _rejectingCategories = categoriesRepositoryProvider.overrideWith(
   ),
 );
 
-/// A goal's own name also renders behind the sheet (the drift footer groups
-/// by goal), so the sheet's own goal control has to be found scoped to it.
-Finder _goalInSheet(String name) =>
-    find.descendant(of: find.byType(BottomSheet), matching: find.text(name));
+/// Picks a goal from the [GoalDropdown] inside [ancestor] — the dropdown's
+/// menu opens in its own overlay route, so the row to tap is not a
+/// descendant of the sheet the dropdown itself sits in. Scoping matters
+/// either way: a goal's name also renders behind the sheet, in the drift
+/// footer's own per-goal rows.
+Future<void> _pickGoal(
+  WidgetTester tester, {
+  required Finder ancestor,
+  String goalName = 'Test goal',
+}) async {
+  await tester.tap(
+    find.descendant(of: ancestor, matching: find.byType(GoalDropdown)),
+  );
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(goalName).last);
+  await tester.pumpAndSettle();
+}
 
 Future<void> _tapTab(WidgetTester tester, String label) async {
   await tester.tap(
