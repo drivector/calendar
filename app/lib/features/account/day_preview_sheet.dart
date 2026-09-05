@@ -91,7 +91,13 @@ class _DayPreviewDialog extends StatelessWidget {
     // generateGoalPlannedBlocksForDate), so it has no place on the
     // timeline above; listed separately instead, one row per goal.
     final unscheduled =
-        untimedPlannedDurationByGoalForDate(goals: goals, date: day.date).entries
+        untimedPlannedDurationByGoalForDate(
+          goals: goals,
+          date: day.date,
+          manualBlocksForDate: day.plannedBlocks
+              .where((b) => !b.isGoalGenerated)
+              .toList(),
+        ).entries
             .map((entry) => (goal: goalById(goals, entry.key), duration: entry.value))
             .where((e) => e.goal != null)
             .toList()

@@ -60,8 +60,11 @@ final weekDaySummariesProvider = Provider<List<WeekDaySummary>>((ref) {
   return List<WeekDaySummary>.generate(7, (i) {
     final date = weekStart.add(Duration(days: i));
 
+    final manualForDate = allPlanned
+        .where((b) => isSameDay(b.start, date))
+        .toList();
     final dayPlanned = [
-      ...allPlanned.where((b) => isSameDay(b.start, date)),
+      ...manualForDate,
       ...generateGoalPlannedBlocksForDate(goals: goals, date: date),
     ];
     final dayTracked = allTracked
@@ -80,6 +83,7 @@ final weekDaySummariesProvider = Provider<List<WeekDaySummary>>((ref) {
         in untimedPlannedDurationByCategoryForDate(
           goals: goals,
           date: date,
+          manualBlocksForDate: manualForDate,
         ).entries) {
       plannedByCategory.update(
         entry.key,
