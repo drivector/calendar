@@ -1,5 +1,18 @@
 # Track My Day (formerly "Calendar Tracker") — session handoff
 
+Updated 2026-09-05 (later still, another session on the same day). Four
+more commits landed on top of everything below, all now **merged into
+`main` and pushed** (merge commit `25ff8d6`) — the branch they were on,
+`feat/capacity-bar-summary-strip`, has been deleted both locally and on
+the remote. Three were a UI round on the Day view (the legend strip
+became a **capacity bar**, and the **drift footer** got matching bars
+plus a "TODAY" label fix); the fourth fixed a real duplicate-activity bug
+the user hit in their own data — see **Capacity bar, drift-footer bars,
+and a duplicate-activity fix** at the very end. `main` is up to date with
+`origin/main` at `25ff8d6`, **296 tests pass**, `flutter analyze` clean.
+Everything the paragraph below says about `a23c517` being the tip is
+superseded by this one; the rest of it still holds.
+
 Updated 2026-09-05 (later the same day, a further session). Three more
 things landed after the write-up immediately below this paragraph, none
 of which change anything it says — they're additive: **`7580538`**
