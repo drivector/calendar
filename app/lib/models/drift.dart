@@ -12,13 +12,26 @@ import 'tracked_block.dart';
 /// needed — [categoryId] here is just [goals]' own category for that goal,
 /// resolved once and carried along for display.
 class GoalDrift {
-  const GoalDrift({required this.categoryId, required this.goalId, required this.delta});
+  const GoalDrift({
+    required this.categoryId,
+    required this.goalId,
+    required this.planned,
+    required this.tracked,
+  });
 
   final String categoryId;
   final String goalId;
 
+  /// The two totals [delta] is the difference of, carried along rather
+  /// than reduced away: the drift footer draws a bar of tracked-against-
+  /// planned per goal, which a signed delta alone can't say anything
+  /// about — "−30m" is the whole of a 30m goal but a rounding error on an
+  /// 8h one.
+  final Duration planned;
+  final Duration tracked;
+
   /// Positive = tracked more than planned; negative = tracked less.
-  final Duration delta;
+  Duration get delta => tracked - planned;
 }
 
 List<GoalDrift> computeDrift({
@@ -68,9 +81,8 @@ List<GoalDrift> computeDrift({
         GoalDrift(
           categoryId: categoryOfGoal[goalId]!,
           goalId: goalId,
-          delta:
-              (trackedTotals[goalId] ?? Duration.zero) -
-              (plannedTotals[goalId] ?? Duration.zero),
+          planned: plannedTotals[goalId] ?? Duration.zero,
+          tracked: trackedTotals[goalId] ?? Duration.zero,
         ),
   ];
 }

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/category.dart';
 import '../../../models/drift.dart';
 import '../../../models/goal.dart';
+import '../../../shared/widgets/capacity_track.dart';
 import '../../../state/categories_providers.dart';
 import '../../../state/day_view_providers.dart';
 import '../../../state/derived_providers.dart';
@@ -43,6 +44,18 @@ class DriftFooter extends ConsumerWidget {
     final selectedDate = ref.watch(selectedDateProvider);
     final isToday = isDayMode && !selectedDate.isAfter(today());
 
+    // Drift is only ever about days that have actually elapsed. When every
+    // visible day is still in the future — Day mode on a day next month, or
+    // a whole week scrolled ahead — there's nothing that *could* be behind
+    // plan, and the footer used to sit there as a bare "DRIFT" heading with
+    // no rows under it. Hide the whole thing instead. (An on-plan present
+    // day still shows the heading with nothing under it: that's a real
+    // "you're not behind on anything", not an empty question.)
+    final hasElapsedDay = ref
+        .watch(visibleDatesProvider)
+        .any((date) => !date.isAfter(today()));
+    if (!hasElapsedDay) return const SizedBox.shrink();
+
     return DecoratedBox(
       decoration: BoxDecoration(
         border: Border(top: BorderSide(color: AppColors.divider)),
@@ -65,35 +78,83 @@ class DriftFooter extends ConsumerWidget {
             // met or exceeded it is fine, not something to flag here.
             for (final entry in drift)
               if (entry.delta.inMinutes < 0)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        // The whole word in the category's own color, not
-                        // just a small swatch next to it. Labelled by the
-                        // goal's own name when there is one — a category
-                        // backing more than one goal (e.g. "job" and a
-                        // "side project" both under "work") would
-                        // otherwise show two identically-labelled rows.
-                        _driftLabel(goals, categories, entry),
-                        style: AppTextStyles.mono(
-                          color: resolveCategory(
-                            categories,
-                            entry.categoryId,
-                          ).color,
-                        ),
-                      ),
-                      Text(
-                        formatSignedDuration(entry.delta),
-                        style: AppTextStyles.mono(color: AppColors.text),
-                      ),
-                    ],
-                  ),
+                _DriftRow(
+                  label: _driftLabel(goals, categories, entry),
+                  color: resolveCategory(categories, entry.categoryId).color,
+                  entry: entry,
                 ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// One goal's row: its name, a bar of how much of its own plan it
+/// actually got, and the shortfall.
+///
+/// The bar is the same [CapacityTrack] the header's capacity bar is built
+/// from, in the goal's own category colour — a signed delta on its own
+/// says nothing about scale, and "−30m" means very different things
+/// against a 30m goal and an 8h one.
+class _DriftRow extends StatelessWidget {
+  const _DriftRow({
+    required this.label,
+    required this.color,
+    required this.entry,
+  });
+
+  final String label;
+  final Color color;
+  final GoalDrift entry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          // A fixed share of the row rather than intrinsic width, so the
+          // bars all start and end at the same x down the column — a
+          // ragged left edge would make them unreadable against each
+          // other, which is the whole point of showing them together.
+          SizedBox(
+            width: 96,
+            child: Text(
+              // The whole word in the category's own color, not just a
+              // small swatch next to it. Labelled by the goal's own name
+              // when there is one — a category backing more than one goal
+              // (e.g. "job" and a "side project" both under "work") would
+              // otherwise show two identically-labelled rows.
+              label,
+              style: AppTextStyles.mono(color: color),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.s2),
+          Expanded(
+            child: CapacityTrack(
+              filled: entry.tracked,
+              total: entry.planned,
+              fillColor: color,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.s2),
+          // Fixed width, like the label — otherwise each row's delta takes
+          // its own intrinsic width ("−7h 15m" against "−1h") and every
+          // bar ends at a different x, which makes the column of bars
+          // unreadable against each other.
+          SizedBox(
+            width: 64,
+            child: Text(
+              formatSignedDuration(entry.delta),
+              style: AppTextStyles.mono(color: AppColors.text),
+              textAlign: TextAlign.right,
+              maxLines: 1,
+            ),
+          ),
+        ],
       ),
     );
   }

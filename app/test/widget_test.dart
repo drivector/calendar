@@ -13,7 +13,9 @@ import 'package:calendar_tracker/features/account/account_screen.dart';
 import 'package:calendar_tracker/features/categories/categories_screen.dart';
 import 'package:calendar_tracker/features/day_view/widgets/actual_block_widget.dart';
 import 'package:calendar_tracker/features/day_view/widgets/day_header_bar.dart';
+import 'package:calendar_tracker/features/day_view/widgets/drift_footer.dart';
 import 'package:calendar_tracker/features/day_view/widgets/legend_row.dart';
+import 'package:calendar_tracker/shared/widgets/capacity_track.dart';
 import 'package:calendar_tracker/theme/app_colors.dart';
 import 'package:calendar_tracker/features/day_view/widgets/live_activity_button.dart';
 import 'package:calendar_tracker/features/day_view/widgets/live_activity_running_block.dart';
@@ -3936,8 +3938,13 @@ void main() {
       // dayTotalsProvider's own doc comment).
       expect(_summaryCaption('0m', '0m'), findsOneWidget);
       expect(_unscheduledLine('30m'), findsOneWidget);
-      // One visible day, so the bar draws one track.
-      expect(find.byType(CapacityTrack), findsOneWidget);
+      // One visible day, so the bar draws one track. Scoped to the bar —
+      // the drift footer builds its per-goal rows out of the same widget.
+      final headerTracks = find.descendant(
+        of: find.byType(CapacityBar),
+        matching: find.byType(CapacityTrack),
+      );
+      expect(headerTracks, findsOneWidget);
 
       await _selectDayViewMode(tester, '3 Day');
       await tester.pumpAndSettle();
@@ -3957,7 +3964,7 @@ void main() {
       expect(_summaryWindow('72h'), findsOneWidget);
       // One track per visible day, rather than a single blended bar — so
       // a day with nothing logged reads as its own empty track.
-      expect(find.byType(CapacityTrack), findsNWidgets(3));
+      expect(headerTracks, findsNWidgets(3));
 
       await tester.tap(_unscheduledLine('1h 30m'));
       await tester.pumpAndSettle();
@@ -3995,9 +4002,9 @@ void main() {
 
       await pumpTrack(
         const CapacityTrack(
-          registered: Duration(hours: 6),
-          planned: Duration(hours: 3),
-          tracked: Duration(hours: 24),
+          filled: Duration(hours: 6),
+          hatched: Duration(hours: 3),
+          total: Duration(hours: 24),
         ),
       );
 
@@ -4014,9 +4021,9 @@ void main() {
       // track, so there's no bare track left and nothing overflows.
       await pumpTrack(
         const CapacityTrack(
-          registered: Duration(hours: 20),
-          planned: Duration(hours: 10),
-          tracked: Duration(hours: 24),
+          filled: Duration(hours: 20),
+          hatched: Duration(hours: 10),
+          total: Duration(hours: 24),
         ),
       );
 
@@ -4034,9 +4041,8 @@ void main() {
       // renders as an empty track rather than throwing.
       await pumpTrack(
         const CapacityTrack(
-          registered: Duration(hours: 2),
-          planned: Duration.zero,
-          tracked: Duration.zero,
+          filled: Duration(hours: 2),
+          total: Duration.zero,
         ),
       );
 
@@ -4161,8 +4167,54 @@ void main() {
   );
 
   testWidgets(
-    'Day view: the drift footer drops the "TODAY" label in Day mode too, '
-    'once the selected day is in the future',
+    "Day view: each drift row draws a bar of that goal's own logged time "
+    'against its own plan, in its category colour — so a shortfall reads '
+    'as a share of the goal, not just a bare signed number',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: await _signedInOnboardedNoActivityOverrides(),
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final driftTracks = find.descendant(
+        of: find.byType(DriftFooter),
+        matching: find.byType(CapacityTrack),
+      );
+      // One row, for the one goal behind its plan.
+      expect(driftTracks, findsOneWidget);
+
+      final track = tester.widget<CapacityTrack>(driftTracks);
+      // The goal's own 30m/day target is the whole track, and nothing has
+      // been logged against it — an entirely empty bar beside "−30m".
+      expect(track.total, const Duration(minutes: 30));
+      expect(track.filled, Duration.zero);
+      expect(track.hatched, Duration.zero);
+      // Coloured by the goal's own category, matching the row's label —
+      // the same colour the drift text itself already used.
+      expect(track.fillColor, const Color(0xFF0278E7));
+      expect(
+        tester.widget<Text>(find.text('test goal')).style?.color,
+        track.fillColor,
+      );
+      // Nothing logged, so only bare track paints.
+      expect(
+        find.descendant(
+          of: driftTracks,
+          matching: find.byWidgetPredicate(
+            (w) => w is ColoredBox && w.color == AppColors.neutral300,
+          ),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'Day view: the drift footer disappears entirely once every visible day '
+    'is still in the future — nothing can be behind plan yet',
     (WidgetTester tester) async {
       final futureDate = DateTime.now().add(const Duration(days: 30));
       final container = ProviderContainer(
@@ -4182,10 +4234,18 @@ void main() {
       await tester.pumpAndSettle();
 
       // Still Day mode, but the selected day hasn't happened yet — nothing
-      // can be "behind plan" for it, so the label shouldn't claim "today".
+      // can be "behind plan" for it, so the footer shouldn't render at all
+      // rather than showing a bare heading with no rows under it.
       expect(tester.takeException(), isNull);
-      expect(find.text('DRIFT'), findsOneWidget);
+      expect(find.text('DRIFT'), findsNothing);
       expect(find.text('DRIFT TODAY'), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byType(DriftFooter),
+          matching: find.byType(Text),
+        ),
+        findsNothing,
+      );
     },
   );
 
