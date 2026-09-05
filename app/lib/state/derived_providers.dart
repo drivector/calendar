@@ -122,6 +122,50 @@ final driftProvider = Provider<List<GoalDrift>>((ref) {
   return (plannedTotal, registeredTotal);
 }
 
+/// One entry per visible day, in [visibleDatesProvider] order — the same
+/// planned/tracked/registered figures [dayTotalsProvider] reports, kept
+/// per day rather than summed. The header's capacity bar draws one track
+/// per entry, so in 3 Day/Working week/Week mode a day with nothing
+/// logged reads as its own empty track instead of averaging away into the
+/// week's total.
+///
+/// "unscheduled" isn't carried here: it's goal-targeted time with no slot
+/// on the calendar at all, so it has no per-day track to fill — see
+/// [dayTotalsProvider], which still reports it as one window-wide figure.
+typedef VisibleDayTotals = ({
+  DateTime date,
+  Duration planned,
+  Duration tracked,
+  Duration registered,
+});
+
+final visibleDayTotalsProvider = Provider<List<VisibleDayTotals>>((ref) {
+  final dayBlocks = ref.watch(visibleDayBlocksProvider);
+  final settings = ref.watch(userSettingsProvider);
+
+  return [
+    for (final day in dayBlocks)
+      (
+        date: day.date,
+        planned: day.planned.fold<Duration>(
+          Duration.zero,
+          (total, b) => total + b.duration,
+        ),
+        tracked: dayWindowsFor(
+          day.date,
+          windows: settings.windowsForWeekday(day.date.weekday),
+        ).fold<Duration>(
+          Duration.zero,
+          (total, window) => total + window.$2.difference(window.$1),
+        ),
+        registered: day.tracked.fold<Duration>(
+          Duration.zero,
+          (total, b) => total + b.duration,
+        ),
+      ),
+  ];
+});
+
 /// Header totals across every day the Day view's timeline currently shows
 /// — [visibleDatesProvider] (1/3/5/7 days depending on the Day/3 Day/
 /// Working week/Week mode), not just [selectedDateProvider] alone. A user
@@ -153,24 +197,18 @@ final dayTotalsProvider =
         Duration unscheduled,
       )
     >((ref) {
-      final dates = ref.watch(visibleDatesProvider);
+      final perDay = ref.watch(visibleDayTotalsProvider);
       final dayBlocks = ref.watch(visibleDayBlocksProvider);
       final goals = ref.watch(goalsProvider);
-      final settings = ref.watch(userSettingsProvider);
 
       var plannedTotal = Duration.zero;
-      var registeredTotal = Duration.zero;
-      for (final day in dayBlocks) {
-        plannedTotal += day.planned.fold<Duration>(
-          Duration.zero,
-          (total, b) => total + b.duration,
-        );
-        registeredTotal += day.tracked.fold<Duration>(
-          Duration.zero,
-          (total, b) => total + b.duration,
-        );
-      }
       var windowTotal = Duration.zero;
+      var registeredTotal = Duration.zero;
+      for (final day in perDay) {
+        plannedTotal += day.planned;
+        windowTotal += day.tracked;
+        registeredTotal += day.registered;
+      }
       var unscheduledTotal = Duration.zero;
       for (final day in dayBlocks) {
         unscheduledTotal += untimedPlannedDurationByCategoryForDate(
@@ -179,15 +217,6 @@ final dayTotalsProvider =
           manualBlocksForDate:
               day.planned.where((b) => !b.isGoalGenerated).toList(),
         ).values.fold<Duration>(Duration.zero, (total, d) => total + d);
-      }
-      for (final date in dates) {
-        for (final window
-            in dayWindowsFor(
-              date,
-              windows: settings.windowsForWeekday(date.weekday),
-            )) {
-          windowTotal += window.$2.difference(window.$1);
-        }
       }
       return (plannedTotal, windowTotal, registeredTotal, unscheduledTotal);
     });
