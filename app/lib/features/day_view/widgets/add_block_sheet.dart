@@ -1,12 +1,11 @@
-import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/mock/mock_categories.dart';
-import '../../../models/category.dart';
 import '../../../models/goal.dart';
 import '../../../models/planned_block.dart';
 import '../../../models/tracked_block.dart';
+import '../../../shared/widgets/category_chip.dart';
 import '../../../shared/widgets/confirm_delete_dialog.dart';
 import '../../../shared/widgets/dashed_border.dart';
 import '../../../shared/widgets/inline_form_error.dart';
@@ -409,14 +408,21 @@ class _AddBlockSheetState extends State<_AddBlockSheet> {
                     ),
                     const SizedBox(height: AppSpacing.s3),
                     _Label('Goal'),
-                    _GoalDropdown(
-                      goals: goals,
-                      categories: categories,
-                      selectedGoalId: _goalId,
-                      onChanged: (goalId) => setState(() {
-                        _goalId = goalId;
-                        _errorMessage = null;
-                      }),
+                    Wrap(
+                      spacing: AppSpacing.s2,
+                      runSpacing: AppSpacing.s2,
+                      children: [
+                        for (final goal in goals)
+                          CategoryChip(
+                            label: goal.name.toLowerCase(),
+                            color: resolveCategory(categories, goal.categoryId).color,
+                            selected: _goalId == goal.id,
+                            onTap: () => setState(() {
+                              _goalId = goal.id;
+                              _errorMessage = null;
+                            }),
+                          ),
+                      ],
                     ),
                     if (widget.editingId != null) ...[
                       const SizedBox(height: AppSpacing.s3),
@@ -606,96 +612,3 @@ class _TimeField extends StatelessWidget {
   }
 }
 
-/// A bordered, tappable field showing the selected goal's name — tapping
-/// opens a flat bottom-sheet list of every eligible goal to choose from,
-/// rather than Flutter's stock `DropdownButton` (rounded menu, elevation,
-/// Material chrome that doesn't match this app's flat design system).
-class _GoalDropdown extends StatelessWidget {
-  const _GoalDropdown({
-    required this.goals,
-    required this.categories,
-    required this.selectedGoalId,
-    required this.onChanged,
-  });
-
-  final List<Goal> goals;
-  final List<Category> categories;
-  final String? selectedGoalId;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final selected = goals.firstWhereOrNull((g) => g.id == selectedGoalId);
-    return GestureDetector(
-      onTap: () async {
-        final pickedId = await showModalBottomSheet<String>(
-          context: context,
-          backgroundColor: AppColors.surface,
-          builder: (context) => SafeArea(
-            top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final goal in goals)
-                  GestureDetector(
-                    onTap: () => Navigator.of(context).pop(goal.id),
-                    behavior: HitTestBehavior.opaque,
-                    child: Container(
-                      width: double.infinity,
-                      constraints: const BoxConstraints(minHeight: 44),
-                      alignment: Alignment.centerLeft,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.s3,
-                      ),
-                      decoration: BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(color: AppColors.divider),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 8,
-                            height: 8,
-                            color: resolveCategory(
-                              categories,
-                              goal.categoryId,
-                            ).color,
-                          ),
-                          const SizedBox(width: AppSpacing.s2),
-                          Text(
-                            goal.name.toLowerCase(),
-                            style: AppTextStyles.label(),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        );
-        if (pickedId != null) onChanged(pickedId);
-      },
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        width: double.infinity,
-        constraints: const BoxConstraints(minHeight: 44),
-        alignment: Alignment.centerLeft,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s2),
-        decoration: BoxDecoration(border: Border.all(color: AppColors.neutral500), borderRadius: AppShapes.small),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              selected == null ? 'set goal' : selected.name.toLowerCase(),
-              style: AppTextStyles.label(),
-            ),
-            Text('▾', style: AppTextStyles.mono()),
-          ],
-        ),
-      ),
-    );
-  }
-}

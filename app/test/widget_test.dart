@@ -34,6 +34,7 @@ import 'package:calendar_tracker/models/running_activity.dart';
 import 'package:calendar_tracker/models/tracked_block.dart';
 import 'package:calendar_tracker/models/user_settings.dart';
 import 'package:calendar_tracker/shared/widgets/app_tab_bar.dart';
+import 'package:calendar_tracker/shared/widgets/category_chip.dart';
 import 'package:calendar_tracker/shared/widgets/dashed_border.dart';
 import 'package:calendar_tracker/shared/widgets/step_arrow_button.dart';
 import 'package:calendar_tracker/state/auth_providers.dart';
@@ -1060,8 +1061,6 @@ void main() {
         find.byType(TextField).first,
         'Third column entry',
       );
-      await tester.tap(find.text('set goal'));
-      await tester.pumpAndSettle();
       await tester.tap(_goalTextInSheet('test goal'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('save'));
@@ -4223,7 +4222,10 @@ void main() {
 
       expect(tester.takeException(), isNull);
       // No goal pre-selected — picking one is a real, required choice now.
-      expect(find.text('set goal'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate((w) => w is CategoryChip && w.selected),
+        findsNothing,
+      );
       // Opened from empty space, not a plan — no "matches a planned
       // activity" icon.
       expect(
@@ -4236,11 +4238,9 @@ void main() {
       await tester.enterText(find.byType(TextField).first, 'Morning walk');
       await tester.pumpAndSettle();
 
-      // "test goal" — the fixture's one goal, in the picker list. Not the
-      // category name ("Work") — goals and categories happen to differ here
+      // "test goal" — the fixture's one goal, as a chip. Not the category
+      // name ("Work") — goals and categories happen to differ here
       // specifically so this can't pass by coincidence.
-      await tester.tap(find.text('set goal'));
-      await tester.pumpAndSettle();
       await tester.tap(_goalTextInSheet('test goal'));
       await tester.pumpAndSettle();
 
@@ -4297,8 +4297,8 @@ void main() {
 
   testWidgets(
     'Day view: the add-block sheet has no date field — it always uses '
-    'whichever day the Day view is showing — and the goal picker is a '
-    'dropdown, not chips',
+    'whichever day the Day view is showing — and the goal picker is an '
+    'inline row of chips, not a dropdown',
     (WidgetTester tester) async {
       await tester.pumpWidget(
         ProviderScope(
@@ -4317,23 +4317,28 @@ void main() {
       expect(find.text('START TIME'), findsOneWidget);
       expect(find.text('END TIME'), findsOneWidget);
 
-      // No goal pre-selected — the closed field reads "set goal" until one
-      // is actually picked, not the Wrap of chips this used to be.
-      expect(find.text('set goal'), findsOneWidget);
-      expect(_goalTextInSheet('test goal'), findsNothing);
+      // No goal pre-selected — the chip is visible but unselected, not
+      // hidden behind a closed dropdown field.
+      expect(_goalTextInSheet('test goal'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate((w) => w is CategoryChip && w.selected),
+        findsNothing,
+      );
 
-      // Tapping opens a flat picker list rather than a native dropdown menu.
-      await tester.tap(find.text('set goal'));
-      await tester.pumpAndSettle();
-      expect(_goalTextInSheet('test goal'), findsOneWidget); // the one list row
-
+      // A single tap on the chip selects it directly — no nested picker.
       await tester.tap(_goalTextInSheet('test goal'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      // Picker closed, field now shows the picked goal.
-      expect(find.text('set goal'), findsNothing);
-      expect(_goalTextInSheet('test goal'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (w) =>
+              w is CategoryChip &&
+              w.selected &&
+              w.label == 'test goal'.toLowerCase(),
+        ),
+        findsOneWidget,
+      );
 
       // The bottom save button is gone — "save" now lives in the header,
       // next to the title, to keep the sheet as short as possible.
@@ -4389,8 +4394,11 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('· 30m'), findsOneWidget);
-      expect(_goalTextInSheet('test goal'), findsOneWidget); // dropdown lowercases
-      expect(find.text('set goal'), findsNothing);
+      expect(_goalTextInSheet('test goal'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate((w) => w is CategoryChip && w.selected),
+        findsOneWidget,
+      );
       // The "matches a planned activity" icon shows only because this sheet
       // was opened by tapping the plan, not an empty-space tap.
       expect(
@@ -4658,8 +4666,6 @@ void main() {
       await tester.pumpAndSettle();
 
       // A goal is picked, but the activity name is left blank.
-      await tester.tap(find.text('set goal'));
-      await tester.pumpAndSettle();
       await tester.tap(_goalTextInSheet('test goal'));
       await tester.pumpAndSettle();
 
@@ -4815,8 +4821,6 @@ void main() {
       await tester.enterText(find.byType(TextField).first, 'Evening walk');
       await tester.pumpAndSettle();
       // A goal is required to save now — pick the fixture's one goal.
-      await tester.tap(find.text('set goal'));
-      await tester.pumpAndSettle();
       await tester.tap(_goalTextInSheet('test goal'));
       await tester.pumpAndSettle();
 
@@ -4863,8 +4867,6 @@ void main() {
 
       // A goal is picked (enough to count as "unsaved changes"), but the
       // activity name is deliberately left blank.
-      await tester.tap(find.text('set goal'));
-      await tester.pumpAndSettle();
       await tester.tap(_goalTextInSheet('test goal'));
       await tester.pumpAndSettle();
 
