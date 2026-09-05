@@ -1,5 +1,24 @@
 # Track My Day (formerly "Calendar Tracker") — session handoff
 
+Updated 2026-09-05 (later the same day, a further session). Three more
+things landed after the write-up immediately below this paragraph, none
+of which change anything it says — they're additive: **`7580538`**
+closed out the read/delete half of the silent-failure bug class `517c7de`
+(below) had only fixed the write half of — a failed read now shows a
+banner instead of rendering as an empty account, and a rejected delete
+says so instead of silently doing nothing (see **Read/delete failures:
+closing out the silent-failure bug class** near the end); **`523675f`**
+fixed the drift footer flagging future days as already behind their plan
+(see **Drift footer: exclude future days**); and **`5e83d5d`**, on its
+own still-unmerged branch `fix/unscheduled-planned-linkage`, fixed a
+goal's "unscheduled" total double-counting time already covered by a
+manual planned block (see **Unscheduled budget: credit manually-planned
+time**). `main` is pushed and up to date with `origin/main` at
+`523675f`, **291 tests pass**, `flutter analyze` clean.
+`fix/unscheduled-planned-linkage` is a separate pushed branch, one commit
+ahead of `main`, not yet merged — merge it the normal way (re-run
+`flutter analyze && flutter test` after) when picking this up.
+
 Updated 2026-09-05. Everything from here down through **Known
 environment quirks** was accurate as of 2026-08-31 (end of the sixth
 session). A large amount of work landed in the five days since across
@@ -3944,3 +3963,135 @@ ahead of `origin/main`** as of this write-up (`517c7de`, `14df054`,
 `7051dfd`) — not yet pushed; `daa474f` and this session's own `c855708`
 are already on `origin/main`. `flutter analyze` clean, **269 tests
 pass**.
+
+## Read/delete failures: closing out the silent-failure bug class (2026-09-05, `7580538`)
+
+`517c7de` above fixed the **write** half of this project's recurring
+silent-failure shape (a sheet closing as if it saved when the write
+actually failed). This commit is the same fix applied to everything that
+write pass didn't touch — reads and deletes.
+
+**Reads.** Every list provider ends in `.valueOrNull ?? []`, so a failed
+read rendered as "you have nothing here," indistinguishable from a
+genuinely empty account. Two distinct ways a read could fail:
+- `FirestoreListRepository.watchAll()` mapped an entire snapshot in one
+  `.map()` pass — one document `fromMap` couldn't parse (a block written
+  before the goal-ownership refactor, `categoryId` but no `goalId`, the
+  same shape as the migration in **Add-block sheet: the goal picker touch
+  bug...** above) errored the whole stream and took every other, readable
+  document down with it. Now skips the row it can't parse instead.
+- A genuine `permission-denied` still errors the stream — that's real
+  signal, not a bug — but nothing surfaced it. Now a new
+  `firestoreReadFailedProvider` drives a banner shown above every tab.
+- Worse than either, and only caught by writing the test for it:
+  `_SignedInGate` gated on `!hasValue`, and an errored stream never
+  produces a value — so a failed goals/categories read left the gate
+  stuck on "loading" forever. Past that point, an empty goals list
+  (indistinguishable from a real error) routed straight to Onboarding —
+  a full account told to set itself up from scratch. The gate now
+  treats an errored read as its own case and shows the real app with the
+  banner instead.
+
+**Deletes.** All six delete paths in the app were unawaited or uncaught,
+so a rejected delete left the item sitting on screen with no
+explanation — indistinguishable from the tap not having registered at
+all. The four sheets (goal, category, tracking window, add-block) now
+show this inline, same as their save path; the Activities list and the
+block-detail dialog use a `SnackBar` instead (the dialog closes first,
+since it's its own route and a `SnackBar` underneath would render
+invisible — the exact class of bug **Bug fix + app-wide audit:
+validation errors hidden behind an open sheet** already found once for
+sheets). Onboarding's category-seeding write is now awaited too, with
+wording specific to the screen it's actually on.
+
+**Titles.** Nothing capped a pasted activity title or goal/category name
+at the 500 characters `isReasonableString` allows server-side, so a long
+paste produced a write only the server could reject — silently, since
+that rejection lands back in the same unawaited-write bug this whole
+class of fix addresses. A new `kMaxFieldLength` now feeds a
+`LengthLimitingTextInputFormatter` on those fields, with a contract test
+asserting it still matches the deployed rules' own cap (so the two can't
+silently drift apart again).
+
+**Tests**: +21 (269 → 290), including new coverage for
+`GoalReminderService` (had none before — it's a singleton with a private
+constructor, so the test fakes rather than extends it). Five reverts
+(throwing `watchAll`, the gate's error branch, a delete's catch, an input
+formatter, cancel-after-schedule) each fail a distinct test, confirming
+none of this passes vacuously.
+
+Touched: `lib/data/firestore/firestore_list_repository.dart`,
+`lib/features/auth/auth_gate.dart`,
+`lib/features/categories/widgets/category_edit_sheet.dart`,
+`lib/features/day_view/widgets/actual_block_widget.dart`,
+`lib/features/day_view/widgets/add_block_sheet.dart`,
+`lib/features/goals/widgets/goal_edit_sheet.dart`,
+`lib/features/log_activity/widgets/activities_list.dart`,
+`lib/features/log_activity/widgets/log_activity_sheet.dart`,
+`lib/features/onboarding/onboarding_screen.dart`, new
+`lib/shared/widgets/inline_form_error.dart` additions,
+`lib/shell/root_shell.dart`, `lib/state/derived_providers.dart`, new
+`test/features/read_paths_test.dart`, `test/features/write_paths_test.dart`,
+`test/firestore_rules_test.dart`, new
+`test/services/goal_reminder_service_test.dart`, new
+`test/support/repository_doubles.dart`. Pushed straight to `main`
+(`7580538`).
+
+## Drift footer: exclude future days (2026-09-05, `523675f`)
+
+User report: "there should be no drift display for future days."
+`driftProvider` (`lib/state/derived_providers.dart`) summed planned vs.
+tracked across every day the timeline currently shows
+(`visibleDatesProvider`/`visibleDayBlocksProvider` — 1/3/5/7 days
+depending on Day/3 Day/Working week/Week mode), with no cutoff at
+today. A future day has nothing tracked against it yet by definition, so
+it always rendered as fully behind its own plan — reading as "already
+missed" rather than "not due yet."
+
+Fix: `driftProvider` now takes `today()` (the plain midnight-truncated
+`DateTime.now()` helper already used to seed `selectedDateProvider`,
+made public — was `_today()`, private to
+`lib/state/day_view_providers.dart`, only ever used in that one file
+before this) as a cutoff, and filters both `visibleDatesProvider`'s
+dates and `visibleDayBlocksProvider`'s per-day blocks down to `!date.isAfter(cutoff)`
+before computing drift — a day past today is simply excluded from the
+sum, not zeroed out or specially flagged.
+
+Touched: `lib/state/day_view_providers.dart` (`_today()` → `today()`),
+`lib/state/derived_providers.dart` (`driftProvider`). `flutter analyze`
+clean; full suite passed both before and after (no test exercised a
+future-day drift scenario, so none broke or needed updating — this was
+verified by precise provider-level reasoning about the fix, not a new
+test, since the existing 290 didn't have a gap here to close). Committed
+and pushed straight to `main` (`523675f`).
+
+## Unscheduled budget: credit manually-planned time (2026-09-05, `5e83d5d`, branch `fix/unscheduled-planned-linkage`, unmerged)
+
+A goal with an untimed schedule entry ("piano, 15 min, any time") counts
+that 15 min as "unscheduled" (see `dayTotalsProvider`'s own doc comment,
+**What's built so far**) until it's given a real clock time. But
+manually creating a planned block for that goal on that day — giving
+exactly that owed time a real slot — never reduced the "unscheduled"
+figure: the same 15 minutes counted as both "planned" (the new block)
+and still "unscheduled" (the untimed entry, untouched), double-counting
+one goal's own owed time across two different totals that are supposed
+to be mutually exclusive.
+
+Fix: `untimedPlannedDurationByGoalForDate` (and its category-level
+counterpart) now take the day's manually-created planned blocks
+(`manualBlocksForDate`, explicitly excluding goal-auto-generated ones —
+those aren't "extra" scheduling, they're the untimed entry rendering
+itself) and subtract each goal's manually-planned total from its untimed
+total before returning it, capped at zero (a manual block covering more
+than the untimed entry's own duration doesn't produce a negative
+"unscheduled"). Every call site (`driftProvider`, `dayTotalsProvider`,
+the Capacity/day-preview screens) now threads its own day's manual
+blocks through.
+
+Touched: `lib/features/account/day_preview_sheet.dart`,
+`lib/models/goal_planned_blocks.dart`, `lib/state/derived_providers.dart`,
+`lib/state/week_view_providers.dart`, `test/widget_test.dart`. Committed
+and pushed to its own branch, `fix/unscheduled-planned-linkage`
+(**not** `main` — pick this up as a normal merge, re-running
+`flutter analyze && flutter test` after, per `CLAUDE.md`'s
+parallel-session convention). 291 tests pass on that branch (290 + 1 new).
