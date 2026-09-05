@@ -1,5 +1,28 @@
 # Track My Day (formerly "Calendar Tracker") — session handoff
 
+Updated 2026-09-05. Everything from here down through **Known
+environment quirks** was accurate as of 2026-08-31 (end of the sixth
+session). A large amount of work landed in the five days since across
+several sessions, none of it individually written up in this doc until
+now — see **Sessions since 2026-08-31 (undocumented in detail)** for a
+commit-by-commit list, and **Add-block sheet: the goal picker touch bug
+that turned out to be a Firestore migration gap** for this session's own
+work, told in full. Short version of what changed in that gap that
+matters most for picking this up: **every activity is now goal-owned**
+(category is derived from the linked goal, never stored on the block
+itself — see that section), the Day view gained **live activity
+tracking** (Start/Stop with a ticking header timer), a **per-weekday
+tracking window** setting, a **Planning tab** (was the Capacity page,
+now promoted with week navigation), and the goal picker across every
+sheet went **chips → nested-modal dropdown (a real, now-fixed bug) →
+inline chips → a proper `PopupMenuButton` dropdown** — that last swing
+happened across two sessions running in parallel worktrees on the same
+day, see that section for the full story. `flutter analyze` is clean and
+**269 tests pass** as of this write-up (was 198 on 2026-08-31) — re-check
+both before trusting this if time has passed. **`main` is 3 commits
+ahead of `origin/main`, unpushed** as of this write-up — see **Git
+status**.
+
 Updated 2026-08-31 (sixth session — twenty-two batches pushed, all
 clean, see **Git status**; the fifth pushed batch also **deployed live
 Firestore rules changes to production**) — the app's user-visible
@@ -279,9 +302,17 @@ Week tab removed**).
 
 ## Testing
 
-`flutter analyze` is clean; `flutter test` currently passes **159 tests**
+`flutter analyze` is clean; `flutter test` currently passes **269 tests**
+(as of 2026-09-05 — this count has moved several times since this section
+was first written and will keep moving; re-run rather than trust it)
 across `test/models/`, `test/state/`, `test/utils/`, `test/widget_test.dart`,
-and `test/features/auth/login_screen_test.dart`. Convention: after any
+`test/features/auth/login_screen_test.dart`,
+`test/features/onboarding/onboarding_screen_test.dart`,
+`test/features/write_paths_test.dart`, and `test/firestore_rules_test.dart`
+(the last two, new 2026-09-05, actually exercise real `firestore.rules`
+against the Firestore emulator rather than `fake_cloud_firestore` — see
+**Add-block sheet: the goal picker touch bug that turned out to be a
+Firestore migration gap**). Convention: after any
 change, run both and fix before moving on. Run from `app/`:
 ```bash
 export PATH="$HOME/development/flutter/bin:$PATH"
@@ -306,6 +337,15 @@ uid-dependent, or the `requireValue` call in `currentUidProvider` throws on
 `pumpAndSettle()` flushes it.
 
 ## Git status — sixth session's first twenty-two batches pushed, all clean
+
+**Stale as of 2026-09-05** — this section stops at the sixth session's
+twenty-second batch (2026-08-31). For current state (`main` 3 commits
+ahead of `origin/main`, unpushed; 269 tests; latest work), see
+**Sessions since 2026-08-31 (undocumented in detail)** and **Add-block
+sheet: the goal picker touch bug that turned out to be a Firestore
+migration gap** near the end of this doc. Left in place below rather
+than rewritten, since it's still an accurate record of what it
+describes.
 
 - The Firebase Auth/Firestore backend, the fourth session's UX fixes/CI,
   the entire fifth session (week nav, Activities tab, onboarding, cap
@@ -3683,3 +3723,224 @@ crash in the first place.
   build macos` both work now, including plugins needing native code.
   Remember `/opt/homebrew/bin` on `PATH` first, same as `gh`/`firebase`/
   `flutterfire`.
+
+## Sessions since 2026-08-31 (undocumented in detail)
+
+Everything above this point (and below, down through **Known
+environment quirks**) was written as of 2026-08-31. What follows below
+covers **only** the two things this specific session (2026-09-05) has
+first-hand knowledge of: its own investigation, and the commits from a
+second, parallel-worktree session that landed on `main` the same day and
+directly interact with this session's own work. In between — 2026-08-31
+through 2026-09-04 — a substantial amount of real feature work shipped
+across several other sessions that were never written up here. Rather
+than fabricate reasoning/tradeoffs for work this session didn't do,
+here's the honest record: every commit between the last documented one
+(`6f9782f`/`fd5cfaf`, twenty-second batch) and this session's own first
+commit (`bcc4cee`), in order, by message alone —
+
+```
+78ee091 Fix block sizing, header totals; move Save to header; add plan-match icon
+668a8a6 Fix drift totals to match the selected calendar view, commit iOS Team
+fe92035 Fix bug: signing in to an existing unverified account sends no email
+062c824 Color each drift row with its own category color
+b543d81 3 Day mode now steps by one day, not by three
+7d4c78b Add configurable per-weekday tracking window, color drift categories
+99acc74 Group drift by goal, add default open hour, color Capacity by category
+93c5247 Promote Planning to its own tab with week navigation and a day preview
+e761570 Add 24h toggle, drop mandatory name, fix overnight drift, quiet met-goal drift
+4719e4b Add Day view goal-in-popup link and a All/Planned/Registered block filter; fix "planned" total to exclude untimed goal minutes
+4542346 Add Start/Stop live activity tracking that survives an app relaunch
+368b938 Merge feature/live-activity into main
+4523261 Document parallel-session workflow: separate worktrees, one branch each
+95eb85d Fix Start doing nothing: add missing Firestore rule for the live-activity state doc
+ba65c16 Default the Day view timeline to the full 24h layout
+5f06d9d Live activity: make the header timer actually tick, and show the run on the calendar
+c0ea884 Fix overnight activities disappearing on the day they end
+7e3b084 Lay overlapping activities side-by-side instead of stacking them, like a calendar's simultaneous-meeting layout
+113da8f Let a date-bound goal specify its own schedule day-by-day, not just a repeating weekly pattern
+dafe1a8 Add "copy from previous day" to the byDate goal schedule
+12ef9f8 Let a future planned block be edited or deleted, and route goal-generated blocks to their detail sheet instead
+895d9b4 Fix stale doc comments referencing the old dayWindowFor name
+cd78471 Make every activity goal-owned; category is derived from its goal, not stored independently
+212c303 Show unscheduled goal time below the timeline in the Capacity page's day preview
+8a35e0b Tapping "unscheduled" in the Calendar legend opens a goal-by-goal breakdown, with a total at the top
+27bb369 Fix firestore.rules still requiring categoryId, silently rejecting every new planned/tracked activity
+```
+The two most load-bearing of these for anyone picking up new work:
+**`cd78471`** made every `PlannedBlock`/`TrackedBlock` carry a required
+`goalId` instead of an independent `categoryId` (category is now always
+derived by looking up the goal) — this is the schema change behind this
+session's whole investigation below, since it's exactly what a
+pre-`cd78471` Firestore document doesn't have. **`4542346`**/`368b938`
+added live activity tracking (Start/Stop, survives a relaunch) via its
+own `worktree`/`feature` branch, merged in cleanly — the first real use
+of the parallel-worktree convention this repo's `CLAUDE.md` now documents
+(`4523261`).
+
+## Add-block sheet: the goal picker touch bug that turned out to be a Firestore migration gap (2026-09-05)
+
+**The report**: "when created a new planned activity in calendar,
+nothing happened." Confirmed on the iOS Simulator, then — critically —
+the user confirmed **it also failed on their real phone**, ruling out
+"Simulator input flakiness" as an explanation on its own. This took
+several wrong turns before landing on the real cause; documented in
+full, wrong turns included, since each one is a real trap worth knowing
+about before falling into it again.
+
+**Wrong turn 1 — the nested-modal goal picker.** `add_block_sheet.dart`'s
+goal field opened a `showModalBottomSheet` from *inside* another already-open
+`showModalBottomSheet` — the only picker in the app using that
+modal-within-modal pattern (every other goal picker used a flat inline
+`Wrap` of `CategoryChip`), and `HANDOFF.md`'s own **Known environment
+quirks** section already had a note about unreliable taps on a similarly
+nested picker from an earlier session. Fixed by replacing it with the
+same inline-chip pattern (**pushed as `c855708`**). `flutter analyze` +
+all 240 tests passed. This was a real, legitimate fix — but live-testing
+it afterward, **the original bug still reproduced.** The chip fix was
+necessary but not sufficient; something else was going on underneath.
+
+**Wrong turn 2 — a corporate network/TLS-interception theory.**
+Instrumenting `_save()` directly (temporary prints in
+`add_block_sheet.dart`, removed after) showed the write *was* being
+called, `_goalId` was correctly set, and `upsert()`'s Future resolved
+without throwing — yet a separate probe process reading the real
+Firestore backend right after found nothing. Also found: the account's
+real `goals` collection had **one** document, while the Simulator's UI
+showed **seven**. Noticed an actively-updating TLS-interception log
+(`/tmp/ztnafw.log`, a Zscaler ZTNA client) on this Mac and hypothesized a
+corporate MITM proxy was breaking Firestore's long-lived write/sync
+streams while letting short one-shot probe requests through. **This
+theory was wrong** — flagged to the user, who correctly pushed back
+("it does not make sense, neither log activity works").
+
+**Wrong turn 3 (partial) — signed into the wrong account.** A `WHOAMI`
+print at app startup revealed the Simulator was actually signed in as
+`test-dummy@example.com` (a leftover pre-verified dev account, see
+**Dummy-data cleanup + a pre-verified test account** from the sixth
+session), not the real production account — explaining the "1 goal vs 7
+goals" discrepancy: two completely different Firestore subtrees, and
+every earlier probe had been reading the wrong one. The user, correctly,
+asked to keep investigating **on that same test-dummy account** rather
+than switch — "there is a clear bug, no activities are persisted."
+
+**The real root cause.** Re-instrumented to listen to the *actual*
+signed-in account's own `trackedBlocks`/`plannedBlocks` collections
+live. The "missing" activity **was there** — `hasPendingWrites=false`,
+fully synced, correct date, correct `goalId` — proving the write path
+was fine all along. The bug was entirely on the **read/display** side:
+`test-dummy@example.com`'s Firestore data predates `cd78471` (every
+activity became goal-owned), so it has a mix of legacy documents with no
+`goalId` field at all (or an explicit `goalId: null`) alongside newer
+ones. `PlannedBlock.fromMap`/`TrackedBlock.fromMap` both do
+`goalId: map['goalId'] as String` — a hard cast that **throws** on any
+such legacy document. `FirestoreListRepository.watchAll()`
+(`lib/data/firestore/firestore_list_repository.dart`) parses an
+entire collection snapshot in one `.map()` pass, so **one** bad legacy
+document throws and turns the whole stream into an `AsyncError`; every
+consuming provider (`allTrackedBlocksProvider`,
+`allPlannedBlocksProvider`) does `.valueOrNull ?? []`, silently
+swallowing that error into an **empty list**. Net effect: the Day view
+rendered zero tracked/planned blocks for that account — not just the old
+legacy ones, *everything*, including a brand-new, perfectly valid
+activity created seconds earlier, because it shared the same doomed
+stream. This is the exact same *class* of silent-failure bug as
+`27bb369` (an unrelated schema mismatch, fixed the same week) and the
+original fifth-session "goal was empty" log-activity bug — a write or
+read failing with zero visible signal, this project's single most
+recurring bug shape.
+
+**The fix.** Given a straight choice between (a) hardening
+`fromMap`/`watchAll()` to skip an unparseable document instead of
+crashing the whole batch, and (b) migrating this account's specific
+legacy data — **the user chose (b) only**, this account's data being
+disposable dev/test data anyway. Ran the same one-time
+backfill-`goalId`-by-`categoryId` migration this project has used
+before (temporary probe in `main.dart`, run via `flutter run -d
+<simulator>`, fully reverted after): read every goal's `categoryId`,
+build a `categoryId → goalId` map, backfill any tracked/planned document
+missing `goalId` by looking up its own `categoryId` in that map,
+disambiguating multiple matches by picking the earliest-`startDate`
+goal. Result: **30 documents migrated, 11 ambiguous** (resolved via
+earliest-start, logged for the record), **0 unresolved**. Live-verified
+immediately after on the Simulator: the Day view went from showing
+nothing but a single fixed "sleep" block to correctly rendering every
+real activity, and the legend's "registered" total went from a
+permanently-stuck `0m` to `9h 15m`.
+
+**Note for future sessions**: option (a) above — making
+`FirestoreListRepository.watchAll()` resilient to one bad document
+instead of one throw poisoning an entire collection for a whole account
+— was explicitly offered and explicitly declined this round (data
+migration was preferred for this specific throwaway account). It's
+still a real, general fragility: *any* future required-field schema
+change will silently blank a user's whole calendar again if even one
+pre-migration document slips through, with no error surfaced anywhere.
+Worth raising again if this shape of bug recurs.
+
+**What shipped**: `c855708` (chips, superseded in look but not in the
+underlying fix — see below), plus one-time Firestore data migration for
+`test-dummy@example.com` (no code, nothing to commit for that part).
+`lib/main.dart` was used as a temporary probe host **many** times this
+round (write-succeeded confirmation, account-identity check, live
+doc-change listener, the migration itself) and fully reverted to its
+clean state every time — confirmed via `git diff` before moving on each
+time, same discipline as every prior session's probe work.
+
+### A second, parallel-worktree session finished this the same day
+
+While the above was in progress, a second session working in its own
+git worktree (branch `worktree-test-robustness`, per `CLAUDE.md`'s
+parallel-session convention — see `4523261` above) was independently
+addressing the same underlying problem class from a different angle,
+and its branch got merged into `main` partway through this session's own
+work (merge commit `14df054`). Its commits, verified by reading their
+diffs directly rather than taken on faith:
+
+- **`daa474f`** — replaced the goal-picker `Wrap` of chips (this
+  session's own `c855708` fix, and the equivalent in `log_activity_sheet.dart`
+  and `start_activity_sheet.dart`) with one shared
+  `lib/shared/widgets/goal_dropdown.dart` (`GoalDropdown`, new) used
+  everywhere a goal is picked — a bordered field opening a Flutter
+  `PopupMenuButton` menu, not a route push. **Confirmed this does not
+  reintroduce the nested-modal bug**: `PopupMenuButton` renders as a
+  single `OverlayEntry` positioned relative to its trigger, never a
+  second `Navigator` route stacked on the sheet's own modal route — the
+  same safe, already-proven pattern this project's Day-view header
+  overflow menu (`bcc4cee`, this session's first commit) already uses.
+  Chips reportedly wrapped badly for a longer goal list, hence the
+  design reversal back to a dropdown.
+- **`517c7de`** — the more substantial fix: every sheet's write
+  (`add_block_sheet.dart`, `log_activity_sheet.dart`,
+  `goal_edit_sheet.dart`, `category_edit_sheet.dart`,
+  `tracking_window_sheet.dart`) is now **awaited**, wrapped in
+  `try`/`catch`, and a failure shows `InlineFormError` **without closing
+  the sheet** — replacing the fire-and-forget `.upsert(...)` pattern that
+  is directly responsible for this project's recurring "silent failure"
+  bug class (`27bb369`, the original log-activity bug, and this
+  session's own investigation above all share this exact shape). Also
+  added real test infrastructure to make sure this keeps holding:
+  `test/support/firestore_rules.dart` + `test/firestore_rules_test.dart`
+  (440 lines — runs the actual `firestore.rules` file against the
+  Firestore emulator, not `fake_cloud_firestore`, which doesn't enforce
+  rules at all) and `test/features/write_paths_test.dart` (487 lines —
+  drives every sheet's real UI save path and asserts it either succeeds
+  or shows the inline error, closing exactly the kind of gap that let
+  every silent-failure bug this project has hit ship unnoticed). One
+  documented known gap from its own commit message: onboarding's
+  category-seeding write is still unawaited/fire-and-forget (no sheet to
+  keep open), and no field caps a typed title at the rules' 500-character
+  limit (reachable by pasting).
+- **`7051dfd`** — follow-up fixing the new write-path tests to target
+  `GoalDropdown`'s `PopupMenuButton` instead of the chips `daa474f` had
+  just removed.
+
+**Net result for the goal picker, end of this day**: nested-modal
+dropdown (broken) → inline chips (`c855708`, correct but wraps badly for
+long lists) → `GoalDropdown`/`PopupMenuButton` (`daa474f`, current state)
+— all three tried within the same 24 hours across two people's worth of
+parallel sessions on the same real bug report. `main` is **3 commits
+ahead of `origin/main`** as of this write-up (`517c7de`, `14df054`,
+`7051dfd`) — not yet pushed; `daa474f` and this session's own `c855708`
+are already on `origin/main`. `flutter analyze` clean, **269 tests
+pass**.
