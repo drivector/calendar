@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/category.dart';
+import '../../../shared/widgets/inline_form_error.dart';
 import '../../../state/categories_providers.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_shapes.dart';
@@ -39,6 +40,11 @@ class _CategoryEditSheetState extends State<_CategoryEditSheet> {
   );
   late Color _color = widget.existing?.color ?? categoryColorPalette.first;
 
+  // Set only by a failed write — the form itself can't be invalid (a blank
+  // name falls back to "Untitled category"). Inline rather than a SnackBar,
+  // which would render behind this sheet: see InlineFormError.
+  String? _saveError;
+
   bool get _isEditing => widget.existing != null;
 
   @override
@@ -47,7 +53,7 @@ class _CategoryEditSheetState extends State<_CategoryEditSheet> {
     super.dispose();
   }
 
-  void _save() {
+  Future<void> _save() async {
     final category = Category(
       id:
           widget.existing?.id ??
@@ -57,7 +63,15 @@ class _CategoryEditSheetState extends State<_CategoryEditSheet> {
           : _nameController.text.trim(),
       color: _color,
     );
-    widget.ref.read(categoriesRepositoryProvider).upsert(category);
+    try {
+      await widget.ref.read(categoriesRepositoryProvider).upsert(category);
+    } catch (_) {
+      // Unawaited before, so a rejected write closed the sheet with
+      // nothing created and nothing said.
+      if (mounted) setState(() => _saveError = kSaveFailedMessage);
+      return;
+    }
+    if (!mounted) return;
     Navigator.of(context).pop();
   }
 
@@ -127,6 +141,10 @@ class _CategoryEditSheetState extends State<_CategoryEditSheet> {
                       ),
                   ],
                 ),
+                if (_saveError != null) ...[
+                  const SizedBox(height: AppSpacing.s3),
+                  InlineFormError(_saveError!),
+                ],
                 const SizedBox(height: AppSpacing.s4),
                 GestureDetector(
                   onTap: _save,
