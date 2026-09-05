@@ -58,9 +58,19 @@ List<(DateTime start, DateTime end)> dayWindowsFor(
 /// [dayTotalsProvider]'s own doc comment, which this mirrors: the same bug
 /// (only ever looking at [selectedDateProvider] alone, ignoring the other
 /// visible columns in 3 Day/Working week/Week mode) applied here too.
+///
+/// Future days (beyond [today]) are excluded — a day that hasn't happened
+/// yet has nothing tracked against it, so it would always show up as fully
+/// "behind" its plan rather than not-yet-due.
 final driftProvider = Provider<List<GoalDrift>>((ref) {
-  final dates = ref.watch(visibleDatesProvider);
-  final dayBlocks = ref.watch(visibleDayBlocksProvider);
+  final cutoff = today();
+  final dates = ref
+      .watch(visibleDatesProvider)
+      .where((date) => !date.isAfter(cutoff))
+      .toList();
+  final dayBlocks = ref
+      .watch(visibleDayBlocksProvider)
+      .where((day) => !day.date.isAfter(cutoff));
   final goals = ref.watch(goalsProvider);
 
   final planned = [for (final day in dayBlocks) ...day.planned];

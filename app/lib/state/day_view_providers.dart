@@ -6,12 +6,12 @@ import '../models/planned_block.dart';
 import '../models/tracked_block.dart';
 import 'firestore_providers.dart';
 
-DateTime _today() {
+DateTime today() {
   final now = DateTime.now();
   return DateTime(now.year, now.month, now.day);
 }
 
-final selectedDateProvider = StateProvider<DateTime>((ref) => _today());
+final selectedDateProvider = StateProvider<DateTime>((ref) => today());
 
 bool isSameDay(DateTime a, DateTime b) =>
     a.year == b.year && a.month == b.month && a.day == b.day;
