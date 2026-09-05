@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 
 import '../../../data/mock/mock_categories.dart';
+import '../../../data/firestore/firestore_list_repository.dart';
 import '../../../models/goal.dart';
 import '../../../models/planned_block.dart';
 import '../../../models/tracked_block.dart';
@@ -300,9 +302,16 @@ class _AddBlockSheetState extends State<_AddBlockSheet> {
       message: 'This removes "${_titleController.text}" from your plan.',
     );
     if (!confirmed || !mounted) return;
-    await widget.ref
-        .read(plannedBlocksRepositoryProvider)
-        .remove(widget.editingId!);
+    try {
+      await widget.ref
+          .read(plannedBlocksRepositoryProvider)
+          .remove(widget.editingId!);
+    } catch (_) {
+      // Same silence as a failed save had: the sheet closed, the plan was
+      // still there, and nothing said why.
+      if (mounted) setState(() => _errorMessage = kDeleteFailedMessage);
+      return;
+    }
     if (!mounted) return;
     Navigator.of(context).pop();
   }
@@ -392,6 +401,13 @@ class _AddBlockSheetState extends State<_AddBlockSheet> {
                       controller: _titleController,
                       style: AppTextStyles.label(),
                       decoration: const InputDecoration(isDense: true),
+                      // The rules reject a longer title outright, so cap it
+                      // here rather than let a paste produce a write that
+                      // can only fail. No counter: this is a ceiling
+                      // nobody types up to, not a budget to show.
+                      inputFormatters: [
+                        LengthLimitingTextInputFormatter(kMaxFieldLength),
+                      ],
                       onChanged: (_) {
                         if (_errorMessage != null) {
                           setState(() => _errorMessage = null);

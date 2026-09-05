@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/onboarding_categories.dart';
 import '../../models/category.dart';
+import '../../shared/widgets/inline_form_error.dart';
 import '../../state/categories_providers.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
@@ -29,6 +30,8 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 }
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
+  bool _seedFailed = false;
+
   @override
   void initState() {
     super.initState();
@@ -36,12 +39,21 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     // Only seeds if categories are currently empty — if the user deletes
     // one of these later but still hasn't created a goal (so this screen
     // shows again), that deletion should stick, not get silently undone.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       if (ref.read(categoriesProvider).isEmpty) {
         final repo = ref.read(categoriesRepositoryProvider);
-        for (final category in onboardingCategories) {
-          repo.upsert(category);
+        try {
+          for (final category in onboardingCategories) {
+            await repo.upsert(category);
+          }
+        } catch (_) {
+          // Seeding is the one write in the app with no sheet to keep
+          // open, but it fails the same way: unawaited, it left the
+          // category chips below simply never appearing, and creating a
+          // goal then blocked on "create a category first" with no hint
+          // that anything had gone wrong.
+          if (mounted) setState(() => _seedFailed = true);
         }
       }
     });
@@ -68,6 +80,17 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             style: AppTextStyles.mono(),
           ),
           const SizedBox(height: AppSpacing.s6),
+          if (_seedFailed) ...[
+            // Worded for what the user is actually looking at — a screen
+            // whose category chips are missing — rather than reusing the
+            // generic save/load wording, since they didn't ask for
+            // anything to be saved here.
+            const InlineFormError(
+              "Couldn't set up your categories — check your connection "
+              'and try again.',
+            ),
+            const SizedBox(height: AppSpacing.s3),
+          ],
           Text('Pick a category to get started', style: AppTextStyles.kicker()),
           const SizedBox(height: AppSpacing.s2),
           for (final category in categories)

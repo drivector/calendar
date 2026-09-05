@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 
 import '../../../models/category.dart';
+import '../../../data/firestore/firestore_list_repository.dart';
 import '../../../shared/widgets/inline_form_error.dart';
 import '../../../state/categories_providers.dart';
 import '../../../theme/app_colors.dart';
@@ -75,8 +77,16 @@ class _CategoryEditSheetState extends State<_CategoryEditSheet> {
     Navigator.of(context).pop();
   }
 
-  void _delete() {
-    widget.ref.read(categoriesRepositoryProvider).remove(widget.existing!.id);
+  Future<void> _delete() async {
+    try {
+      await widget.ref
+          .read(categoriesRepositoryProvider)
+          .remove(widget.existing!.id);
+    } catch (_) {
+      if (mounted) setState(() => _saveError = kDeleteFailedMessage);
+      return;
+    }
+    if (!mounted) return;
     Navigator.of(context).pop();
   }
 
@@ -120,6 +130,10 @@ class _CategoryEditSheetState extends State<_CategoryEditSheet> {
                   controller: _nameController,
                   style: AppTextStyles.label(),
                   decoration: const InputDecoration(isDense: true),
+                  // Capped for the same reason as a goal's own name.
+                  inputFormatters: [
+                    LengthLimitingTextInputFormatter(kMaxFieldLength),
+                  ],
                 ),
                 const SizedBox(height: AppSpacing.s3),
                 _Label('Color'),

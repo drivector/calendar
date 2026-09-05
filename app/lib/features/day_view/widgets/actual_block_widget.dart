@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart' show Dialog, showDialog;
+import 'package:flutter/material.dart'
+    show Dialog, ScaffoldMessenger, SnackBar, showDialog;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -7,6 +8,7 @@ import '../../../models/category.dart';
 import '../../../models/tracked_block.dart';
 import '../../../shared/widgets/confirm_delete_dialog.dart';
 import '../../../shared/widgets/dashed_border.dart';
+import '../../../shared/widgets/inline_form_error.dart';
 import '../../../state/day_view_providers.dart';
 import '../../../state/goals_providers.dart';
 import '../../../theme/app_category_colors.dart';
@@ -186,7 +188,19 @@ class _DetailDialog extends StatelessWidget {
                           'This removes "${block.title}" from your activity log.',
                     );
                     if (!confirmed || !context.mounted) return;
-                    await softDeleteTrackedBlock(ref, block);
+                    try {
+                      await softDeleteTrackedBlock(ref, block);
+                    } catch (_) {
+                      // This dialog is a route of its own, so a SnackBar
+                      // under it would be invisible — close it first, then
+                      // say why the block is still on the calendar.
+                      if (!context.mounted) return;
+                      Navigator.of(context).pop();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text(kDeleteFailedMessage)),
+                      );
+                      return;
+                    }
                     if (!context.mounted) return;
                     Navigator.of(context).pop();
                   },

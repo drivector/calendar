@@ -6,8 +6,10 @@ import '../models/goal_planned_blocks.dart';
 import '../models/planned_block.dart';
 import '../models/tracked_block.dart';
 import '../models/user_settings.dart';
+import 'categories_providers.dart';
 import 'day_view_providers.dart';
 import 'goals_providers.dart';
+import 'running_activity_providers.dart';
 import 'user_settings_providers.dart';
 
 /// The window(s) "untracked" gaps are computed against — not the full 24h
@@ -191,4 +193,25 @@ final unscheduledByGoalProvider = Provider<Map<String, Duration>>((ref) {
     }
   }
   return totals;
+});
+
+
+/// True when any of the app's Firestore reads has actually failed — a
+/// permission-denied on a collection, say, which this app has shipped
+/// twice (the settings collection, then the live-activity state doc).
+///
+/// Every list provider turns an errored stream into an empty list, so
+/// without this a failed read looks exactly like a brand-new account with
+/// nothing in it: no error, no retry, just an empty calendar. A single
+/// document that can't be parsed is *not* this — the repository skips it
+/// and keeps the rest (see `FirestoreListRepository.watchAll`), so this
+/// stays false for one stale row.
+final firestoreReadFailedProvider = Provider<bool>((ref) {
+  bool failed(AsyncValue<Object?> value) => value.hasError;
+  return failed(ref.watch(categoriesStreamProvider)) ||
+      failed(ref.watch(goalsStreamProvider)) ||
+      failed(ref.watch(allPlannedBlocksStreamProvider)) ||
+      failed(ref.watch(allTrackedBlocksStreamProvider)) ||
+      failed(ref.watch(userSettingsStreamProvider)) ||
+      failed(ref.watch(runningActivityStreamProvider));
 });

@@ -1,11 +1,13 @@
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../../../models/category.dart';
 import '../../../models/clock_time.dart';
 import '../../../models/goal.dart';
+import '../../../data/firestore/firestore_list_repository.dart';
 import '../../../models/goal_progress.dart';
 import '../../../shared/widgets/category_chip.dart';
 import '../../../shared/widgets/confirm_delete_dialog.dart';
@@ -513,9 +515,14 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
         confirmLabel: 'Deactivate',
       );
       if (!confirmed || !mounted) return;
-      widget.ref
-          .read(goalsRepositoryProvider)
-          .upsert(goal.copyWithStatus(GoalLifecycleStatus.deactivated));
+      try {
+        await widget.ref
+            .read(goalsRepositoryProvider)
+            .upsert(goal.copyWithStatus(GoalLifecycleStatus.deactivated));
+      } catch (_) {
+        if (mounted) setState(() => _saveError = kDeleteFailedMessage);
+        return;
+      }
     } else {
       final confirmed = await showConfirmDeleteDialog(
         context,
@@ -523,7 +530,12 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
         message: 'This permanently removes "${goal.name}".',
       );
       if (!confirmed || !mounted) return;
-      widget.ref.read(goalsRepositoryProvider).remove(goal.id);
+      try {
+        await widget.ref.read(goalsRepositoryProvider).remove(goal.id);
+      } catch (_) {
+        if (mounted) setState(() => _saveError = kDeleteFailedMessage);
+        return;
+      }
     }
     if (!mounted) return;
     Navigator.of(context).pop();
@@ -562,6 +574,11 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
           controller: _nameController,
           style: AppTextStyles.label(),
           decoration: const InputDecoration(isDense: true),
+          // The rules cap this field too — see the add-block sheet's own
+          // title for why it's limited at the input rather than on save.
+          inputFormatters: [
+            LengthLimitingTextInputFormatter(kMaxFieldLength),
+          ],
         ),
         const SizedBox(height: AppSpacing.s3),
         _Label('Dates'),

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 
 import '../../../data/mock/mock_categories.dart';
 import '../../../models/goal.dart';
+import '../../../data/firestore/firestore_list_repository.dart';
 import '../../../models/tracked_block.dart';
 import '../../../shared/widgets/confirm_delete_dialog.dart';
 import '../../../shared/widgets/date_field.dart';
@@ -222,7 +224,12 @@ class _LogActivitySheetState extends ConsumerState<LogActivitySheet> {
     );
     if (!confirmed || !mounted) return;
 
-    await softDeleteTrackedBlock(widget.ref, existing);
+    try {
+      await softDeleteTrackedBlock(widget.ref, existing);
+    } catch (_) {
+      if (mounted) setState(() => _errorMessage = kDeleteFailedMessage);
+      return;
+    }
     widget.ref.read(draftLogEntryProvider.notifier).reset();
     if (!mounted) return;
     Navigator.of(context).pop();
@@ -319,6 +326,10 @@ class _LogActivitySheetState extends ConsumerState<LogActivitySheet> {
                     controller: _activityController,
                     style: AppTextStyles.label(),
                     decoration: const InputDecoration(isDense: true),
+                    // See the same cap on the add-block sheet's own title.
+                    inputFormatters: [
+                      LengthLimitingTextInputFormatter(kMaxFieldLength),
+                    ],
                     onChanged: notifier.setActivity,
                   ),
                   const SizedBox(height: AppSpacing.s3),

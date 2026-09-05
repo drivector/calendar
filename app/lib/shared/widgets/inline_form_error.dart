@@ -24,6 +24,21 @@ const _errorRed = Color(0xFFB10E1C);
 const kSaveFailedMessage =
     "Couldn't save — check your connection and try again.";
 
+/// Shown when a Firestore *read* failed, rather than a write. Its own
+/// message because the consequence is the opposite one: nothing the user
+/// did was lost, but what they're looking at is incomplete — and every
+/// list provider renders a failed read as an empty list, which is
+/// otherwise indistinguishable from an account that genuinely has nothing
+/// in it yet.
+const kLoadFailedMessage =
+    "Couldn't load your data — what's shown may be incomplete.";
+
+/// Shown when a delete failed. Separate from [kSaveFailedMessage] because
+/// "couldn't save" reads as though the thing the user was deleting might
+/// have been changed instead.
+const kDeleteFailedMessage =
+    "Couldn't delete — check your connection and try again.";
+
 class InlineFormError extends StatelessWidget {
   const InlineFormError(this.message, {super.key});
 

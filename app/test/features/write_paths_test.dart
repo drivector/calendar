@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart' show FirebaseException;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,19 +9,14 @@ import 'package:calendar_tracker/features/day_view/widgets/plan_block_widget.dar
 import 'package:calendar_tracker/features/day_view/widgets/start_activity_sheet.dart';
 import 'package:calendar_tracker/features/day_view/widgets/time_body_grid.dart';
 import 'package:calendar_tracker/features/goals/widgets/goal_edit_sheet.dart';
-import 'package:calendar_tracker/models/category.dart';
-import 'package:calendar_tracker/models/goal.dart';
-import 'package:calendar_tracker/models/tracked_block.dart';
 import 'package:calendar_tracker/shared/widgets/app_tab_bar.dart';
 import 'package:calendar_tracker/shared/widgets/goal_dropdown.dart';
 import 'package:calendar_tracker/shared/widgets/inline_form_error.dart';
-import 'package:calendar_tracker/state/categories_providers.dart';
 import 'package:calendar_tracker/state/day_view_providers.dart';
-import 'package:calendar_tracker/state/firestore_providers.dart';
-import 'package:calendar_tracker/state/goals_providers.dart';
 import 'package:calendar_tracker/state/log_entry_providers.dart';
 
 import '../support/firestore_test_fixtures.dart';
+import '../support/repository_doubles.dart';
 
 /// Two halves of the same bug, one file.
 ///
@@ -275,6 +269,249 @@ void main() {
     });
   });
 
+  testWidgets(
+    'Day view: a pasted over-length title is cut to what the rules accept, '
+    'not sent as a write that can only be rejected',
+    (WidgetTester tester) async {
+      final account = await onboardedEmptyAccount();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: account.overrides,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tapAt(tester.getCenter(find.byType(TimeBodyGrid)));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byType(TextField).first,
+        'x' * (kMaxFieldLength + 200),
+      );
+      await _pickGoal(tester, ancestor: find.byType(BottomSheet));
+      await tester.tap(find.text('save'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      final written = await account.docsIn('trackedBlocks');
+      expect((written.values.single['title'] as String).length,
+          kMaxFieldLength);
+      account.expectWritesWouldBeAccepted();
+    },
+  );
+
+  group('a delete that fails is never silent', () {
+    // Same hole the saves had: unawaited (or uncaught), so the sheet
+    // closed, the thing was still there, and nothing said why — which
+    // reads as the delete not having registered at all.
+    testWidgets('Day view: the edit-plan sheet keeps the plan and says so', (
+      WidgetTester tester,
+    ) async {
+      final futureDate = DateTime.now().add(const Duration(days: 30));
+      final account = await onboardedEmptyAccount();
+      await account.firestore
+          .collection('users')
+          .doc(account.uid)
+          .collection('plannedBlocks')
+          .doc('plan-future')
+          .set({
+            'start': DateTime(
+              futureDate.year,
+              futureDate.month,
+              futureDate.day,
+              12,
+            ).toIso8601String(),
+            'end': DateTime(
+              futureDate.year,
+              futureDate.month,
+              futureDate.day,
+              13,
+            ).toIso8601String(),
+            'title': 'Future sync',
+            'goalId': 'goal-1',
+          });
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            ...account.overrides,
+            selectedDateProvider.overrideWith((ref) => futureDate),
+            rejectingPlannedBlocks,
+          ],
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final planBlock = find.byWidgetPredicate(
+        (w) => w is PlanBlockWidget && w.block.id == 'plan-future',
+      );
+      await tester.ensureVisible(planBlock);
+      await tester.tap(planBlock);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Delete planned activity'));
+      await tester.tap(find.text('Delete planned activity'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Edit planned activity'), findsOneWidget);
+      expect(find.text(kDeleteFailedMessage), findsOneWidget);
+      expect((await account.docsIn('plannedBlocks')).keys, ['plan-future']);
+    });
+
+    testWidgets('Categories: the category sheet keeps it and says so', (
+      WidgetTester tester,
+    ) async {
+      final account = await onboardedEmptyAccount();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [...account.overrides, rejectingCategories],
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _tapTab(tester, 'Goals');
+      await tester.tap(find.text('categories'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Work'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete category'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text(kDeleteFailedMessage), findsOneWidget);
+      expect((await account.docsIn('categories')).keys, ['cat-1']);
+    });
+
+    testWidgets('Goals: the edit sheet keeps the goal and says so', (
+      WidgetTester tester,
+    ) async {
+      final account = await seededAccount();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [...account.overrides, rejectingGoals],
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _tapTab(tester, 'Goals');
+      await tester.tap(find.text('Walking'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('EDIT'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Delete goal'));
+      await tester.tap(find.text('Delete goal'));
+      await tester.pumpAndSettle();
+      // Walking has linked activity in this fixture, so it deactivates
+      // rather than hard-deletes — the write that fails here is the
+      // status upsert, not a remove.
+      await tester.tap(find.text('Deactivate'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Edit goal'), findsOneWidget);
+      expect(find.text(kDeleteFailedMessage), findsOneWidget);
+    });
+
+    testWidgets('Log activity: the edit sheet keeps the entry and says so', (
+      WidgetTester tester,
+    ) async {
+      final account = await seededAccount();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [...account.overrides, rejectingTrackedBlocks],
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _tapTab(tester, 'Account');
+      await tester.tap(find.text('Activities'));
+      await tester.pumpAndSettle();
+      final row = find.byKey(const ValueKey('actual-walk'));
+      await tester.ensureVisible(row);
+      await tester.tap(find.descendant(of: row, matching: find.text('edit')));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Delete activity'));
+      await tester.tap(find.text('Delete activity'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Delete activity'), findsOneWidget); // Still open.
+      expect(find.text(kDeleteFailedMessage), findsOneWidget);
+    });
+
+    testWidgets(
+      "Day view: the block's own detail dialog closes, then says why the "
+      'block is still there',
+      (WidgetTester tester) async {
+        final account = await seededAccount();
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [...account.overrides, rejectingTrackedBlocks],
+            child: const CalendarTrackerApp(),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final actual = find.byWidgetPredicate(
+          (w) => w is ActualBlockWidget && w.block.id == 'actual-walk',
+        );
+        await tester.ensureVisible(actual);
+        await tester.tap(actual);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('🗑'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Delete'));
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        // The dialog is its own route, so a SnackBar underneath it would
+        // be invisible — it closes first, then explains.
+        expect(find.text('Thu, 20 Aug 2026'), findsNothing);
+        expect(find.text(kDeleteFailedMessage), findsOneWidget);
+        expect(actual, findsOneWidget);
+      },
+    );
+
+    testWidgets('Activities: the list says so rather than leaving the row', (
+      WidgetTester tester,
+    ) async {
+      final account = await seededAccount();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [...account.overrides, rejectingTrackedBlocks],
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _tapTab(tester, 'Account');
+      await tester.tap(find.text('Activities'));
+      await tester.pumpAndSettle();
+
+      final row = find.byKey(const ValueKey('actual-walk'));
+      await tester.ensureVisible(row);
+      await tester.tap(find.descendant(of: row, matching: find.text('delete')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      // A tab screen, not a sheet, so this one can use a SnackBar.
+      expect(find.text(kDeleteFailedMessage), findsOneWidget);
+      // And the row it couldn't delete is still there, rather than
+      // disappearing optimistically.
+      expect(find.text('Walk 48 m'), findsOneWidget);
+    });
+  });
+
   group('a write that fails is never silent', () {
     testWidgets('Day view: the add-block sheet stays open and says so', (
       WidgetTester tester,
@@ -284,7 +521,7 @@ void main() {
         ProviderScope(
           overrides: [
             ...account.overrides,
-            _rejectingTrackedBlocks,
+            rejectingTrackedBlocks,
           ],
           child: const CalendarTrackerApp(),
         ),
@@ -311,7 +548,7 @@ void main() {
     ) async {
       final account = await onboardedEmptyAccount();
       final container = ProviderContainer(
-        overrides: [...account.overrides, _rejectingTrackedBlocks],
+        overrides: [...account.overrides, rejectingTrackedBlocks],
       );
       addTearDown(container.dispose);
       await tester.pumpWidget(
@@ -348,7 +585,7 @@ void main() {
       final account = await onboardedEmptyAccount();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [...account.overrides, _rejectingGoals],
+          overrides: [...account.overrides, rejectingGoals],
           child: const CalendarTrackerApp(),
         ),
       );
@@ -385,7 +622,7 @@ void main() {
       final account = await onboardedEmptyAccount();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [...account.overrides, _rejectingCategories],
+          overrides: [...account.overrides, rejectingCategories],
           child: const CalendarTrackerApp(),
         ),
       );
@@ -406,65 +643,6 @@ void main() {
     });
   });
 }
-
-/// A repository whose reads work normally but whose writes are rejected —
-/// what a permission-denied from Firestore's rules looks like to the app.
-/// `DocumentReference` is sealed in `cloud_firestore`, so a rejected write
-/// can't be faked at the Firestore level; overriding the repository
-/// provider is the seam this app already uses for the same purpose (see
-/// `saveUserSettingsProvider`).
-class _RejectingRepository<T> extends FirestoreListRepository<T> {
-  _RejectingRepository({
-    required super.firestore,
-    required super.uid,
-    required super.collectionName,
-    required super.fromMap,
-    required super.toMap,
-    required super.idOf,
-  });
-
-  @override
-  Future<void> upsert(T item) => Future.error(
-    FirebaseException(
-      plugin: 'cloud_firestore',
-      code: 'permission-denied',
-      message: 'The caller does not have permission.',
-    ),
-  );
-}
-
-final _rejectingTrackedBlocks = trackedBlocksRepositoryProvider.overrideWith(
-  (ref) => _RejectingRepository<TrackedBlock>(
-    firestore: ref.watch(firestoreProvider),
-    uid: ref.watch(currentUidProvider),
-    collectionName: 'trackedBlocks',
-    fromMap: TrackedBlock.fromMap,
-    toMap: (block) => block.toMap(),
-    idOf: (block) => block.id,
-  ),
-);
-
-final _rejectingGoals = goalsRepositoryProvider.overrideWith(
-  (ref) => _RejectingRepository<Goal>(
-    firestore: ref.watch(firestoreProvider),
-    uid: ref.watch(currentUidProvider),
-    collectionName: 'goals',
-    fromMap: Goal.fromMap,
-    toMap: (goal) => goal.toMap(),
-    idOf: (goal) => goal.id,
-  ),
-);
-
-final _rejectingCategories = categoriesRepositoryProvider.overrideWith(
-  (ref) => _RejectingRepository<Category>(
-    firestore: ref.watch(firestoreProvider),
-    uid: ref.watch(currentUidProvider),
-    collectionName: 'categories',
-    fromMap: Category.fromMap,
-    toMap: (category) => category.toMap(),
-    idOf: (category) => category.id,
-  ),
-);
 
 /// Picks a goal from the [GoalDropdown] inside [ancestor] — the dropdown's
 /// menu opens in its own overlay route, so the row to tap is not a

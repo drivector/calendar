@@ -256,6 +256,18 @@ class _SignedInGateState extends ConsumerState<_SignedInGate> {
     final goalsAsync = ref.watch(goalsStreamProvider);
     final categoriesAsync = ref.watch(categoriesStreamProvider);
 
+    // A read that failed is neither "still loading" nor "nothing here
+    // yet", and it used to be indistinguishable from both: an errored
+    // stream never gets a value, so this sat on 'loading' forever, and
+    // anything downstream reading `valueOrNull ?? []` treated it as an
+    // empty account — which for goals means Onboarding, i.e. telling
+    // someone with a full account to set it up from scratch. Show the app
+    // instead; RootShell's own banner says what actually happened (see
+    // `firestoreReadFailedProvider`).
+    if (goalsAsync.hasError || categoriesAsync.hasError) {
+      return const RootShell();
+    }
+
     if (!goalsAsync.hasValue || !categoriesAsync.hasValue) {
       return Center(child: Text('loading', style: AppTextStyles.mono()));
     }

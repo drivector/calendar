@@ -1,6 +1,7 @@
 import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:calendar_tracker/data/firestore/firestore_list_repository.dart';
 import 'package:calendar_tracker/data/mock/dummy_data.dart';
 import 'package:calendar_tracker/data/mock/mock_categories.dart';
 import 'package:calendar_tracker/data/mock/mock_day_20aug.dart';
@@ -287,12 +288,17 @@ service cloud.firestore {
       );
     });
 
-    test('a title longer than the rules allow is caught, not written', () {
-      // Nothing in the app caps the length of a typed activity name, so
-      // this is reachable by pasting — and it's the one document-shape
-      // rejection the deployed rules can still produce. It shows as the
-      // sheet's "Couldn't save" now rather than as a silent no-op (see
-      // test/features/write_paths_test.dart), but it is a real limit.
+    test("the app's own input cap is the one the rules enforce", () {
+      // The title/name fields limit themselves to kMaxFieldLength so a
+      // pasted essay can't produce a write that only the server can
+      // reject. That's only true while the two numbers agree.
+      expect(kMaxFieldLength, rules.maxStringLength);
+    });
+
+    test('a title longer than the rules allow is a violation', () {
+      // The other side of the cap above: if a document ever does get
+      // built with an over-length string (a code path that skips the
+      // input fields, say), this is what production would do with it.
       final tooLong = PlannedBlock(
         id: 'plan-long',
         start: DateTime(2026, 8, 20, 9),

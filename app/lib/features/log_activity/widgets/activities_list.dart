@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart'
-    show InputBorder, InputDecoration, TextField;
+    show
+        InputBorder,
+        InputDecoration,
+        ScaffoldMessenger,
+        SnackBar,
+        TextField;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -8,6 +13,7 @@ import '../../../models/activity_log.dart';
 import '../../../models/goal.dart';
 import '../../../models/tracked_block.dart';
 import '../../../shared/widgets/confirm_delete_dialog.dart';
+import '../../../shared/widgets/inline_form_error.dart';
 import '../../../state/categories_providers.dart';
 import '../../../state/day_view_providers.dart';
 import '../../../state/goals_providers.dart';
@@ -119,8 +125,20 @@ class _ActivitiesListState extends ConsumerState<ActivitiesList> {
                                 message:
                                     'This removes "${block.title}" from your activity log.',
                               );
-                              if (!confirmed) return;
-                              await softDeleteTrackedBlock(ref, block);
+                              if (!confirmed || !context.mounted) return;
+                              try {
+                                await softDeleteTrackedBlock(ref, block);
+                              } catch (_) {
+                                // A failed delete used to leave the row
+                                // sitting there with no explanation, which
+                                // reads as the tap not registering.
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(kDeleteFailedMessage),
+                                  ),
+                                );
+                              }
                             },
                           ),
                         const SizedBox(height: AppSpacing.s3),
