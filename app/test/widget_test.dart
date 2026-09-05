@@ -1252,9 +1252,12 @@ void main() {
       await tester.pumpAndSettle();
 
       // Monday 17 Aug — the mock Walking/Deep work goals both have plain
-      // duration-only schedule entries (no fixed clock time), so they
-      // never generate a plotted PlannedBlock for any day, this one
-      // included.
+      // duration-only schedule entries (no fixed clock time), so their
+      // budget never generates a plotted PlannedBlock for any day, this
+      // one included. The dummy seed data does manually plan part of each
+      // goal's Monday budget though (a 30m walk against Walking's 1h, a 3h
+      // block against Deep work's 4h) — that manually-scheduled time is
+      // credited against the budget, leaving only the rest unscheduled.
       await tester.tap(find.text('MON 17'));
       await tester.pumpAndSettle();
 
@@ -1270,11 +1273,11 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.descendant(of: find.byType(Dialog), matching: find.text('1h')),
+        find.descendant(of: find.byType(Dialog), matching: find.text('30m')),
         findsOneWidget,
       );
       expect(
-        find.descendant(of: find.byType(Dialog), matching: find.text('4h')),
+        find.descendant(of: find.byType(Dialog), matching: find.text('1h')),
         findsOneWidget,
       );
     },
@@ -4003,6 +4006,52 @@ void main() {
         find.descendant(of: dialog, matching: find.text('test goal')),
         findsOneWidget,
       );
+    },
+  );
+
+  testWidgets(
+    'Day view: manually planning time against a goal with untimed budget '
+    'moves that time from "unscheduled" to "planned" instead of leaving '
+    'both totals unchanged — the exact bug a real user hit creating a new '
+    'planned activity for a goal with unscheduled time left',
+    (WidgetTester tester) async {
+      final container = ProviderContainer(
+        overrides: await _signedInOnboardedNoActivityOverrides(),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Before: nothing manually planned yet, so the goal's whole 30m/day
+      // budget reads as unscheduled and nothing at all reads as planned.
+      expect(find.text('planned 0m'), findsOneWidget);
+      expect(find.text('unscheduled 30m'), findsOneWidget);
+
+      // A manually-created planned activity against that same goal, for
+      // the full 30m it owes today.
+      await container.read(plannedBlocksRepositoryProvider).upsert(
+        PlannedBlock(
+          id: 'test-manual-plan',
+          start: DateTime(mockDay.year, mockDay.month, mockDay.day, 9, 0),
+          end: DateTime(mockDay.year, mockDay.month, mockDay.day, 9, 30),
+          title: 'Test goal block',
+          goalId: 'goal-1',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      // "planned" picks up the new block, and "unscheduled" drops by the
+      // same 30m — the goal's budget is now fully accounted for, not
+      // double-counted as both planned and still-unscheduled.
+      expect(find.text('planned 30m'), findsOneWidget);
+      expect(find.text('unscheduled 30m'), findsNothing);
     },
   );
 

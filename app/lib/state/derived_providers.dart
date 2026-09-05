@@ -75,12 +75,17 @@ final driftProvider = Provider<List<GoalDrift>>((ref) {
 
   final planned = [for (final day in dayBlocks) ...day.planned];
   final tracked = [for (final day in dayBlocks) ...day.tracked];
+  final dayBlocksByDate = {for (final day in dayBlocks) day.date: day};
   final untimed = <String, Duration>{};
   for (final date in dates) {
+    final manualForDate =
+        dayBlocksByDate[date]?.planned.where((b) => !b.isGoalGenerated).toList() ??
+            const <PlannedBlock>[];
     for (final entry
         in untimedPlannedDurationByGoalForDate(
           goals: goals,
           date: date,
+          manualBlocksForDate: manualForDate,
         ).entries) {
       untimed.update(
         entry.key,
@@ -167,11 +172,15 @@ final dayTotalsProvider =
       }
       var windowTotal = Duration.zero;
       var unscheduledTotal = Duration.zero;
-      for (final date in dates) {
+      for (final day in dayBlocks) {
         unscheduledTotal += untimedPlannedDurationByCategoryForDate(
           goals: goals,
-          date: date,
+          date: day.date,
+          manualBlocksForDate:
+              day.planned.where((b) => !b.isGoalGenerated).toList(),
         ).values.fold<Duration>(Duration.zero, (total, d) => total + d);
+      }
+      for (final date in dates) {
         for (final window
             in dayWindowsFor(
               date,
@@ -188,13 +197,19 @@ final dayTotalsProvider =
 /// legend's "unscheduled" popup lists. Keyed by goal id (not category), so
 /// two goals sharing a category never merge into one row.
 final unscheduledByGoalProvider = Provider<Map<String, Duration>>((ref) {
-  final dates = ref.watch(visibleDatesProvider);
+  final dayBlocks = ref.watch(visibleDayBlocksProvider);
   final goals = ref.watch(goalsProvider);
 
   final totals = <String, Duration>{};
-  for (final date in dates) {
+  for (final day in dayBlocks) {
+    final manualForDate =
+        day.planned.where((b) => !b.isGoalGenerated).toList();
     for (final entry
-        in untimedPlannedDurationByGoalForDate(goals: goals, date: date).entries) {
+        in untimedPlannedDurationByGoalForDate(
+          goals: goals,
+          date: day.date,
+          manualBlocksForDate: manualForDate,
+        ).entries) {
       totals.update(
         entry.key,
         (total) => total + entry.value,

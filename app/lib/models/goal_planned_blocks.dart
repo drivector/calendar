@@ -83,21 +83,24 @@ List<PlannedBlock> generateGoalPlannedBlocksForDate({
 Map<String, Duration> untimedPlannedDurationByCategoryForDate({
   required List<Goal> goals,
   required DateTime date,
+  List<PlannedBlock> manualBlocksForDate = const [],
 }) {
-  final day = DateTime(date.year, date.month, date.day);
+  final byGoal = untimedPlannedDurationByGoalForDate(
+    goals: goals,
+    date: date,
+    manualBlocksForDate: manualBlocksForDate,
+  );
+  final categoryByGoalId = {for (final goal in goals) goal.id: goal.categoryId};
 
   final totals = <String, Duration>{};
-  for (final goal in goals) {
-    if (goal.status != GoalLifecycleStatus.active) continue;
-    if (!goal.isActiveOn(day)) continue;
-    for (final entry in goal.entriesForOccurrence(day)) {
-      if (entry.isTimeRange) continue;
-      totals.update(
-        goal.categoryId,
-        (total) => total + entry.effectiveDuration,
-        ifAbsent: () => entry.effectiveDuration,
-      );
-    }
+  for (final entry in byGoal.entries) {
+    final categoryId = categoryByGoalId[entry.key];
+    if (categoryId == null) continue;
+    totals.update(
+      categoryId,
+      (total) => total + entry.value,
+      ifAbsent: () => entry.value,
+    );
   }
   return totals;
 }
@@ -106,9 +109,20 @@ Map<String, Duration> untimedPlannedDurationByCategoryForDate({
 /// instead of category id — for callers (drift) that need to keep two
 /// goals sharing a category separate rather than merging their untimed
 /// time into one bucket.
+///
+/// [manualBlocksForDate] — the day's manually-created (non-goal-generated)
+/// [PlannedBlock]s, if the caller has them handy — lets a goal's untimed
+/// requirement count as met once the user hand-schedules real time against
+/// it: a "walk, 30 min, any time" goal that gets a 3–3:30pm block placed on
+/// it should read as 30 min less unscheduled, not as unscheduled *and*
+/// planned simultaneously. Each manual block reduces its goal's own
+/// untimed total (never below zero) by its duration; a block for a goal
+/// with no untimed entry today, or more manual time than the goal owes, is
+/// simply ignored rather than going negative or crediting another goal.
 Map<String, Duration> untimedPlannedDurationByGoalForDate({
   required List<Goal> goals,
   required DateTime date,
+  List<PlannedBlock> manualBlocksForDate = const [],
 }) {
   final day = DateTime(date.year, date.month, date.day);
 
@@ -125,5 +139,15 @@ Map<String, Duration> untimedPlannedDurationByGoalForDate({
       );
     }
   }
+
+  for (final goalId in totals.keys.toList()) {
+    final consumed = manualBlocksForDate
+        .where((b) => !b.isGoalGenerated && b.goalId == goalId)
+        .fold<Duration>(Duration.zero, (total, b) => total + b.duration);
+    if (consumed == Duration.zero) continue;
+    final remaining = totals[goalId]! - consumed;
+    totals[goalId] = remaining.isNegative ? Duration.zero : remaining;
+  }
+
   return totals;
 }
