@@ -32,10 +32,16 @@ class DriftFooter extends ConsumerWidget {
     final drift = ref.watch(driftProvider);
     final categories = ref.watch(categoriesProvider);
     final goals = ref.watch(goalsProvider);
-    // Only genuinely "today" in Day mode — [driftProvider] now sums across
-    // every visible day, so the label needs to stop claiming "today" once
-    // there's more than one day on screen.
+    // Only genuinely "today" in Day mode, and only when the selected day
+    // isn't in the future — [driftProvider] now sums across every visible
+    // day, so the label needs to stop claiming "today" once there's more
+    // than one day on screen, or once Day mode is showing a day that
+    // hasn't happened yet (mirrors [driftProvider]'s own "future days
+    // excluded" cutoff, not a strict same-day check — a past selected day
+    // still reads as "today" the same way [driftProvider] still sums it).
     final isDayMode = ref.watch(dayViewModeProvider) == DayViewMode.day;
+    final selectedDate = ref.watch(selectedDateProvider);
+    final isToday = isDayMode && !selectedDate.isAfter(today());
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -51,7 +57,7 @@ class DriftFooter extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              isDayMode ? 'DRIFT TODAY' : 'DRIFT',
+              isToday ? 'DRIFT TODAY' : 'DRIFT',
               style: AppTextStyles.kicker(),
             ),
             const SizedBox(height: AppSpacing.s1),

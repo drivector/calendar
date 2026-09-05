@@ -4088,6 +4088,35 @@ void main() {
   );
 
   testWidgets(
+    'Day view: the drift footer drops the "TODAY" label in Day mode too, '
+    'once the selected day is in the future',
+    (WidgetTester tester) async {
+      final futureDate = DateTime.now().add(const Duration(days: 30));
+      final container = ProviderContainer(
+        overrides: [
+          ...await _signedInOnboardedNoActivityOverrides(),
+          selectedDateProvider.overrideWith((ref) => futureDate),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Still Day mode, but the selected day hasn't happened yet — nothing
+      // can be "behind plan" for it, so the label shouldn't claim "today".
+      expect(tester.takeException(), isNull);
+      expect(find.text('DRIFT'), findsOneWidget);
+      expect(find.text('DRIFT TODAY'), findsNothing);
+    },
+  );
+
+  testWidgets(
     'Categories: a new category needs a goal of its own before it shows up as a Log activity chip',
     (WidgetTester tester) async {
       await tester.pumpWidget(
