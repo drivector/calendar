@@ -36,6 +36,7 @@ import 'package:calendar_tracker/models/user_settings.dart';
 import 'package:calendar_tracker/shared/widgets/app_tab_bar.dart';
 import 'package:calendar_tracker/shared/widgets/category_chip.dart';
 import 'package:calendar_tracker/shared/widgets/dashed_border.dart';
+import 'package:calendar_tracker/shared/widgets/goal_dropdown.dart';
 import 'package:calendar_tracker/shared/widgets/step_arrow_button.dart';
 import 'package:calendar_tracker/state/auth_providers.dart';
 import 'package:calendar_tracker/state/day_view_providers.dart';
@@ -147,9 +148,11 @@ Future<List<Override>> _signedInOnboardedNoActivityOverrides() async {
 /// A goal's own name can collide with plain body text elsewhere on screen
 /// once drift is grouped by goal rather than category (e.g. the drift
 /// footer's own "test goal" row, always visible whenever that goal is
-/// behind) — scoped to any open [BottomSheet] (the add-block sheet itself,
-/// and/or its nested goal-picker sheet) sidesteps that ambiguity for the
-/// add-block sheet's goal field/picker specifically.
+/// behind) — scoped to any open [BottomSheet] sidesteps that ambiguity.
+/// Only finds text actually painted in the sheet itself (e.g. the
+/// [GoalDropdown] trigger showing its current selection) — a goal name
+/// inside the dropdown's own popup menu lives in a separate overlay route,
+/// not a descendant of the sheet, so use [_pickGoal] to select one instead.
 Finder _goalTextInSheet(String name) =>
     find.descendant(of: find.byType(BottomSheet), matching: find.text(name));
 
@@ -194,6 +197,20 @@ Future<void> _selectBlockFilter(WidgetTester tester, String label) async {
   await tester.pumpAndSettle();
 }
 
+/// Picks [goalName] from a `GoalDropdown` scoped to [ancestor] — opens the
+/// dropdown's popup menu, then taps the matching row inside it.
+Future<void> _pickGoal(
+  WidgetTester tester, {
+  required Finder ancestor,
+  required String goalName,
+}) async {
+  await tester.tap(
+    find.descendant(of: ancestor, matching: find.byType(GoalDropdown)),
+  );
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(goalName).last);
+  await tester.pumpAndSettle();
+}
 
 void main() {
   testWidgets('Day view renders the mock day without layout errors', (
@@ -1061,8 +1078,11 @@ void main() {
         find.byType(TextField).first,
         'Third column entry',
       );
-      await tester.tap(_goalTextInSheet('test goal'));
-      await tester.pumpAndSettle();
+      await _pickGoal(
+        tester,
+        ancestor: find.byType(BottomSheet),
+        goalName: 'Test goal',
+      );
       await tester.tap(find.text('save'));
       await tester.pumpAndSettle();
 
@@ -2014,13 +2034,11 @@ void main() {
     // Scoped to the sheet — the Day view behind it (now visible, since
     // "+ LOG" lives there) has its own "deep work" text in the drift
     // footer whenever that category has nonzero drift for the day.
-    await tester.tap(
-      find.descendant(
-        of: find.byType(LogActivitySheet),
-        matching: find.text('deep work'),
-      ),
+    await _pickGoal(
+      tester,
+      ancestor: find.byType(LogActivitySheet),
+      goalName: 'Deep work',
     );
-    await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
     expect(find.textContaining('20h/wk'), findsOneWidget);
@@ -3247,14 +3265,12 @@ void main() {
     await tester.enterText(find.byType(TextField).first, 'No time set');
     // Scoped to the sheet — the Day view's drift footer also shows
     // "walking" whenever that category has nonzero drift for the day.
-    await tester.tap(
-      find.descendant(
-        of: find.byType(LogActivitySheet),
-        matching: find.text('walking'),
-      ),
+    await _pickGoal(
+      tester,
+      ancestor: find.byType(LogActivitySheet),
+      goalName: 'Walking',
     );
     // Deliberately no start/end.
-    await tester.pumpAndSettle();
 
     await tester.ensureVisible(find.text('Save entry'));
     await tester.pumpAndSettle();
@@ -3309,13 +3325,11 @@ void main() {
     // Now actually pick a goal and try again. Scoped to the sheet — the
     // Day view's drift footer also shows "walking" when that category
     // has nonzero drift for the day.
-    await tester.tap(
-      find.descendant(
-        of: find.byType(LogActivitySheet),
-        matching: find.text('walking'),
-      ),
+    await _pickGoal(
+      tester,
+      ancestor: find.byType(LogActivitySheet),
+      goalName: 'Walking',
     );
-    await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Save entry'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Save entry'));
@@ -3395,13 +3409,11 @@ void main() {
 
       // Scoped to the sheet — the Day view's drift footer also shows
       // "deep work" when that category has nonzero drift for the day.
-      await tester.tap(
-        find.descendant(
-          of: find.byType(LogActivitySheet),
-          matching: find.text('deep work'),
-        ),
+      await _pickGoal(
+        tester,
+        ancestor: find.byType(LogActivitySheet),
+        goalName: 'Deep work',
       );
-      await tester.pumpAndSettle();
       expect(find.text('WEEKLY TARGET'), findsOneWidget); // a goal is selected
 
       await tester.tap(find.text('close'));
@@ -4101,17 +4113,18 @@ void main() {
       await tester.tap(find.text('+ Log'));
       await tester.pumpAndSettle();
 
-      // Scoped to the sheet — the new goal's own default schedule now also
-      // gives it a nonzero planned total, so "reading" (lowercased) shows a
-      // second time in the still-mounted Day view's own DRIFT TODAY footer
-      // behind the sheet.
-      expect(
+      // Opening the dropdown's popup menu shows the new goal as a
+      // selectable row — its own name ("Reading"), not the lowercased
+      // "reading" the still-mounted Day view's DRIFT TODAY footer shows
+      // behind the sheet (a different string, so no collision).
+      await tester.tap(
         find.descendant(
           of: find.byType(LogActivitySheet),
-          matching: find.text('reading'),
+          matching: find.byType(GoalDropdown),
         ),
-        findsOneWidget, // now selectable, by goal
       );
+      await tester.pumpAndSettle();
+      expect(find.text('Reading'), findsOneWidget); // now selectable, by goal
     },
   );
 
@@ -4199,8 +4212,8 @@ void main() {
   );
 
   testWidgets(
-    'Day view: tapping empty space opens a sheet with goal chips (not category '
-    "chips), and saving files the block under that goal's category",
+    'Day view: tapping empty space opens a sheet with a goal dropdown (not '
+    "category chips), and saving files the block under that goal's category",
     (WidgetTester tester) async {
       final container = ProviderContainer(
         overrides: await _signedInOnboardedNoActivityOverrides(),
@@ -4223,8 +4236,10 @@ void main() {
       expect(tester.takeException(), isNull);
       // No goal pre-selected — picking one is a real, required choice now.
       expect(
-        find.byWidgetPredicate((w) => w is CategoryChip && w.selected),
-        findsNothing,
+        tester
+            .widget<GoalDropdown>(find.byType(GoalDropdown))
+            .selectedGoalId,
+        isNull,
       );
       // Opened from empty space, not a plan — no "matches a planned
       // activity" icon.
@@ -4238,11 +4253,14 @@ void main() {
       await tester.enterText(find.byType(TextField).first, 'Morning walk');
       await tester.pumpAndSettle();
 
-      // "test goal" — the fixture's one goal, as a chip. Not the category
-      // name ("Work") — goals and categories happen to differ here
-      // specifically so this can't pass by coincidence.
-      await tester.tap(_goalTextInSheet('test goal'));
-      await tester.pumpAndSettle();
+      // "Test goal" — the fixture's one goal, from the dropdown. Not the
+      // category name ("Work") — goals and categories happen to differ
+      // here specifically so this can't pass by coincidence.
+      await _pickGoal(
+        tester,
+        ancestor: find.byType(BottomSheet),
+        goalName: 'Test goal',
+      );
 
       await tester.tap(find.text('save'));
       await tester.pumpAndSettle();
@@ -4297,8 +4315,8 @@ void main() {
 
   testWidgets(
     'Day view: the add-block sheet has no date field — it always uses '
-    'whichever day the Day view is showing — and the goal picker is an '
-    'inline row of chips, not a dropdown',
+    'whichever day the Day view is showing — and the goal picker is a '
+    'dropdown, not an inline row of chips',
     (WidgetTester tester) async {
       await tester.pumpWidget(
         ProviderScope(
@@ -4317,27 +4335,24 @@ void main() {
       expect(find.text('START TIME'), findsOneWidget);
       expect(find.text('END TIME'), findsOneWidget);
 
-      // No goal pre-selected — the chip is visible but unselected, not
-      // hidden behind a closed dropdown field.
-      expect(_goalTextInSheet('test goal'), findsOneWidget);
-      expect(
-        find.byWidgetPredicate((w) => w is CategoryChip && w.selected),
-        findsNothing,
-      );
+      // No goal pre-selected — the dropdown shows its placeholder, not a
+      // choice already made for the user, and there's no chip in sight.
+      expect(find.byType(CategoryChip), findsNothing);
+      final goalField = find.byType(GoalDropdown);
+      expect(goalField, findsOneWidget);
+      expect(tester.widget<GoalDropdown>(goalField).selectedGoalId, isNull);
 
-      // A single tap on the chip selects it directly — no nested picker.
-      await tester.tap(_goalTextInSheet('test goal'));
-      await tester.pumpAndSettle();
+      // Opening it and picking the fixture's one goal selects it directly.
+      await _pickGoal(
+        tester,
+        ancestor: find.byType(BottomSheet),
+        goalName: 'Test goal',
+      );
 
       expect(tester.takeException(), isNull);
       expect(
-        find.byWidgetPredicate(
-          (w) =>
-              w is CategoryChip &&
-              w.selected &&
-              w.label == 'test goal'.toLowerCase(),
-        ),
-        findsOneWidget,
+        tester.widget<GoalDropdown>(goalField).selectedGoalId,
+        'goal-1',
       );
 
       // The bottom save button is gone — "save" now lives in the header,
@@ -4394,10 +4409,14 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('· 30m'), findsOneWidget);
-      expect(_goalTextInSheet('test goal'), findsOneWidget);
+      expect(_goalTextInSheet('Test goal'), findsOneWidget);
       expect(
-        find.byWidgetPredicate((w) => w is CategoryChip && w.selected),
-        findsOneWidget,
+        tester
+            .widget<GoalDropdown>(
+              find.descendant(of: sheet, matching: find.byType(GoalDropdown)),
+            )
+            .selectedGoalId,
+        'goal-1',
       );
       // The "matches a planned activity" icon shows only because this sheet
       // was opened by tapping the plan, not an empty-space tap.
@@ -4666,8 +4685,11 @@ void main() {
       await tester.pumpAndSettle();
 
       // A goal is picked, but the activity name is left blank.
-      await tester.tap(_goalTextInSheet('test goal'));
-      await tester.pumpAndSettle();
+      await _pickGoal(
+        tester,
+        ancestor: find.byType(BottomSheet),
+        goalName: 'Test goal',
+      );
 
       await tester.tap(find.text('save'));
       await tester.pumpAndSettle();
@@ -4821,8 +4843,11 @@ void main() {
       await tester.enterText(find.byType(TextField).first, 'Evening walk');
       await tester.pumpAndSettle();
       // A goal is required to save now — pick the fixture's one goal.
-      await tester.tap(_goalTextInSheet('test goal'));
-      await tester.pumpAndSettle();
+      await _pickGoal(
+        tester,
+        ancestor: find.byType(BottomSheet),
+        goalName: 'Test goal',
+      );
 
       await tester.tapAt(const Offset(200, 10));
       await tester.pumpAndSettle();
@@ -4867,8 +4892,11 @@ void main() {
 
       // A goal is picked (enough to count as "unsaved changes"), but the
       // activity name is deliberately left blank.
-      await tester.tap(_goalTextInSheet('test goal'));
-      await tester.pumpAndSettle();
+      await _pickGoal(
+        tester,
+        ancestor: find.byType(BottomSheet),
+        goalName: 'Test goal',
+      );
 
       await tester.tapAt(const Offset(200, 10));
       await tester.pumpAndSettle();
@@ -5486,11 +5514,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Pick a goal before starting'), findsOneWidget);
 
-      await tester.tap(
-        find.descendant(
-          of: find.byType(StartActivitySheet),
-          matching: find.text('walking'),
-        ),
+      await _pickGoal(
+        tester,
+        ancestor: find.byType(StartActivitySheet),
+        goalName: 'Walking',
       );
       await tester.tap(find.text('Start'));
       await tester.pumpAndSettle();
@@ -5602,11 +5629,10 @@ void main() {
 
       await tester.tap(find.text('▶ Start'));
       await tester.pumpAndSettle();
-      await tester.tap(
-        find.descendant(
-          of: find.byType(StartActivitySheet),
-          matching: find.text('walking'),
-        ),
+      await _pickGoal(
+        tester,
+        ancestor: find.byType(StartActivitySheet),
+        goalName: 'Walking',
       );
       await tester.tap(find.text('Start'));
       await tester.pumpAndSettle();

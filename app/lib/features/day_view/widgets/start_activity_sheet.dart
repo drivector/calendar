@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/mock/mock_categories.dart';
-import '../../../shared/widgets/category_chip.dart';
+import '../../../shared/widgets/goal_dropdown.dart';
 import '../../../shared/widgets/inline_form_error.dart';
 import '../../../state/categories_providers.dart';
 import '../../../state/goals_providers.dart';
@@ -142,23 +142,16 @@ class _StartActivitySheetState extends ConsumerState<StartActivitySheet> {
                 const SizedBox(height: AppSpacing.s3),
                 Text('GOAL', style: AppTextStyles.kicker()),
                 const SizedBox(height: 5),
-                Wrap(
-                  spacing: AppSpacing.s2,
-                  runSpacing: AppSpacing.s2,
-                  children: [
-                    for (final goal in goals.where(
-                      (g) => g.categoryId != screenTimeCategoryId,
-                    ))
-                      CategoryChip(
-                        label: goal.name.toLowerCase(),
-                        color: resolveCategory(categories, goal.categoryId).color,
-                        selected: _goalId == goal.id,
-                        onTap: () => setState(() {
-                          _goalId = goal.id;
-                          _errorMessage = null;
-                        }),
-                      ),
-                  ],
+                GoalDropdown(
+                  goals: goals
+                      .where((g) => g.categoryId != screenTimeCategoryId)
+                      .toList(),
+                  colorFor: (goal) => resolveCategory(categories, goal.categoryId).color,
+                  selectedGoalId: _goalId,
+                  onChanged: (goalId) => setState(() {
+                    _goalId = goalId;
+                    _errorMessage = null;
+                  }),
                 ),
               ],
             ),

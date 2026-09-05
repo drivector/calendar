@@ -4,9 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/mock/mock_categories.dart';
 import '../../../models/goal.dart';
 import '../../../models/tracked_block.dart';
-import '../../../shared/widgets/category_chip.dart';
 import '../../../shared/widgets/confirm_delete_dialog.dart';
 import '../../../shared/widgets/date_field.dart';
+import '../../../shared/widgets/goal_dropdown.dart';
 import '../../../shared/widgets/inline_form_error.dart';
 import '../../../state/categories_providers.dart';
 import '../../../state/day_view_providers.dart';
@@ -359,33 +359,25 @@ class _LogActivitySheetState extends ConsumerState<LogActivitySheet> {
                   ),
                   const SizedBox(height: AppSpacing.s3),
                   _FieldLabel('Goal'),
-                  Wrap(
-                    spacing: AppSpacing.s2,
-                    runSpacing: AppSpacing.s2,
-                    children: [
-                      // Logging is goal-first, not category-first — the
-                      // screen-time goal is excluded since it's auto-tracked,
-                      // not something you'd manually log.
-                      for (final goal in goals.where(
-                        (g) =>
-                            g.categoryId != screenTimeCategoryId &&
-                            g.status == GoalLifecycleStatus.active,
-                      ))
-                        CategoryChip(
-                          label: goal.name.toLowerCase(),
-                          color: resolveCategory(
-                            categories,
-                            goal.categoryId,
-                          ).color,
-                          selected: draft.goalId == goal.id,
-                          onTap: () {
-                            notifier.setGoal(goal.id);
-                            if (_errorMessage != null) {
-                              setState(() => _errorMessage = null);
-                            }
-                          },
-                        ),
-                    ],
+                  GoalDropdown(
+                    // Logging is goal-first, not category-first — the
+                    // screen-time goal is excluded since it's auto-tracked,
+                    // not something you'd manually log.
+                    goals: goals
+                        .where(
+                          (g) =>
+                              g.categoryId != screenTimeCategoryId &&
+                              g.status == GoalLifecycleStatus.active,
+                        )
+                        .toList(),
+                    colorFor: (goal) => resolveCategory(categories, goal.categoryId).color,
+                    selectedGoalId: draft.goalId,
+                    onChanged: (goalId) {
+                      notifier.setGoal(goalId);
+                      if (_errorMessage != null) {
+                        setState(() => _errorMessage = null);
+                      }
+                    },
                   ),
                   if (selectedGoal != null) ...[
                     const SizedBox(height: AppSpacing.s3),

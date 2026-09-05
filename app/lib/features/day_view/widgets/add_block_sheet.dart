@@ -5,9 +5,9 @@ import '../../../data/mock/mock_categories.dart';
 import '../../../models/goal.dart';
 import '../../../models/planned_block.dart';
 import '../../../models/tracked_block.dart';
-import '../../../shared/widgets/category_chip.dart';
 import '../../../shared/widgets/confirm_delete_dialog.dart';
 import '../../../shared/widgets/dashed_border.dart';
+import '../../../shared/widgets/goal_dropdown.dart';
 import '../../../shared/widgets/inline_form_error.dart';
 import '../../../state/categories_providers.dart';
 import '../../../state/day_view_providers.dart';
@@ -408,21 +408,14 @@ class _AddBlockSheetState extends State<_AddBlockSheet> {
                     ),
                     const SizedBox(height: AppSpacing.s3),
                     _Label('Goal'),
-                    Wrap(
-                      spacing: AppSpacing.s2,
-                      runSpacing: AppSpacing.s2,
-                      children: [
-                        for (final goal in goals)
-                          CategoryChip(
-                            label: goal.name.toLowerCase(),
-                            color: resolveCategory(categories, goal.categoryId).color,
-                            selected: _goalId == goal.id,
-                            onTap: () => setState(() {
-                              _goalId = goal.id;
-                              _errorMessage = null;
-                            }),
-                          ),
-                      ],
+                    GoalDropdown(
+                      goals: goals,
+                      colorFor: (goal) => resolveCategory(categories, goal.categoryId).color,
+                      selectedGoalId: _goalId,
+                      onChanged: (goalId) => setState(() {
+                        _goalId = goalId;
+                        _errorMessage = null;
+                      }),
                     ),
                     if (widget.editingId != null) ...[
                       const SizedBox(height: AppSpacing.s3),
