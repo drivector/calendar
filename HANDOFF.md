@@ -9,15 +9,13 @@ banner instead of rendering as an empty account, and a rejected delete
 says so instead of silently doing nothing (see **Read/delete failures:
 closing out the silent-failure bug class** near the end); **`523675f`**
 fixed the drift footer flagging future days as already behind their plan
-(see **Drift footer: exclude future days**); and **`5e83d5d`**, on its
-own still-unmerged branch `fix/unscheduled-planned-linkage`, fixed a
+(see **Drift footer: exclude future days**); and **`5e83d5d`** fixed a
 goal's "unscheduled" total double-counting time already covered by a
 manual planned block (see **Unscheduled budget: credit manually-planned
-time**). `main` is pushed and up to date with `origin/main` at
-`523675f`, **291 tests pass**, `flutter analyze` clean.
-`fix/unscheduled-planned-linkage` is a separate pushed branch, one commit
-ahead of `main`, not yet merged — merge it the normal way (re-run
-`flutter analyze && flutter test` after) when picking this up.
+time**). `5e83d5d`'s branch, `fix/unscheduled-planned-linkage`, has since
+been **merged into `main`** (merge commit `a23c517`) and the branch
+deleted — it's no longer separate. `main` is pushed and up to date with
+`origin/main` at `a23c517`, **291 tests pass**, `flutter analyze` clean.
 
 Updated 2026-09-05. Everything from here down through **Known
 environment quirks** was accurate as of 2026-08-31 (end of the sixth
@@ -38,9 +36,9 @@ inline chips → a proper `PopupMenuButton` dropdown** — that last swing
 happened across two sessions running in parallel worktrees on the same
 day, see that section for the full story. `flutter analyze` is clean and
 **269 tests pass** as of this write-up (was 198 on 2026-08-31) — re-check
-both before trusting this if time has passed. **`main` is 3 commits
-ahead of `origin/main`, unpushed** as of this write-up — see **Git
-status**.
+both before trusting this if time has passed. `main` was 3 commits ahead
+of `origin/main`, unpushed, as of this write-up — since pushed (see the
+newer entry above and **Git status**).
 
 Updated 2026-08-31 (sixth session — twenty-two batches pushed, all
 clean, see **Git status**; the fifth pushed batch also **deployed live
@@ -4065,7 +4063,7 @@ verified by precise provider-level reasoning about the fix, not a new
 test, since the existing 290 didn't have a gap here to close). Committed
 and pushed straight to `main` (`523675f`).
 
-## Unscheduled budget: credit manually-planned time (2026-09-05, `5e83d5d`, branch `fix/unscheduled-planned-linkage`, unmerged)
+## Unscheduled budget: credit manually-planned time (2026-09-05, `5e83d5d`, merged into `main` via `a23c517`)
 
 A goal with an untimed schedule entry ("piano, 15 min, any time") counts
 that 15 min as "unscheduled" (see `dayTotalsProvider`'s own doc comment,
@@ -4091,7 +4089,6 @@ blocks through.
 Touched: `lib/features/account/day_preview_sheet.dart`,
 `lib/models/goal_planned_blocks.dart`, `lib/state/derived_providers.dart`,
 `lib/state/week_view_providers.dart`, `test/widget_test.dart`. Committed
-and pushed to its own branch, `fix/unscheduled-planned-linkage`
-(**not** `main` — pick this up as a normal merge, re-running
-`flutter analyze && flutter test` after, per `CLAUDE.md`'s
-parallel-session convention). 291 tests pass on that branch (290 + 1 new).
+and pushed to its own branch, `fix/unscheduled-planned-linkage`, then
+merged into `main` (merge commit `a23c517`) and the branch deleted —
+`main` is fully up to date with `origin/main`. 291 tests pass.
