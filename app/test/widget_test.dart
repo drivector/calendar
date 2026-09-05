@@ -14,6 +14,7 @@ import 'package:calendar_tracker/features/categories/categories_screen.dart';
 import 'package:calendar_tracker/features/day_view/widgets/actual_block_widget.dart';
 import 'package:calendar_tracker/features/day_view/widgets/day_header_bar.dart';
 import 'package:calendar_tracker/features/day_view/widgets/legend_row.dart';
+import 'package:calendar_tracker/theme/app_colors.dart';
 import 'package:calendar_tracker/features/day_view/widgets/live_activity_button.dart';
 import 'package:calendar_tracker/features/day_view/widgets/live_activity_running_block.dart';
 import 'package:calendar_tracker/features/day_view/widgets/start_activity_sheet.dart';
@@ -179,6 +180,18 @@ Future<void> _tapTab(WidgetTester tester, String label) async {
   );
   await tester.pumpAndSettle();
 }
+
+/// The Day view's summary strip (LegendRow) reads as one caption —
+/// `<registered> done · <planned> planned` — with `of <window>` beside it
+/// and, only when it's non-zero, an `<amount> unscheduled ›` line below
+/// the capacity bar. These build the finders for those, so a wording
+/// change lands in one place rather than across a dozen tests.
+Finder _summaryCaption(String registered, String planned) =>
+    find.text('$registered done · $planned planned');
+
+Finder _summaryWindow(String tracked) => find.text('of $tracked');
+
+Finder _unscheduledLine(String amount) => find.text('$amount unscheduled ›');
 
 /// The Day view's mode/filter/full-day controls all live behind one "⋮"
 /// overflow menu button now (see DayHeaderBar's own doc comment) — tap it,
@@ -1388,8 +1401,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('planned 0m'), findsOneWidget);
-      expect(find.text('unscheduled 30m'), findsOneWidget);
+      expect(_summaryCaption('0m', '0m'), findsOneWidget);
+      expect(_unscheduledLine('30m'), findsOneWidget);
 
       await _tapTab(tester, 'Planning');
       await tester.pumpAndSettle();
@@ -3825,13 +3838,15 @@ void main() {
       // no fixed clock time, so it counts as "unscheduled" rather than
       // "planned" — see dayTotalsProvider's own doc comment.
       expect(tester.takeException(), isNull);
-      expect(find.text('planned 0m'), findsOneWidget);
-      expect(find.text('unscheduled 30m'), findsOneWidget);
-      // "tracked" is the configured tracking window (defaults to the full
-      // 24h — no settings saved for this fixture); "registered" is what's
-      // actually been logged, zero here.
-      expect(find.text('tracked 24h'), findsOneWidget);
-      expect(find.text('registered 0m'), findsOneWidget);
+      // "registered" is what's actually been logged, zero here, and
+      // "planned" only counts blocks with a real clock time — so the
+      // caption reads all zeroes and the 30m shows on the unscheduled
+      // line instead.
+      expect(_summaryCaption('0m', '0m'), findsOneWidget);
+      expect(_unscheduledLine('30m'), findsOneWidget);
+      // The bar's full track is the configured tracking window, which
+      // defaults to the full 24h — no settings saved for this fixture.
+      expect(_summaryWindow('24h'), findsOneWidget);
 
       // Drift footer: nothing tracked against a 30m target reads as −30m,
       // under the goal's own name (lowercased) — drift is grouped by goal,
@@ -3919,56 +3934,115 @@ void main() {
       // Day mode: one day's worth of the goal's own 30m/day schedule — no
       // fixed clock time, so it's "unscheduled" rather than "planned" (see
       // dayTotalsProvider's own doc comment).
-      expect(find.text('planned 0m'), findsOneWidget);
-      expect(find.text('unscheduled 30m'), findsOneWidget);
+      expect(_summaryCaption('0m', '0m'), findsOneWidget);
+      expect(_unscheduledLine('30m'), findsOneWidget);
+      // One visible day, so the bar draws one track.
+      expect(find.byType(CapacityTrack), findsOneWidget);
 
       await _selectDayViewMode(tester, '3 Day');
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      // 3 Day (and beyond) collapses the legend to icon + value only —
-      // the word ("planned"/etc.) is what's hidden by default and
-      // revealed one at a time by tapping — see LegendRow's own doc
-      // comment for why (the word prefixes are what overflow a real
-      // phone width). The legend's own GestureDetectors, in item order:
-      // tracked, planned, registered, unscheduled — that fourth one only
-      // rendered here because this fixture actually has some.
-      final legendTaps = find.descendant(
-        of: find.byType(LegendRow),
-        matching: find.byType(GestureDetector),
-      );
-      expect(legendTaps, findsNWidgets(4));
-
       // Three visible days, each with the same 30m/day schedule — the bug
-      // this covers: the legend used to keep showing just one day's 30m
-      // even with three days on screen. The value alone is already
-      // visible next to the icon, with no tap needed. It's the
-      // "unscheduled" total that carries this now, not "planned" — the
+      // this covers: the strip used to keep showing just one day's 30m
+      // even with three days on screen. The caption and the unscheduled
+      // line read exactly as they do in Day mode, just summed; it's the
+      // "unscheduled" total that carries this, not "planned", since the
       // goal's schedule has no fixed clock time.
-      expect(find.text('1h 30m'), findsOneWidget);
-      expect(find.text('unscheduled 1h 30m'), findsNothing);
-      expect(find.text('unscheduled 30m'), findsNothing);
+      expect(_summaryCaption('0m', '0m'), findsOneWidget);
+      expect(_unscheduledLine('1h 30m'), findsOneWidget);
+      expect(_unscheduledLine('30m'), findsNothing);
+      // The window sums the same way — 3 days at the default full 24h
+      // each (formatDuration doesn't roll over into "days").
+      expect(_summaryWindow('72h'), findsOneWidget);
+      // One track per visible day, rather than a single blended bar — so
+      // a day with nothing logged reads as its own empty track.
+      expect(find.byType(CapacityTrack), findsNWidgets(3));
 
-      await tester.tap(legendTaps.at(3)); // unscheduled
+      await tester.tap(_unscheduledLine('1h 30m'));
       await tester.pumpAndSettle();
-      // Unlike the other three items, tapping "unscheduled" opens its own
-      // breakdown dialog instead of just revealing the word — see
-      // showUnscheduledDialog. Its own total matches the legend's.
+      // Tapping the unscheduled line opens its own breakdown dialog — see
+      // showUnscheduledDialog. Its own total matches the strip's.
       expect(find.text('Unscheduled'), findsOneWidget);
-      // Scoped to the dialog — the legend row behind it still has its own
-      // "1h 30m" value in the tree too, just visually covered.
       expect(
         find.descendant(of: find.byType(Dialog), matching: find.text('1h 30m')),
         findsNWidgets(2), // the Total row and the one goal's own row
       );
       await tester.tap(find.text('close'));
       await tester.pumpAndSettle();
+    },
+  );
 
-      await tester.tap(legendTaps.at(0)); // tracked
-      await tester.pumpAndSettle();
-      // "tracked" (the window) sums the same way — 3 days at the default
-      // full 24h each (formatDuration doesn't roll over into "days").
-      expect(find.text('tracked 72h'), findsOneWidget);
+  testWidgets(
+    "Day view: the capacity bar's fills are sized to their real share of "
+    'the tracking window, and a day logged past its own window fills the '
+    'track rather than overflowing it',
+    (WidgetTester tester) async {
+      // Pumped directly at a known width — the fractions are the whole
+      // point of this widget, and a fixture-driven test would only ever
+      // assert them indirectly through totals that other tests already
+      // cover.
+      Future<void> pumpTrack(CapacityTrack track) => tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Center(child: SizedBox(width: 100, child: track)),
+        ),
+      );
+
+      Size sizeOfFill(Color color) => tester.getSize(
+        find.byWidgetPredicate((w) => w is ColoredBox && w.color == color),
+      );
+
+      await pumpTrack(
+        const CapacityTrack(
+          registered: Duration(hours: 6),
+          planned: Duration(hours: 3),
+          tracked: Duration(hours: 24),
+        ),
+      );
+
+      expect(sizeOfFill(AppColors.accent).width, 25);
+      expect(sizeOfFill(AppColors.neutral300).width, closeTo(62.5, 0.01));
+      expect(tester.getSize(find.byType(CapacityTrack)).height, 6);
+      // Heights, not just widths: a childless ColoredBox under the Row's
+      // default centre alignment sizes itself to zero and paints nothing,
+      // which is exactly how this shipped invisible the first time.
+      expect(sizeOfFill(AppColors.accent).height, 6);
+      expect(sizeOfFill(AppColors.neutral300).height, 6);
+
+      // Over its own window: the two fills are clamped to the whole
+      // track, so there's no bare track left and nothing overflows.
+      await pumpTrack(
+        const CapacityTrack(
+          registered: Duration(hours: 20),
+          planned: Duration(hours: 10),
+          tracked: Duration(hours: 24),
+        ),
+      );
+
+      expect(tester.takeException(), isNull);
+      // 20/24 of the track, to the bar's own 1/1000 flex resolution.
+      expect(sizeOfFill(AppColors.accent).width, closeTo(83.3, 0.01));
+      expect(
+        find.byWidgetPredicate(
+          (w) => w is ColoredBox && w.color == AppColors.neutral300,
+        ),
+        findsNothing,
+      );
+
+      // A day with no tracking window at all divides by nothing — it
+      // renders as an empty track rather than throwing.
+      await pumpTrack(
+        const CapacityTrack(
+          registered: Duration(hours: 2),
+          planned: Duration.zero,
+          tracked: Duration.zero,
+        ),
+      );
+
+      expect(tester.takeException(), isNull);
+      expect(sizeOfFill(AppColors.neutral300).width, 100);
+      expect(sizeOfFill(AppColors.neutral300).height, 6);
     },
   );
 
@@ -3984,11 +4058,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Day mode already shows the word inline ("unscheduled 30m") — this
-      // covers that tapping it still opens the dialog rather than being
-      // inert, unlike the other three legend items in this mode.
-      expect(find.text('unscheduled 30m'), findsOneWidget);
-      await tester.tap(find.text('unscheduled 30m'));
+      // The unscheduled line is the strip's one tappable element — this
+      // covers that it opens the dialog rather than being inert.
+      expect(_unscheduledLine('30m'), findsOneWidget);
+      await tester.tap(_unscheduledLine('30m'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
@@ -4030,8 +4103,8 @@ void main() {
 
       // Before: nothing manually planned yet, so the goal's whole 30m/day
       // budget reads as unscheduled and nothing at all reads as planned.
-      expect(find.text('planned 0m'), findsOneWidget);
-      expect(find.text('unscheduled 30m'), findsOneWidget);
+      expect(_summaryCaption('0m', '0m'), findsOneWidget);
+      expect(_unscheduledLine('30m'), findsOneWidget);
 
       // A manually-created planned activity against that same goal, for
       // the full 30m it owes today.
@@ -4047,11 +4120,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      // "planned" picks up the new block, and "unscheduled" drops by the
-      // same 30m — the goal's budget is now fully accounted for, not
-      // double-counted as both planned and still-unscheduled.
-      expect(find.text('planned 30m'), findsOneWidget);
-      expect(find.text('unscheduled 30m'), findsNothing);
+      // "planned" picks up the new block, and the unscheduled line
+      // disappears entirely — the goal's budget is now fully accounted
+      // for, not double-counted as both planned and still-unscheduled.
+      expect(_summaryCaption('0m', '30m'), findsOneWidget);
+      expect(_unscheduledLine('30m'), findsNothing);
     },
   );
 
@@ -5125,52 +5198,26 @@ void main() {
       expect(plan, findsNothing);
       expect(actual, findsOneWidget);
 
-      // The legend's own totals are unaffected — they reflect the full
-      // day's data regardless of what the grid currently hides. Captured
-      // as whatever the fixture's real numbers are, rather than hardcoded,
-      // since they're a sum over several seeded blocks.
-      final plannedLegend = tester
+      // The summary strip's own totals are unaffected — they reflect the
+      // full day's data regardless of what the grid currently hides.
+      // Captured as whatever the fixture's real numbers are, rather than
+      // hardcoded, since they're a sum over several seeded blocks.
+      String summaryCaption() => tester
           .widget<Text>(
             find.byWidgetPredicate(
-              (w) => w is Text && (w.data?.startsWith('planned ') ?? false),
+              (w) => w is Text && (w.data?.contains(' done · ') ?? false),
             ),
           )
-          .data;
-      final registeredLegend = tester
-          .widget<Text>(
-            find.byWidgetPredicate(
-              (w) =>
-                  w is Text && (w.data?.startsWith('registered ') ?? false),
-            ),
-          )
-          .data;
+          .data!;
+
+      final captionWhileFiltered = summaryCaption();
 
       await _selectBlockFilter(tester, 'All');
       expect(tester.takeException(), isNull);
       expect(container.read(dayViewBlockFilterProvider), DayViewBlockFilter.both);
       expect(plan, findsOneWidget);
       expect(actual, findsOneWidget);
-      expect(
-        tester
-            .widget<Text>(
-              find.byWidgetPredicate(
-                (w) => w is Text && (w.data?.startsWith('planned ') ?? false),
-              ),
-            )
-            .data,
-        plannedLegend,
-      );
-      expect(
-        tester
-            .widget<Text>(
-              find.byWidgetPredicate(
-                (w) =>
-                    w is Text && (w.data?.startsWith('registered ') ?? false),
-              ),
-            )
-            .data,
-        registeredLegend,
-      );
+      expect(summaryCaption(), captionWhileFiltered);
     },
   );
 
