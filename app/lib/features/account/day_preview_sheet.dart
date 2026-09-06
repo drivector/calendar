@@ -8,6 +8,7 @@ import '../../models/day_capacity.dart';
 import '../../models/goal.dart';
 import '../../models/goal_planned_blocks.dart';
 import '../../models/planned_block.dart';
+import '../../shared/widgets/inline_form_error.dart';
 import '../../shared/widgets/quick_log_check_button.dart';
 import '../../state/categories_providers.dart';
 import '../../state/day_view_providers.dart';
@@ -55,7 +56,7 @@ const double _pxPerMinute = 0.4;
 const double _twoLineMinHeight = 52;
 const double _gutterWidth = 34;
 
-class _DayPreviewDialog extends StatelessWidget {
+class _DayPreviewDialog extends StatefulWidget {
   const _DayPreviewDialog({
     required this.ref,
     required this.day,
@@ -69,7 +70,31 @@ class _DayPreviewDialog extends StatelessWidget {
   final List<Goal> goals;
 
   @override
+  State<_DayPreviewDialog> createState() => _DayPreviewDialogState();
+}
+
+class _DayPreviewDialogState extends State<_DayPreviewDialog> {
+  String? _errorMessage;
+
+  Future<void> _quickLog(Goal goal, DateTime date, Duration duration) async {
+    try {
+      await logUnscheduledGoalTime(
+        widget.ref,
+        goal: goal,
+        date: date,
+        duration: duration,
+      );
+      if (mounted) Navigator.of(context).pop();
+    } catch (_) {
+      if (mounted) setState(() => _errorMessage = kSaveFailedMessage);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final day = widget.day;
+    final categories = widget.categories;
+    final goals = widget.goals;
     final windowStart = day.windowStart;
     final windowEnd = day.windowEnd;
     final hasWindow =
@@ -165,6 +190,10 @@ class _DayPreviewDialog extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: AppSpacing.s2),
+              if (_errorMessage != null) ...[
+                InlineFormError(_errorMessage!),
+                const SizedBox(height: AppSpacing.s2),
+              ],
               if (blocks.isEmpty && unscheduled.isEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: AppSpacing.s3),
@@ -226,15 +255,11 @@ class _DayPreviewDialog extends StatelessWidget {
                         ),
                         const SizedBox(width: AppSpacing.s2),
                         QuickLogCheckButton(
-                          onTap: () {
-                            logUnscheduledGoalTime(
-                              ref,
-                              goal: entry.goal!,
-                              date: day.date,
-                              duration: entry.duration,
-                            );
-                            Navigator.of(context).pop();
-                          },
+                          onTap: () => _quickLog(
+                            entry.goal!,
+                            day.date,
+                            entry.duration,
+                          ),
                         ),
                       ],
                     ),
@@ -302,8 +327,8 @@ class _DayPreviewDialog extends StatelessWidget {
       child: PlanBlockWidget(
         block: block,
         category: resolveCategory(
-          categories,
-          goalById(goals, block.goalId)?.categoryId ?? '',
+          widget.categories,
+          goalById(widget.goals, block.goalId)?.categoryId ?? '',
         ),
         labelStyle: labelStyle,
       ),

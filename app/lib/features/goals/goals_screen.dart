@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart' show MaterialPageRoute;
+import 'package:flutter/material.dart'
+    show MaterialPageRoute, ScaffoldMessenger, SnackBar;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,6 +7,7 @@ import '../../models/goal_completion.dart';
 import '../../models/goal_progress.dart';
 import '../../models/planned_block.dart';
 import '../../shared/widgets/date_swipe_nav.dart';
+import '../../shared/widgets/inline_form_error.dart';
 import '../../state/day_view_providers.dart';
 import '../../state/goals_providers.dart';
 import '../../state/root_shell_providers.dart';
@@ -165,9 +167,17 @@ class _GoalRow extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.only(left: AppSpacing.s2),
             child: CompleteGoalButton(
-              onTap: () {
-                for (final block in trackedBlocksCompletingPlan(pending)) {
-                  ref.read(trackedBlocksRepositoryProvider).upsert(block);
+              onTap: () async {
+                final repo = ref.read(trackedBlocksRepositoryProvider);
+                try {
+                  for (final block in trackedBlocksCompletingPlan(pending)) {
+                    await repo.upsert(block);
+                  }
+                } catch (_) {
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text(kSaveFailedMessage)));
                 }
               },
             ),

@@ -8,10 +8,13 @@ import 'package:calendar_tracker/features/day_view/widgets/actual_block_widget.d
 import 'package:calendar_tracker/features/day_view/widgets/plan_block_widget.dart';
 import 'package:calendar_tracker/features/day_view/widgets/start_activity_sheet.dart';
 import 'package:calendar_tracker/features/day_view/widgets/time_body_grid.dart';
+import 'package:calendar_tracker/features/goals/widgets/goal_block.dart';
 import 'package:calendar_tracker/features/goals/widgets/goal_edit_sheet.dart';
+import 'package:calendar_tracker/models/planned_block.dart';
 import 'package:calendar_tracker/shared/widgets/app_tab_bar.dart';
 import 'package:calendar_tracker/shared/widgets/goal_dropdown.dart';
 import 'package:calendar_tracker/shared/widgets/inline_form_error.dart';
+import 'package:calendar_tracker/shared/widgets/quick_log_check_button.dart';
 import 'package:calendar_tracker/state/day_view_providers.dart';
 import 'package:calendar_tracker/state/log_entry_providers.dart';
 
@@ -645,6 +648,117 @@ void main() {
       expect(find.text(kSaveFailedMessage), findsOneWidget);
       expect((await account.docsIn('categories')).keys, ['cat-1']);
     });
+
+    testWidgets(
+      "Day view: the unscheduled dialog's quick-log checkmark says so",
+      (WidgetTester tester) async {
+        final account = await onboardedEmptyAccount();
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [...account.overrides, rejectingTrackedBlocks],
+            child: const CalendarTrackerApp(),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('30m unscheduled ›'));
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.descendant(
+            of: find.byType(Dialog),
+            matching: find.byType(QuickLogCheckButton),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        // Still open, and the write really didn't land — a closed dialog
+        // with nothing written is exactly what the shipped bug looked like.
+        expect(find.byType(Dialog), findsOneWidget);
+        expect(find.text(kSaveFailedMessage), findsOneWidget);
+        expect(await account.docsIn('trackedBlocks'), isEmpty);
+      },
+    );
+
+    testWidgets("Goals: the complete button says so", (
+      WidgetTester tester,
+    ) async {
+      // A plan that has already fully happened, in the week the goal list
+      // is showing — otherwise there is nothing to "complete" and the
+      // test would fail on its own setup rather than on the save path.
+      final account = await onboardedEmptyAccount(
+        selectedDate: DateTime(2026, 9, 2),
+        plannedBlocks: [
+          PlannedBlock(
+            id: 'plan-past',
+            start: DateTime(2026, 9, 1, 9, 0),
+            end: DateTime(2026, 9, 1, 10, 0),
+            title: 'Already happened',
+            goalId: 'goal-1',
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [...account.overrides, rejectingTrackedBlocks],
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _tapTab(tester, 'Goals');
+
+      final complete = find.byType(CompleteGoalButton);
+      expect(
+        complete,
+        findsWidgets,
+        reason: 'precondition: a pending plan to complete',
+      );
+      await tester.tap(complete.first);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text(kSaveFailedMessage), findsOneWidget);
+      expect(await account.docsIn('trackedBlocks'), isEmpty);
+    });
+
+    testWidgets(
+      "Capacity: a day preview's quick-log checkmark says so",
+      (WidgetTester tester) async {
+        final account = await onboardedEmptyAccount();
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [...account.overrides, rejectingTrackedBlocks],
+            child: const CalendarTrackerApp(),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await _tapTab(tester, 'Planning');
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('THU 20'));
+        await tester.pumpAndSettle();
+
+        final checkButton = find.descendant(
+          of: find.byType(Dialog),
+          matching: find.byType(QuickLogCheckButton),
+        );
+        expect(
+          checkButton,
+          findsOneWidget,
+          reason: 'precondition: an unscheduled row to quick-log',
+        );
+
+        await tester.ensureVisible(checkButton);
+        await tester.pumpAndSettle();
+        await tester.tap(checkButton);
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        expect(find.byType(Dialog), findsOneWidget);
+        expect(find.text(kSaveFailedMessage), findsOneWidget);
+        expect(await account.docsIn('trackedBlocks'), isEmpty);
+      },
+    );
   });
 }
 

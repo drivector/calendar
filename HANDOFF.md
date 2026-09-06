@@ -1,5 +1,38 @@
 # Track My Day (formerly "Calendar Tracker") — session handoff
 
+Updated 2026-09-07 (yet another session, later still). Fixed the last
+three of the six known defects from the 2026-09-07 data-model audit — all
+three were the same bug in three places: a quick-log/complete-goal write
+fired without `await` or a `catch`, so a rejected write closed the sheet
+or dialog exactly as on success, with nothing shown and nothing written.
+Fixed by awaiting the write and showing `kSaveFailedMessage`
+(`lib/shared/widgets/inline_form_error.dart`) on failure, matching the
+pattern already used elsewhere in the app (e.g.
+`lib/features/account/tracking_window_sheet.dart`):
+- `showUnscheduledDialog` (`lib/features/day_view/widgets/unscheduled_dialog.dart`)
+  — its content is now a `StatefulWidget` (`_UnscheduledDialogContent`)
+  holding an error message and staying open on failure, instead of a
+  bare `showDialog` builder with no state of its own.
+- `_DayPreviewDialog` (`lib/features/account/day_preview_sheet.dart`) —
+  same conversion, `StatelessWidget` → `StatefulWidget`.
+- `_GoalRow`'s `CompleteGoalButton` (`lib/features/goals/goals_screen.dart`)
+  — already a `ConsumerWidget` with no sheet/dialog of its own, so this
+  one awaits the `upsert` loop and shows `kSaveFailedMessage` in a
+  `SnackBar` instead (`GoalsScreen` sits in a real `Scaffold`, not under a
+  modal route, so a `SnackBar` is visible — see `InlineFormError`'s own
+  doc comment for why that doesn't work for the other two).
+
+This closes out every defect from the audit — **`test/known_defects_test.dart`
+has been deleted**; there is nothing left in it. The three tests moved
+(as regular, now-passing assertions) into
+`test/features/write_paths_test.dart`'s existing `'a write that fails is
+never silent'` group, which already covered this exact bug class for
+other save flows. `onboardedEmptyAccount` (`test/support/firestore_test_fixtures.dart`)
+gained two optional parameters (`selectedDate`, `plannedBlocks`) so the
+"complete a past-due goal" test could seed a fixture without a bespoke
+helper. **331 tests pass, 0 fail** (every known defect fixed), `flutter
+analyze` clean, not yet committed.
+
 Updated 2026-09-07 (later still, a further session). Fixed the second of
 the six known defects from the audit below: `weekDaySummariesProvider`
 (`lib/state/week_view_providers.dart`, backing the Capacity page) filtered
@@ -19,9 +52,8 @@ already had — see `dayTotalsProvider`'s own fix). Also added
 `occursOn`. The two tests for this moved out of `test/known_defects_test.dart`
 into `test/state/week_view_providers_test.dart`, and a redundant
 `DayViewMode`-based test harness that group didn't need was deleted from
-`known_defects_test.dart` along with it. **325 tests pass, 3 still fail**
-(the three silent-write defects below, unchanged), `flutter analyze`
-clean, not yet committed.
+`known_defects_test.dart` along with it. Committed as `3675bcc` and
+pushed to `origin/main`.
 
 Updated 2026-09-07 (later, another session). Fixed the first of the six
 known defects from the audit below: an overnight block spanning midnight
@@ -50,22 +82,16 @@ build still writing `start`/`end`/`hasNoTime` will now be rejected with
 permission-denied. `main` is up to date with `origin/main` at `c4db8a3`,
 `flutter analyze` clean.
 
-**The test suite is deliberately red.** `test/known_defects_test.dart`
-holds three failing tests, one per still-unfixed defect found in the audit
-at the end of that session (the first two — the overnight-block
-double-count and the Capacity page losing the far side of an overnight
-block — were fixed and moved out, see the two paragraphs above) — they
-assert the behaviour the app *should* have, and each failure message
-names the bug. Expected state is **325 passing, 3 failing**; anything else
-means something genuinely broke. This was a deliberate call over marking
-them `skip:` — the bugs stay loud at the cost of red CI. To go green
-without fixing them, add `skip: 'known defect'` to each test. Delete or
-invert an assertion (or, as with the fixed ones, move it into a regular
-test file) only when its underlying defect is actually fixed. Two audit
-findings have no test on purpose (`Goal.weeklyTargetHours` and
-`AppTextStyles.mono()` are both misnamed rather than misbehaving, and a
-test cannot fail on a name) — the file header says so, so it is not read
-as an exhaustive list.
+**The "deliberately red" test suite is gone — every known defect from the
+2026-09-07 audit is now fixed.** `test/known_defects_test.dart` used to
+hold one failing test per defect (see the three paragraphs above for how
+each was fixed and where its test moved to); it has been deleted now that
+none are left. Two audit findings never had a test and still don't
+(`Goal.weeklyTargetHours` and `AppTextStyles.mono()` are both misnamed
+rather than misbehaving, and a test cannot fail on a name) — nothing to
+do there beyond a rename, if it's ever worth the diff. Expected state is
+**331 passing, 0 failing**; anything else means something genuinely
+broke.
 
 Note on the paragraph below: it was accurate when written but `d15d5ee`
 has not been the tip since. Eight commits landed between it and

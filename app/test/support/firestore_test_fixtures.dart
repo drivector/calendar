@@ -12,6 +12,7 @@ import 'package:calendar_tracker/data/mock/mock_goals.dart';
 import 'package:calendar_tracker/data/mock/mock_day_20aug.dart';
 import 'package:calendar_tracker/models/category.dart';
 import 'package:calendar_tracker/models/goal.dart';
+import 'package:calendar_tracker/models/planned_block.dart';
 import 'package:calendar_tracker/state/auth_providers.dart';
 import 'package:calendar_tracker/state/day_view_providers.dart';
 import 'package:calendar_tracker/state/firestore_providers.dart';
@@ -129,8 +130,14 @@ Future<TestAccount> seededAccount({String uid = 'seeded-uid'}) async {
 /// One category and one goal, no blocks at all — the state a real account
 /// is in immediately after onboarding, which is where "I added an activity
 /// and nothing appeared" is at its most visible.
+///
+/// [selectedDate] defaults to [mockDay]; [plannedBlocks] seeds additional
+/// `plannedBlocks` documents up front (e.g. a plan that's already fully
+/// happened, so the Goals list has something pending to complete).
 Future<TestAccount> onboardedEmptyAccount({
   String uid = 'onboarded-uid',
+  DateTime? selectedDate,
+  List<PlannedBlock> plannedBlocks = const [],
 }) async {
   final firestore = FakeFirebaseFirestore();
   final userDoc = firestore.collection('users').doc(uid);
@@ -152,19 +159,28 @@ Future<TestAccount> onboardedEmptyAccount({
   );
   await userDoc.collection('categories').doc(category.id).set(category.toMap());
   await userDoc.collection('goals').doc(goal.id).set(goal.toMap());
+  for (final block in plannedBlocks) {
+    await userDoc.collection('plannedBlocks').doc(block.id).set(block.toMap());
+  }
 
   return TestAccount(
     uid: uid,
     firestore: firestore,
-    overrides: _overridesFor(uid, firestore, 'onboarded@example.com'),
+    overrides: _overridesFor(
+      uid,
+      firestore,
+      'onboarded@example.com',
+      selectedDate: selectedDate,
+    ),
   );
 }
 
 List<Override> _overridesFor(
   String uid,
   FakeFirebaseFirestore firestore,
-  String email,
-) => [
+  String email, {
+  DateTime? selectedDate,
+}) => [
   firebaseAuthProvider.overrideWithValue(
     MockFirebaseAuth(
       signedIn: true,
@@ -172,5 +188,5 @@ List<Override> _overridesFor(
     ),
   ),
   firestoreProvider.overrideWithValue(firestore),
-  selectedDateProvider.overrideWith((ref) => mockDay),
+  selectedDateProvider.overrideWith((ref) => selectedDate ?? mockDay),
 ];
