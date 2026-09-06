@@ -4210,6 +4210,50 @@ void main() {
   );
 
   testWidgets(
+    'Day view: a registered actual activity against a goal with untimed '
+    'budget reduces "unscheduled" by its own duration too, not just a '
+    'manually-planned block -- logging half of what was owed leaves only '
+    'the other half unscheduled',
+    (WidgetTester tester) async {
+      final container = ProviderContainer(
+        overrides: await _signedInOnboardedNoActivityOverrides(),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Before: the goal's whole 30m/day budget reads as unscheduled.
+      expect(_unscheduledLine('30m'), findsOneWidget);
+
+      // Half of it logged as a real, already-happened activity -- no
+      // planned block involved at all.
+      await container.read(trackedBlocksRepositoryProvider).upsert(
+        TrackedBlock(
+          id: 'test-tracked-partial',
+          start: DateTime(mockDay.year, mockDay.month, mockDay.day, 7, 0),
+          end: DateTime(mockDay.year, mockDay.month, mockDay.day, 7, 15),
+          title: 'Test goal',
+          goalId: 'goal-1',
+          sourceId: 'manual',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      // Only the other 15m is still genuinely unscheduled -- the 15m
+      // already done doesn't also sit there unaccounted for.
+      expect(_unscheduledLine('15m'), findsOneWidget);
+      expect(_unscheduledLine('30m'), findsNothing);
+    },
+  );
+
+  testWidgets(
     'Day view: the drift footer also totals every visible day, and drops '
     'the "TODAY" label once more than one day is on screen',
     (WidgetTester tester) async {

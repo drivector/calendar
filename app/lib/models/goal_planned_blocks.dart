@@ -1,6 +1,7 @@
 import 'clock_time.dart';
 import 'goal.dart';
 import 'planned_block.dart';
+import 'tracked_block.dart';
 
 /// Renders each active goal's own schedule as [PlannedBlock]s for one
 /// specific [date] — this is what makes a goal like "work 9am-6pm" actually
@@ -99,11 +100,13 @@ Map<String, Duration> untimedPlannedDurationByCategoryForDate({
   required List<Goal> goals,
   required DateTime date,
   List<PlannedBlock> manualBlocksForDate = const [],
+  List<TrackedBlock> trackedBlocksForDate = const [],
 }) {
   final byGoal = untimedPlannedDurationByGoalForDate(
     goals: goals,
     date: date,
     manualBlocksForDate: manualBlocksForDate,
+    trackedBlocksForDate: trackedBlocksForDate,
   );
   final categoryByGoalId = {for (final goal in goals) goal.id: goal.categoryId};
 
@@ -134,10 +137,29 @@ Map<String, Duration> untimedPlannedDurationByCategoryForDate({
 /// untimed total (never below zero) by its duration; a block for a goal
 /// with no untimed entry today, or more manual time than the goal owes, is
 /// simply ignored rather than going negative or crediting another goal.
+///
+/// [trackedBlocksForDate] — the day's real [TrackedBlock]s for the same
+/// caller, if it has them — does the same for time actually *done*, not
+/// just scheduled: a "walk, 30 min, any time" goal with a 30-min activity
+/// already logged against it (with or without ever getting a manual
+/// planned block first) reads as 30 min less unscheduled too, not as
+/// unscheduled *and* done. A manual block a tracked block already overlaps
+/// only has the tracked block's own duration counted — not both — since
+/// they represent the same stretch of time; only a manual block still
+/// waiting on its own tracked counterpart counts separately, as time
+/// that's scheduled but not yet actually done.
+///
+/// Deliberately not threaded into every caller: [driftProvider] passes
+/// neither, since its own "planned" total already means *committed*
+/// (scheduled-or-owed) time and independently adds tracked time on top to
+/// find drift — folding tracked consumption into the untimed figure there
+/// too would shrink "planned" every time real time got logged, silently
+/// erasing drift rather than measuring it.
 Map<String, Duration> untimedPlannedDurationByGoalForDate({
   required List<Goal> goals,
   required DateTime date,
   List<PlannedBlock> manualBlocksForDate = const [],
+  List<TrackedBlock> trackedBlocksForDate = const [],
 }) {
   final day = DateTime(date.year, date.month, date.day);
 
@@ -156,9 +178,25 @@ Map<String, Duration> untimedPlannedDurationByGoalForDate({
   }
 
   for (final goalId in totals.keys.toList()) {
-    final consumed = manualBlocksForDate
-        .where((b) => !b.isGoalGenerated && b.goalId == goalId)
+    final trackedForGoal = trackedBlocksForDate.where(
+      (b) => b.goalId == goalId,
+    );
+    bool coveredByTracked(PlannedBlock plan) => trackedForGoal.any(
+      (t) => t.start.isBefore(plan.end) && plan.start.isBefore(t.end),
+    );
+    final manualConsumed = manualBlocksForDate
+        .where(
+          (b) =>
+              !b.isGoalGenerated &&
+              b.goalId == goalId &&
+              !coveredByTracked(b),
+        )
         .fold<Duration>(Duration.zero, (total, b) => total + b.duration);
+    final trackedConsumed = trackedForGoal.fold<Duration>(
+      Duration.zero,
+      (total, b) => total + b.duration,
+    );
+    final consumed = manualConsumed + trackedConsumed;
     if (consumed == Duration.zero) continue;
     final remaining = totals[goalId]! - consumed;
     totals[goalId] = remaining.isNegative ? Duration.zero : remaining;

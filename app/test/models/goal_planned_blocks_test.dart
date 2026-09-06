@@ -4,6 +4,7 @@ import 'package:calendar_tracker/models/clock_time.dart';
 import 'package:calendar_tracker/models/goal.dart';
 import 'package:calendar_tracker/models/goal_planned_blocks.dart';
 import 'package:calendar_tracker/models/planned_block.dart';
+import 'package:calendar_tracker/models/tracked_block.dart';
 
 final _ongoingStart = DateTime(2020, 1, 1);
 final _ongoingEnd = DateTime(2099, 12, 31);
@@ -432,6 +433,154 @@ void main() {
 
       expect(totals, isEmpty);
     });
+  });
+
+  group('untimedPlannedDurationByGoalForDate — tracked-block credit', () {
+    test(
+      'a registered actual activity reduces the untimed total by its own '
+      'duration, same as a manually-planned block does',
+      () {
+        final walking = Goal(
+          id: 'goal-walking',
+          name: 'Walking',
+          categoryId: 'walking',
+          startDate: _ongoingStart,
+          endDate: _ongoingEnd,
+          scheduleByWeekday: _uniform(const Duration(hours: 1)),
+        );
+        final tracked = TrackedBlock(
+          id: 'tracked-1',
+          start: DateTime(2026, 8, 20, 7, 0),
+          end: DateTime(2026, 8, 20, 7, 30),
+          title: 'Walk',
+          goalId: 'goal-walking',
+          sourceId: 'manual',
+        );
+
+        final totals = untimedPlannedDurationByGoalForDate(
+          goals: [walking],
+          date: DateTime(2026, 8, 20),
+          trackedBlocksForDate: [tracked],
+        );
+
+        expect(totals, {'goal-walking': const Duration(minutes: 30)});
+      },
+    );
+
+    test(
+      'tracked time beyond what the goal owes today clamps at zero rather '
+      'than going negative',
+      () {
+        final walking = Goal(
+          id: 'goal-walking',
+          name: 'Walking',
+          categoryId: 'walking',
+          startDate: _ongoingStart,
+          endDate: _ongoingEnd,
+          scheduleByWeekday: _uniform(const Duration(minutes: 20)),
+        );
+        final tracked = TrackedBlock(
+          id: 'tracked-1',
+          start: DateTime(2026, 8, 20, 7, 0),
+          end: DateTime(2026, 8, 20, 8, 0),
+          title: 'Walk',
+          goalId: 'goal-walking',
+          sourceId: 'manual',
+        );
+
+        final totals = untimedPlannedDurationByGoalForDate(
+          goals: [walking],
+          date: DateTime(2026, 8, 20),
+          trackedBlocksForDate: [tracked],
+        );
+
+        expect(totals, {'goal-walking': Duration.zero});
+      },
+    );
+
+    test(
+      'a manual planned block already fulfilled by an overlapping tracked '
+      "block only has the tracked block's own duration counted, not both "
+      '— they represent the same stretch of time, not two',
+      () {
+        final walking = Goal(
+          id: 'goal-walking',
+          name: 'Walking',
+          categoryId: 'walking',
+          startDate: _ongoingStart,
+          endDate: _ongoingEnd,
+          scheduleByWeekday: _uniform(const Duration(hours: 1)),
+        );
+        final plan = PlannedBlock(
+          id: 'plan-1',
+          start: DateTime(2026, 8, 20, 7, 0),
+          end: DateTime(2026, 8, 20, 7, 30),
+          title: 'Walk',
+          goalId: 'goal-walking',
+        );
+        final tracked = TrackedBlock(
+          id: 'tracked-1',
+          start: DateTime(2026, 8, 20, 7, 0),
+          end: DateTime(2026, 8, 20, 7, 30),
+          title: 'Walk',
+          goalId: 'goal-walking',
+          sourceId: 'manual',
+        );
+
+        final totals = untimedPlannedDurationByGoalForDate(
+          goals: [walking],
+          date: DateTime(2026, 8, 20),
+          manualBlocksForDate: [plan],
+          trackedBlocksForDate: [tracked],
+        );
+
+        // 1h owed, 30m done (the tracked block) — not 1h owed minus 30m
+        // (plan) minus 30m (tracked) = 0, which would hide that another
+        // 30m is still owed.
+        expect(totals, {'goal-walking': const Duration(minutes: 30)});
+      },
+    );
+
+    test(
+      'a manual planned block with no tracked counterpart still counts on '
+      'its own — merely scheduling time credits it same as before',
+      () {
+        final walking = Goal(
+          id: 'goal-walking',
+          name: 'Walking',
+          categoryId: 'walking',
+          startDate: _ongoingStart,
+          endDate: _ongoingEnd,
+          scheduleByWeekday: _uniform(const Duration(hours: 1)),
+        );
+        final plan = PlannedBlock(
+          id: 'plan-1',
+          start: DateTime(2026, 8, 20, 7, 0),
+          end: DateTime(2026, 8, 20, 7, 30),
+          title: 'Walk',
+          goalId: 'goal-walking',
+        );
+        // An unrelated tracked block for a different goal shouldn't cover
+        // this one's plan.
+        final unrelatedTracked = TrackedBlock(
+          id: 'tracked-1',
+          start: DateTime(2026, 8, 20, 7, 0),
+          end: DateTime(2026, 8, 20, 7, 30),
+          title: 'Something else',
+          goalId: 'goal-other',
+          sourceId: 'manual',
+        );
+
+        final totals = untimedPlannedDurationByGoalForDate(
+          goals: [walking],
+          date: DateTime(2026, 8, 20),
+          manualBlocksForDate: [plan],
+          trackedBlocksForDate: [unrelatedTracked],
+        );
+
+        expect(totals, {'goal-walking': const Duration(minutes: 30)});
+      },
+    );
   });
 
   group('GoalScheduleMode.byDate', () {

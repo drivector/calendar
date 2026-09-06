@@ -216,6 +216,7 @@ final dayTotalsProvider =
           date: day.date,
           manualBlocksForDate:
               day.planned.where((b) => !b.isGoalGenerated).toList(),
+          trackedBlocksForDate: day.tracked,
         ).values.fold<Duration>(Duration.zero, (total, d) => total + d);
       }
       return (plannedTotal, windowTotal, registeredTotal, unscheduledTotal);
@@ -238,6 +239,7 @@ final unscheduledByGoalProvider = Provider<Map<String, Duration>>((ref) {
           goals: goals,
           date: day.date,
           manualBlocksForDate: manualForDate,
+          trackedBlocksForDate: day.tracked,
         ).entries) {
       totals.update(
         entry.key,
