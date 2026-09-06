@@ -71,9 +71,13 @@ final weekDaySummariesProvider = Provider<List<WeekDaySummary>>((ref) {
         manualBlocksForDate: manualForDate,
       ),
     ];
-    final dayTracked = allTracked
-        .where((b) => isSameDay(b.day, date))
-        .toList();
+    // occursOn, not isSameDay(b.day, date) — an overnight block belongs on
+    // both days it touches (see TrackedBlock.occursOn's own doc comment).
+    // A real gap a user hit directly: a block tracked from Wednesday
+    // evening into Thursday morning used to vanish from Thursday's own
+    // summary entirely (isSameDay only ever matches a block's *start*
+    // day) while still reading as an untracked gap there.
+    final dayTracked = allTracked.where((b) => b.occursOn(date)).toList();
 
     final plannedByCategory = groupByCategory(
       dayPlanned.map(
@@ -120,7 +124,11 @@ final weekDaySummariesProvider = Provider<List<WeekDaySummary>>((ref) {
         dayTracked.map(
           (b) => (
             categoryId: goalById(goals, b.goalId)?.categoryId ?? '',
-            duration: b.duration,
+            // durationOn(date), not b.duration — dayTracked now includes
+            // an overnight block on both days it touches, so crediting
+            // each day with the block's whole duration would double-count
+            // it across the week the same way dayTotalsProvider used to.
+            duration: b.durationOn(date),
           ),
         ),
       ),

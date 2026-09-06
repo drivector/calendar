@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:calendar_tracker/data/mock/mock_categories.dart';
+import 'package:calendar_tracker/models/goal.dart';
+import 'package:calendar_tracker/models/tracked_block.dart';
 import 'package:calendar_tracker/models/untracked_gap.dart';
 import 'package:calendar_tracker/models/user_settings.dart';
 import 'package:calendar_tracker/state/auth_providers.dart';
@@ -173,6 +175,51 @@ void main() {
           nextWeek.first.date,
           firstWeek.first.date.add(const Duration(days: 7)),
         );
+      },
+    );
+
+    test(
+      'an overnight block credits both days it touches, without also '
+      'leaving either half reported as an untracked gap',
+      () {
+        // Wed 22:00 -> Thu 06:00. Eight real hours, spanning midnight.
+        final nightShift = TrackedBlock(
+          id: 'night-shift',
+          start: DateTime(2026, 8, 19, 22, 0),
+          end: DateTime(2026, 8, 20, 6, 0),
+          title: 'Night shift',
+          goalId: 'goal-1',
+          sourceId: 'manual',
+        );
+        final goal = Goal(
+          id: 'goal-1',
+          name: 'Test goal',
+          categoryId: 'cat-1',
+          startDate: DateTime(2020, 1, 1),
+          endDate: DateTime(2099, 12, 31),
+          scheduleByWeekday: {
+            for (var weekday = 1; weekday <= 7; weekday++)
+              weekday: [const DayScheduleEntry.duration(Duration(minutes: 30))],
+          },
+        );
+        final container = ProviderContainer(
+          overrides: [
+            allTrackedBlocksProvider.overrideWithValue([nightShift]),
+            allPlannedBlocksProvider.overrideWithValue([]),
+            goalsProvider.overrideWithValue([goal]),
+            selectedDateProvider.overrideWith(
+              (ref) => DateTime(2026, 8, 20),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        final thursday = container
+            .read(weekDaySummariesProvider)
+            .firstWhere((d) => d.date == DateTime(2026, 8, 20));
+
+        expect(thursday.actualHoursByCategory['cat-1'], closeTo(6, 0.001));
+        expect(thursday.untrackedHours, closeTo(18, 0.001));
       },
     );
   });

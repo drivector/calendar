@@ -212,6 +212,25 @@ class TrackedBlock {
     return overlapsDay(start, start.add(duration), date);
   }
 
+  /// How much of [duration] actually falls on [date] — the real overlap
+  /// with [date]'s own [00:00, 24:00) span, not the whole [duration]. For
+  /// an overnight block this is less than [duration] on both of the days
+  /// [occursOn] returns true for (e.g. 2h before midnight, 6h after);
+  /// callers that already sum per-day get the block's real total exactly
+  /// once by adding both, rather than double-counting a full [duration]
+  /// on each day it touches. An untimed block has no clock position to
+  /// clip against, so its whole [duration] belongs to [day].
+  Duration durationOn(DateTime date) {
+    final start = this.start;
+    if (start == null) return duration;
+    final end = start.add(duration);
+    final (dayStart, dayEnd) = dayBounds(date);
+    final clampedStart = start.isBefore(dayStart) ? dayStart : start;
+    final clampedEnd = end.isAfter(dayEnd) ? dayEnd : end;
+    final overlap = clampedEnd.difference(clampedStart);
+    return overlap.isNegative ? Duration.zero : overlap;
+  }
+
   /// A copy with [status] changed — used for the Activities list's soft
   /// delete, which is the only mutation this needs; every other field is
   /// reconstructed in full at its own call site (this app's established

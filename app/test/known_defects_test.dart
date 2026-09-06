@@ -7,6 +7,9 @@
 // "An overnight block is counted twice in multi-day totals" (the first
 // defect from that audit) has since been fixed and moved to
 // test/state/derived_providers_test.dart as a regular passing assertion.
+// "The Capacity page loses the far side of an overnight block" (the
+// second) has likewise been fixed and moved to
+// test/state/week_view_providers_test.dart.
 //
 // Two items from that audit are deliberately absent, because neither is
 // expressible as a behavioural assertion:
@@ -33,28 +36,15 @@ import 'package:calendar_tracker/models/category.dart';
 import 'package:calendar_tracker/models/goal.dart';
 import 'package:calendar_tracker/models/planned_block.dart';
 import 'package:calendar_tracker/features/goals/widgets/goal_block.dart';
-import 'package:calendar_tracker/models/tracked_block.dart';
 import 'package:calendar_tracker/shared/widgets/quick_log_check_button.dart';
 import 'package:calendar_tracker/state/auth_providers.dart';
 import 'package:calendar_tracker/state/day_view_providers.dart';
 import 'package:calendar_tracker/state/firestore_providers.dart';
-import 'package:calendar_tracker/state/goals_providers.dart';
-import 'package:calendar_tracker/state/week_view_providers.dart';
 
 import 'package:calendar_tracker/data/mock/mock_day_20aug.dart';
 
 import 'support/firestore_test_fixtures.dart';
 import 'support/repository_doubles.dart';
-
-/// Wed 22:00 -> Thu 06:00. Eight real hours, spanning midnight.
-final _nightShift = TrackedBlock(
-  id: 'night-shift',
-  start: DateTime(2026, 8, 19, 22, 0),
-  end: DateTime(2026, 8, 20, 6, 0),
-  title: 'Night shift',
-  goalId: 'goal-1',
-  sourceId: 'manual',
-);
 
 Goal _goal() => Goal(
   id: 'goal-1',
@@ -68,67 +58,7 @@ Goal _goal() => Goal(
   },
 );
 
-ProviderContainer _containerWith({
-  required DateTime selectedDate,
-  required DayViewMode mode,
-}) => ProviderContainer(
-  overrides: [
-    allTrackedBlocksProvider.overrideWithValue([_nightShift]),
-    allPlannedBlocksProvider.overrideWithValue([]),
-    goalsProvider.overrideWithValue([_goal()]),
-    selectedDateProvider.overrideWith((ref) => selectedDate),
-    dayViewModeProvider.overrideWith((ref) => mode),
-  ],
-);
-
 void main() {
-  group('DEFECT: the Capacity page loses the far side of an overnight block', () {
-    test('the hours after midnight are credited to the day they happened on', () {
-      final container = _containerWith(
-        selectedDate: DateTime(2026, 8, 20),
-        mode: DayViewMode.day,
-      );
-      addTearDown(container.dispose);
-
-      final thursday = container
-          .read(weekDaySummariesProvider)
-          .firstWhere((d) => d.date == DateTime(2026, 8, 20));
-
-      // weekDaySummaries filters with isSameDay(b.day, date), so a block
-      // belongs only to the day it started on.
-      expect(
-        thursday.actualHoursByCategory['cat-1'] ?? 0,
-        closeTo(6, 0.001),
-        reason:
-            'Thursday 00:00-06:00 was tracked, but the summary attributes '
-            'the whole block to Wednesday and credits Thursday with 0.',
-      );
-    });
-
-    test('tracked time is never also reported as an untracked gap', () {
-      final container = _containerWith(
-        selectedDate: DateTime(2026, 8, 20),
-        mode: DayViewMode.day,
-      );
-      addTearDown(container.dispose);
-
-      final thursday = container
-          .read(weekDaySummariesProvider)
-          .firstWhere((d) => d.date == DateTime(2026, 8, 20));
-
-      // computeUntrackedGaps is handed the same start-day-filtered list,
-      // so it reports 00:00-06:00 as untracked despite activity spanning
-      // it. With a default full-day window, untracked should be 24 - 6.
-      expect(
-        thursday.untrackedHours,
-        lessThanOrEqualTo(18.0),
-        reason:
-            'The Capacity page reports demonstrably-tracked time as '
-            'untracked: 6h of logged activity is missing from the day.',
-      );
-    });
-  });
-
   group('DEFECT: a rejected write closes the UI as if it had worked', () {
     testWidgets(
       "the unscheduled dialog's quick-log checkmark reports a failed write",
