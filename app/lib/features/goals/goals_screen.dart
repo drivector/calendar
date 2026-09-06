@@ -58,14 +58,50 @@ class GoalsScreen extends ConsumerWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text('Goals', style: AppTextStyles.title()),
-                    GestureDetector(
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const CategoriesScreen(),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        GestureDetector(
+                          onTap: () => showGoalEditSheet(context, ref),
+                          behavior: HitTestBehavior.opaque,
+                          child: Container(
+                            constraints: const BoxConstraints(minHeight: 32),
+                            alignment: Alignment.center,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.s2,
+                            ),
+                            // The one primary action on this screen —
+                            // Fluent gives exactly one filled brand button
+                            // per surface and leaves everything else
+                            // neutral. Moved up here from the bottom of the
+                            // list so it's reachable without scrolling past
+                            // every goal first.
+                            decoration: const BoxDecoration(
+                              color: AppColors.accent,
+                              borderRadius: AppShapes.small,
+                            ),
+                            child: Text(
+                              '+ New goal',
+                              style: AppTextStyles.small(
+                                color: AppColors.surface,
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                      behavior: HitTestBehavior.opaque,
-                      child: Text('categories', style: AppTextStyles.mono()),
+                        const SizedBox(width: AppSpacing.s3),
+                        GestureDetector(
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const CategoriesScreen(),
+                            ),
+                          ),
+                          behavior: HitTestBehavior.opaque,
+                          child: Text(
+                            'categories',
+                            style: AppTextStyles.mono(),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -91,34 +127,6 @@ class GoalsScreen extends ConsumerWidget {
                       ),
                       const SizedBox(height: AppSpacing.s4),
                     ],
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        border: Border(
-                          top: BorderSide(color: AppColors.divider),
-                        ),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: AppSpacing.s3),
-                        child: GestureDetector(
-                          onTap: () => showGoalEditSheet(context, ref),
-                          behavior: HitTestBehavior.opaque,
-                          child: Container(
-                            constraints: const BoxConstraints(minHeight: 44),
-                            alignment: Alignment.centerLeft,
-                            decoration: BoxDecoration(
-                              border: Border.all(color: AppColors.neutral500), borderRadius: AppShapes.small,
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpacing.s3,
-                            ),
-                            child: Text(
-                              '+ New goal',
-                              style: AppTextStyles.small(color: AppColors.text),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               ),
