@@ -44,11 +44,20 @@ Future<void> showAddBlockSheet(
   String? initialTitle,
   String? initialGoalId,
   bool fromPlan = false,
-  // Set when opening this sheet by tapping an existing manually-added
-  // planned block that hasn't happened yet (see TimeBodyGrid) — turns this
-  // from "create a new plan" into "edit this one", saving back to the same
-  // document (and offering to delete it) instead of adding a duplicate.
+  // Set when opening this sheet to edit an existing planned block (see
+  // TimeBodyGrid/PlanBlockActionsSheet) — turns this from "create a new
+  // plan" into "edit this one", saving back to the same document instead of
+  // adding a duplicate.
   String? editingId,
+  // True when [editingId] names a goal-generated occurrence rather than a
+  // real Firestore document (see PlannedBlock.isGoalGenerated) — saving
+  // still writes a real document under that same id, which is what turns
+  // just *this* occurrence into its own editable block without touching
+  // the goal's recurring schedule. But there's nothing to delete yet the
+  // first time this happens — the document this would remove doesn't
+  // exist until that first save — so the delete option stays hidden until
+  // then. Never true together with a null [editingId].
+  bool editingIsGoalGenerated = false,
 }) {
   // Nothing to file a block under yet — a brand-new account starts with no
   // goals, so tell the user to create one first rather than opening a form
@@ -81,6 +90,7 @@ Future<void> showAddBlockSheet(
       initialGoalId: initialGoalId,
       fromPlan: fromPlan,
       editingId: editingId,
+      editingIsGoalGenerated: editingIsGoalGenerated,
     ),
   );
 }
@@ -96,6 +106,7 @@ class _AddBlockSheet extends StatefulWidget {
     this.initialGoalId,
     this.fromPlan = false,
     this.editingId,
+    this.editingIsGoalGenerated = false,
   });
 
   final bool isPlan;
@@ -119,6 +130,9 @@ class _AddBlockSheet extends StatefulWidget {
   // Set when editing an existing planned block rather than creating a new
   // one — see showAddBlockSheet's own doc comment on this param.
   final String? editingId;
+
+  // See showAddBlockSheet's own doc comment on this param.
+  final bool editingIsGoalGenerated;
 
   @override
   State<_AddBlockSheet> createState() => _AddBlockSheetState();
@@ -445,7 +459,8 @@ class _AddBlockSheetState extends State<_AddBlockSheet> {
                         _errorMessage = null;
                       }),
                     ),
-                    if (widget.editingId != null) ...[
+                    if (widget.editingId != null &&
+                        !widget.editingIsGoalGenerated) ...[
                       const SizedBox(height: AppSpacing.s3),
                       GestureDetector(
                         onTap: _delete,

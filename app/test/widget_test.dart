@@ -32,6 +32,7 @@ import 'package:calendar_tracker/features/account/capacity_view.dart';
 import 'package:calendar_tracker/models/category.dart';
 import 'package:calendar_tracker/models/clock_time.dart';
 import 'package:calendar_tracker/models/goal.dart';
+import 'package:calendar_tracker/models/goal_planned_blocks.dart';
 import 'package:calendar_tracker/models/planned_block.dart';
 import 'package:calendar_tracker/models/running_activity.dart';
 import 'package:calendar_tracker/models/tracked_block.dart';
@@ -4929,12 +4930,13 @@ void main() {
   );
 
   testWidgets(
-    'Day view: tapping a future goal-generated planned block opens that '
-    "goal's own detail instead — there's no standalone document behind "
-    "it to edit, since it's derived fresh from the goal's own recurring "
-    'schedule',
+    'Day view: editing a goal-generated planned block edits only that '
+    "occurrence — never the goal's own recurring schedule, and without a "
+    'delete option the first time, since there is no document yet to '
+    'remove',
     (WidgetTester tester) async {
       final futureDate = DateTime.now().add(const Duration(days: 30));
+      final nextDate = futureDate.add(const Duration(days: 1));
       final container = ProviderContainer(
         overrides: [
           ...await _signedInOnboardedNoActivityOverrides(),
@@ -4969,15 +4971,72 @@ void main() {
       await container.read(goalsRepositoryProvider).upsert(workGoal);
       await tester.pumpAndSettle();
 
-      final planBlock = find.byWidgetPredicate(
+      final planBlockFinder = find.byWidgetPredicate(
         (w) => w is PlanBlockWidget && w.block.goalId == 'goal-work-future-test',
       );
-      await _tapPlanBlock(tester, planBlock, 'Edit goal schedule');
+      final generatedId = tester
+          .widget<PlanBlockWidget>(planBlockFinder)
+          .block
+          .id;
+
+      await tester.ensureVisible(planBlockFinder);
+      await tester.tap(planBlockFinder);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text("Only this occurrence — the goal's own schedule stays "
+            'the same.'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Edit planned activity'));
+      await tester.pumpAndSettle();
+
+      // Nothing to delete yet — this occurrence has no real document
+      // until the edit below is saved.
+      expect(find.text('Delete planned activity'), findsNothing);
+
+      await tester.enterText(find.byType(TextField).first, 'Work, adjusted');
+      await tester.tap(find.text('save'));
+      await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      expect(find.byType(GoalDetailSheet), findsOneWidget);
-      expect(find.text('Edit planned activity'), findsNothing);
-      expect(find.text('New actual activity'), findsNothing);
+      // A real document now exists for just this one day, under the same
+      // id generateGoalPlannedBlocksForDate would otherwise keep
+      // regenerating — so it doesn't also show doubled up.
+      final planned = container.read(allPlannedBlocksProvider);
+      expect(planned, hasLength(1));
+      expect(planned.single.id, generatedId);
+      expect(planned.single.title, 'Work, adjusted');
+      expect(find.text('Work, adjusted'), findsOneWidget);
+      expect(find.text('Work'), findsNothing);
+
+      // The goal's own schedule is untouched — the very next day still
+      // generates the original, unedited occurrence.
+      final refreshedGoal = container
+          .read(goalsProvider)
+          .firstWhere((g) => g.id == 'goal-work-future-test');
+      final nextDayBlocks = generateGoalPlannedBlocksForDate(
+        goals: [refreshedGoal],
+        date: nextDate,
+      );
+      expect(nextDayBlocks.single.title, 'Work');
+
+      // Editing it again now goes through the normal manual-plan path —
+      // Delete is offered, since a real document exists this time.
+      final editedBlockFinder = find.byWidgetPredicate(
+        (w) => w is PlanBlockWidget && w.block.id == generatedId,
+      );
+      await tester.ensureVisible(editedBlockFinder);
+      await tester.tap(editedBlockFinder);
+      await tester.pumpAndSettle();
+      expect(
+        find.text("Only this occurrence — the goal's own schedule stays "
+            'the same.'),
+        findsNothing,
+      );
+      await tester.tap(find.text('Edit planned activity'));
+      await tester.pumpAndSettle();
+      expect(find.text('Delete planned activity'), findsOneWidget);
     },
   );
 

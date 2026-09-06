@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:calendar_tracker/models/clock_time.dart';
 import 'package:calendar_tracker/models/goal.dart';
 import 'package:calendar_tracker/models/goal_planned_blocks.dart';
+import 'package:calendar_tracker/models/planned_block.dart';
 
 final _ongoingStart = DateTime(2020, 1, 1);
 final _ongoingEnd = DateTime(2099, 12, 31);
@@ -68,6 +69,88 @@ void main() {
         );
 
         expect(blocks, isEmpty);
+      },
+    );
+
+    test(
+      "a manually-planned block reusing this function's own deterministic "
+      'id suppresses the generated occurrence it stands in for — the '
+      "single-occurrence edit made from the Day view's own plan-tap "
+      'chooser',
+      () {
+        final work = Goal(
+          id: 'goal-work',
+          name: 'Work',
+          categoryId: 'work',
+          startDate: _ongoingStart,
+          endDate: _ongoingEnd,
+          scheduleByWeekday: {
+            for (var weekday = 1; weekday <= 5; weekday++)
+              weekday: [
+                const DayScheduleEntry.timeRange(
+                  ClockRange(ClockTime(9, 0), ClockTime(18, 0)),
+                ),
+              ],
+          },
+        );
+        final date = DateTime(2026, 8, 20); // a Thursday
+        final unedited = generateGoalPlannedBlocksForDate(
+          goals: [work],
+          date: date,
+        );
+        final override = PlannedBlock(
+          id: unedited.single.id,
+          start: DateTime(2026, 8, 20, 10, 0),
+          end: DateTime(2026, 8, 20, 11, 0),
+          title: 'Work, adjusted',
+          goalId: 'goal-work',
+        );
+
+        final blocks = generateGoalPlannedBlocksForDate(
+          goals: [work],
+          date: date,
+          manualBlocksForDate: [override],
+        );
+
+        expect(blocks, isEmpty);
+      },
+    );
+
+    test(
+      "a manually-planned block for a different day leaves this day's own "
+      'generated occurrence untouched',
+      () {
+        final work = Goal(
+          id: 'goal-work',
+          name: 'Work',
+          categoryId: 'work',
+          startDate: _ongoingStart,
+          endDate: _ongoingEnd,
+          scheduleByWeekday: {
+            for (var weekday = 1; weekday <= 5; weekday++)
+              weekday: [
+                const DayScheduleEntry.timeRange(
+                  ClockRange(ClockTime(9, 0), ClockTime(18, 0)),
+                ),
+              ],
+          },
+        );
+        final otherDayOverride = PlannedBlock(
+          id: 'goal-goal-work-2026-08-19-0',
+          start: DateTime(2026, 8, 19, 10, 0),
+          end: DateTime(2026, 8, 19, 11, 0),
+          title: 'Work, adjusted',
+          goalId: 'goal-work',
+        );
+
+        final blocks = generateGoalPlannedBlocksForDate(
+          goals: [work],
+          date: DateTime(2026, 8, 20),
+          manualBlocksForDate: [otherDayOverride],
+        );
+
+        expect(blocks, hasLength(1));
+        expect(blocks.single.title, 'Work');
       },
     );
 

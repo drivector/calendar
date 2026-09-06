@@ -23,9 +23,16 @@ enum PlanBlockAction {
 /// without asking, picked from whether the plan had already started —
 /// which meant a plan in the past could only ever be logged against, never
 /// edited (the bug the user hit: tapping "sleep" to correct it opened a new
-/// actual entry instead). The choice is the user's to make, so it's asked
-/// rather than inferred; [PlanBlockAction.editPlan] is listed first as the
-/// one the tap most often means.
+/// actual entry instead). A second such bug got fixed alongside it:
+/// [PlanBlockAction.editPlan] used to route a goal-generated plan to the
+/// goal's own detail sheet — meaning to edit *that one occurrence* instead
+/// opened the whole recurring schedule. Edit now always means just this
+/// occurrence (see `showAddBlockSheet`'s own doc comment on how that's
+/// done for a goal-generated one without a document of its own yet); the
+/// goal's schedule is still only ever changed from the Goals tab. The
+/// choice is the user's to make, so it's asked rather than inferred;
+/// [PlanBlockAction.editPlan] is listed first as the one the tap most
+/// often means.
 ///
 /// Returns null if the sheet is dismissed without choosing.
 Future<PlanBlockAction?> showPlanBlockActionsSheet(
@@ -95,16 +102,17 @@ class _PlanBlockActionsSheet extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.s3),
               _ActionRow(
-                // A goal's own recurring schedule has no standalone
-                // document to edit, so editing that kind of plan means
-                // going to where the schedule actually lives.
-                // Each row names the sheet it opens, so the choice reads
-                // as the same vocabulary the destination uses.
-                label: block.isGoalGenerated
-                    ? 'Edit goal schedule'
-                    : 'Edit planned activity',
+                label: 'Edit planned activity',
                 action: PlanBlockAction.editPlan,
               ),
+              if (block.isGoalGenerated) ...[
+                const SizedBox(height: 2),
+                Text(
+                  'Only this occurrence — the goal\'s own schedule stays '
+                  'the same.',
+                  style: AppTextStyles.mono(),
+                ),
+              ],
               const SizedBox(height: AppSpacing.s2),
               _ActionRow(
                 label: 'New planned activity',

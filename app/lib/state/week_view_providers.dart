@@ -65,7 +65,11 @@ final weekDaySummariesProvider = Provider<List<WeekDaySummary>>((ref) {
         .toList();
     final dayPlanned = [
       ...manualForDate,
-      ...generateGoalPlannedBlocksForDate(goals: goals, date: date),
+      ...generateGoalPlannedBlocksForDate(
+        goals: goals,
+        date: date,
+        manualBlocksForDate: manualForDate,
+      ),
     ];
     final dayTracked = allTracked
         .where((b) => isSameDay(b.start, date))

@@ -90,6 +90,11 @@ class _GoalDetailSheetState extends ConsumerState<GoalDetailSheet> {
     bool inThisWeek(DateTime start) =>
         !start.isBefore(_weekStart) && start.isBefore(weekEnd);
 
+    final allPlannedThisWeek = ref
+        .watch(allPlannedBlocksProvider)
+        .where((b) => inThisWeek(b.start))
+        .toList();
+
     // Goal-generated (time-range) blocks for the browsed week — computed
     // locally rather than via goalGeneratedBlocksThisWeekProvider, which is
     // pinned to the app's globally selected week; this sheet needs to look
@@ -99,13 +104,14 @@ class _GoalDetailSheetState extends ConsumerState<GoalDetailSheet> {
         ...generateGoalPlannedBlocksForDate(
           goals: goals,
           date: _weekStart.add(Duration(days: i)),
+          manualBlocksForDate: allPlannedThisWeek
+              .where((b) => isSameDay(b.start, _weekStart.add(Duration(days: i))))
+              .toList(),
         ),
     ];
 
     final plannedActivity = [
-      ...ref
-          .watch(allPlannedBlocksProvider)
-          .where((b) => b.goalId == goal!.id && inThisWeek(b.start)),
+      ...allPlannedThisWeek.where((b) => b.goalId == goal!.id),
       ...generatedThisWeek.where((b) => b.goalId == goal!.id),
     ]..sort((a, b) => a.start.compareTo(b.start));
 

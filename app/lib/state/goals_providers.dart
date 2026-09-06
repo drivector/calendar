@@ -136,7 +136,13 @@ double _plannedHoursForGoal(
             day.isBefore(windowEnd);
             day = day.add(const Duration(days: 1))
           )
-            ...generateGoalPlannedBlocksForDate(goals: [goal], date: day),
+            ...generateGoalPlannedBlocksForDate(
+              goals: [goal],
+              date: day,
+              manualBlocksForDate: allPlanned
+                  .where((b) => isSameDay(b.start, day))
+                  .toList(),
+            ),
         ]
       : generatedThisWeek;
   final generatedHours = generatedForWindow
@@ -177,11 +183,20 @@ final goalGeneratedBlocksThisWeekProvider = Provider<List<PlannedBlock>>((ref) {
   final selectedDate = ref.watch(selectedDateProvider);
   final weekStart = weekStartFor(selectedDate);
   final goals = ref.watch(goalsProvider);
+  final allPlanned = ref.watch(allPlannedBlocksProvider);
 
   final generated = <PlannedBlock>[];
   for (var i = 0; i < 7; i++) {
     final day = weekStart.add(Duration(days: i));
-    generated.addAll(generateGoalPlannedBlocksForDate(goals: goals, date: day));
+    generated.addAll(
+      generateGoalPlannedBlocksForDate(
+        goals: goals,
+        date: day,
+        manualBlocksForDate: allPlanned
+            .where((b) => isSameDay(b.start, day))
+            .toList(),
+      ),
+    );
   }
   return generated;
 });
@@ -224,25 +239,37 @@ final visibleDayBlocksProvider = Provider<List<DayBlocks>>((ref) {
   final allPlanned = ref.watch(allPlannedBlocksProvider);
   final allTracked = ref.watch(allTrackedBlocksProvider);
 
-  return [
-    for (final date in dates)
+  final result = <DayBlocks>[];
+  for (final date in dates) {
+    // overlapsDay, not isSameDay — an overnight block (started one evening,
+    // ending after midnight) needs to show up on both days it touches, not
+    // just the one it started on. See overlapsDay's own doc comment for the
+    // exact bug this fixes. Computed once and reused for both the manual
+    // planned blocks below and generateGoalPlannedBlocksForDate's own
+    // single-occurrence-edit suppression (see that function's doc comment).
+    final manualForDate = allPlanned
+        .where((b) => overlapsDay(b.start, b.end, date))
+        .toList();
+    result.add(
       DayBlocks(
         date: date,
         planned:
             [
-                ...allPlanned.where((b) => overlapsDay(b.start, b.end, date)),
-                ...generateGoalPlannedBlocksForDate(goals: goals, date: date),
+                ...manualForDate,
+                ...generateGoalPlannedBlocksForDate(
+                  goals: goals,
+                  date: date,
+                  manualBlocksForDate: manualForDate,
+                ),
               ]
               ..sort((a, b) => a.start.compareTo(b.start)),
-        // overlapsDay, not isSameDay — an overnight block (started one
-        // evening, ending after midnight) needs to show up on both days
-        // it touches, not just the one it started on. See overlapsDay's
-        // own doc comment for the exact bug this fixes.
         tracked: allTracked
             .where((b) => overlapsDay(b.start, b.end, date))
             .toList(),
       ),
-  ];
+    );
+  }
+  return result;
 });
 
 final goalProgressListProvider = Provider<List<GoalProgress>>((ref) {

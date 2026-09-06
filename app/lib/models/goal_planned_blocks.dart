@@ -15,15 +15,29 @@ import 'planned_block.dart';
 /// toward what's "planned" for the day, just not as a drawable block — see
 /// [untimedPlannedDurationByCategoryForDate], its counterpart for exactly
 /// that remaining time.
+///
+/// [manualBlocksForDate] — [date]'s own manually-created (real,
+/// Firestore-backed) planned blocks, if the caller already has them handy
+/// — lets a single occurrence be edited without touching the goal's
+/// recurring schedule: the add-block sheet saves that edit as a real
+/// [PlannedBlock] document reusing this function's own deterministic id
+/// (`goal-<goalId>-<dateId>-<index>`, see below) for that exact occurrence,
+/// so once such a document exists, generating the *virtual* one for the
+/// same slot on top of it would just double it up. A caller that doesn't
+/// pass this (the default, `const []`) simply never sees an occurrence get
+/// suppressed this way — fine for something like scheduling a reminder,
+/// where a single day's one-off edit isn't worth threading through.
 List<PlannedBlock> generateGoalPlannedBlocksForDate({
   required List<Goal> goals,
   required DateTime date,
+  List<PlannedBlock> manualBlocksForDate = const [],
 }) {
   final day = DateTime(date.year, date.month, date.day);
   final dateId =
       '${day.year.toString().padLeft(4, '0')}-'
       '${day.month.toString().padLeft(2, '0')}-'
       '${day.day.toString().padLeft(2, '0')}';
+  final overriddenIds = manualBlocksForDate.map((b) => b.id).toSet();
 
   final generated = <PlannedBlock>[];
   for (final goal in goals) {
@@ -33,6 +47,7 @@ List<PlannedBlock> generateGoalPlannedBlocksForDate({
     for (final entry in goal.entriesForOccurrence(day)) {
       final index = entryIndex++;
       if (!entry.isTimeRange) continue;
+      if (overriddenIds.contains('goal-${goal.id}-$dateId-$index')) continue;
       final range = entry.timeRange!;
       final start = DateTime(
         day.year,

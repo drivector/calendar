@@ -17,7 +17,6 @@ import '../../../state/user_settings_providers.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../utils/overlap_layout.dart';
-import '../../goals/widgets/goal_detail_sheet.dart';
 import 'actual_block_widget.dart';
 import 'add_block_sheet.dart';
 import 'block_label_style.dart';
@@ -142,9 +141,13 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
   }
 
   // Acts on whichever of the three things tapping a planned block can
-  // mean (see [showPlanBlockActionsSheet]). "Edit" for a goal-generated
-  // plan opens the goal's own detail instead of this sheet: a recurring
-  // schedule has no standalone document to edit in place. "New planned"
+  // mean (see [showPlanBlockActionsSheet]). "Edit" always edits just this
+  // one occurrence, never the goal's own recurring schedule — even for a
+  // goal-generated plan, which has no standalone document of its own yet:
+  // saving writes one under the same deterministic id
+  // [generateGoalPlannedBlocksForDate] would otherwise keep regenerating
+  // for that exact slot, which is also what stops the two from doubling up
+  // afterwards (see that function's own doc comment). "New planned"
   // deliberately carries only the tapped slot's start time over, not the
   // plan's title/goal — it's a second, different plan in that slot, not a
   // copy. "New actual" keeps the old prefilled-from-the-plan behaviour, so
@@ -154,21 +157,18 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
     if (action == null || !mounted) return;
     switch (action) {
       case PlanBlockAction.editPlan:
-        if (block.isGoalGenerated) {
-          showGoalDetailSheet(context, ref, block.goalId);
-        } else {
-          showAddBlockSheet(
-            context,
-            ref,
-            isPlan: true,
-            date: date,
-            initialStart: TimeOfDay.fromDateTime(block.start),
-            initialEnd: TimeOfDay.fromDateTime(block.end),
-            initialTitle: block.title,
-            initialGoalId: block.goalId,
-            editingId: block.id,
-          );
-        }
+        showAddBlockSheet(
+          context,
+          ref,
+          isPlan: true,
+          date: date,
+          initialStart: TimeOfDay.fromDateTime(block.start),
+          initialEnd: TimeOfDay.fromDateTime(block.end),
+          initialTitle: block.title,
+          initialGoalId: block.goalId,
+          editingId: block.id,
+          editingIsGoalGenerated: block.isGoalGenerated,
+        );
       case PlanBlockAction.newPlan:
         showAddBlockSheet(
           context,
