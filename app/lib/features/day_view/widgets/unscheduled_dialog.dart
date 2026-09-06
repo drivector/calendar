@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart' show Dialog, showDialog;
 import 'package:flutter/widgets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/category.dart';
 import '../../../models/goal.dart';
+import '../../../shared/widgets/quick_log_check_button.dart';
 import '../../../state/categories_providers.dart';
+import '../../../state/day_view_providers.dart';
 import '../../../state/goals_providers.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_shapes.dart';
@@ -15,11 +18,19 @@ import '../../../utils/duration_format.dart';
 /// the total shown there: goal-targeted time with no fixed clock slot for
 /// whichever day(s) are currently visible, one row per goal, a real total
 /// at the top so it doesn't have to be added up by eye.
+///
+/// [date] is the single day each row's checkmark logs against (see
+/// [logUnscheduledGoalTime]) — null hides the checkmark entirely, since
+/// [byGoal] can be summed across more than one visible day (3 Day/Working
+/// week/Week mode), and there'd be no honest single day left to credit
+/// that time to.
 Future<void> showUnscheduledDialog(
   BuildContext context, {
+  required WidgetRef ref,
   required Map<String, Duration> byGoal,
   required List<Goal> goals,
   required List<Category> categories,
+  DateTime? date,
 }) {
   final entries =
       byGoal.entries
@@ -108,19 +119,35 @@ Future<void> showUnscheduledDialog(
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          entry.goal!.name.toLowerCase(),
-                          style: AppTextStyles.mono(
-                            color: resolveCategory(
-                              categories,
-                              entry.goal!.categoryId,
-                            ).color,
+                        Expanded(
+                          child: Text(
+                            entry.goal!.name.toLowerCase(),
+                            style: AppTextStyles.mono(
+                              color: resolveCategory(
+                                categories,
+                                entry.goal!.categoryId,
+                              ).color,
+                            ),
                           ),
                         ),
                         Text(
                           formatDuration(entry.duration),
                           style: AppTextStyles.mono(color: AppColors.text),
                         ),
+                        if (date != null) ...[
+                          const SizedBox(width: AppSpacing.s2),
+                          QuickLogCheckButton(
+                            onTap: () {
+                              logUnscheduledGoalTime(
+                                ref,
+                                goal: entry.goal!,
+                                date: date,
+                                duration: entry.duration,
+                              );
+                              Navigator.of(context).pop();
+                            },
+                          ),
+                        ],
                       ],
                     ),
                   ),

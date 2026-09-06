@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../state/categories_providers.dart';
+import '../../../state/day_view_providers.dart';
 import '../../../state/derived_providers.dart';
 import '../../../shared/widgets/capacity_track.dart';
 import '../../../state/goals_providers.dart';
@@ -46,6 +47,7 @@ class LegendRow extends ConsumerWidget {
     final (plannedTotal, trackedTotal, registeredTotal, unscheduledTotal) =
         ref.watch(dayTotalsProvider);
     final perDay = ref.watch(visibleDayTotalsProvider);
+    final visibleDates = ref.watch(visibleDatesProvider);
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -95,9 +97,16 @@ class LegendRow extends ConsumerWidget {
                 total: unscheduledTotal,
                 onTap: () => showUnscheduledDialog(
                   context,
+                  ref: ref,
                   byGoal: ref.read(unscheduledByGoalProvider),
                   goals: ref.read(goalsProvider),
                   categories: ref.read(categoriesProvider),
+                  // Only ever one honest day to credit a quick-log to
+                  // when exactly one day is visible — in 3 Day/Working
+                  // week/Week mode, byGoal sums more than one day's worth
+                  // per goal, so there's no single day the checkmark
+                  // could correctly log against.
+                  date: visibleDates.length == 1 ? visibleDates.single : null,
                 ),
               ),
           ],

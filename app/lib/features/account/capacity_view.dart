@@ -84,7 +84,12 @@ class CapacityView extends ConsumerWidget {
               windowEnd: headerWindow.$2,
             ),
           for (final day in days)
-            _DayCapacityRow(day: day, categories: categories, goals: goals),
+            _DayCapacityRow(
+              day: day,
+              categories: categories,
+              goals: goals,
+              ref: ref,
+            ),
           const SizedBox(height: AppSpacing.s4),
           Text('ROOM TOWARD GOALS', style: AppTextStyles.kicker()),
           const SizedBox(height: AppSpacing.s1),
@@ -205,11 +210,17 @@ class _DayCapacityRow extends StatelessWidget {
     required this.day,
     required this.categories,
     required this.goals,
+    required this.ref,
   });
 
   final DayCapacity day;
   final List<Category> categories;
   final List<Goal> goals;
+
+  // Borrowed from CapacityView's own build — read-only here, per this
+  // project's Riverpod convention (see e.g. LogActivitySheet's own doc
+  // comment): only used inside a tap callback, never watched.
+  final WidgetRef ref;
 
   @override
   Widget build(BuildContext context) {
@@ -223,6 +234,7 @@ class _DayCapacityRow extends StatelessWidget {
     return GestureDetector(
       onTap: () => showDayPreviewSheet(
         context,
+        ref: ref,
         day: day,
         categories: categories,
         goals: goals,

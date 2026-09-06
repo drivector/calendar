@@ -41,6 +41,7 @@ import 'package:calendar_tracker/shared/widgets/app_tab_bar.dart';
 import 'package:calendar_tracker/shared/widgets/category_chip.dart';
 import 'package:calendar_tracker/shared/widgets/dashed_border.dart';
 import 'package:calendar_tracker/shared/widgets/goal_dropdown.dart';
+import 'package:calendar_tracker/shared/widgets/quick_log_check_button.dart';
 import 'package:calendar_tracker/shared/widgets/step_arrow_button.dart';
 import 'package:calendar_tracker/state/auth_providers.dart';
 import 'package:calendar_tracker/state/day_view_providers.dart';
@@ -1313,6 +1314,68 @@ void main() {
         find.descendant(of: find.byType(Dialog), matching: find.text('1h')),
         findsOneWidget,
       );
+    },
+  );
+
+  testWidgets(
+    "Capacity: a day preview's own unscheduled rows offer the same "
+    'quick-log checkmark as the Day view legend, logging against that '
+    "exact day -- always unambiguous here, since a day preview is only "
+    'ever one day',
+    (WidgetTester tester) async {
+      final container = ProviderContainer(
+        overrides: await _signedInOverrides(),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _tapTab(tester, 'Planning');
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('MON 17'));
+      await tester.pumpAndSettle();
+
+      final dialog = find.byType(Dialog);
+      final walkingRow = find.ancestor(
+        of: find.descendant(of: dialog, matching: find.text('walking')),
+        matching: find.byType(Row),
+      ).first;
+      final checkButton = find.descendant(
+        of: walkingRow,
+        matching: find.byType(QuickLogCheckButton),
+      );
+      expect(checkButton, findsOneWidget);
+
+      final before = container
+          .read(allTrackedBlocksProvider)
+          .where((b) => b.goalId == 'goal-walking')
+          .length;
+
+      await tester.ensureVisible(checkButton);
+      await tester.pumpAndSettle();
+      await tester.tap(checkButton);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(Dialog), findsNothing);
+
+      final walkingTracked = container
+          .read(allTrackedBlocksProvider)
+          .where((b) => b.goalId == 'goal-walking')
+          .toList();
+      expect(walkingTracked, hasLength(before + 1));
+      final logged = walkingTracked.last;
+      expect(logged.start.year, 2026);
+      expect(logged.start.month, 8);
+      expect(logged.start.day, 17);
+      expect(logged.duration, const Duration(minutes: 30));
     },
   );
 
@@ -4323,6 +4386,87 @@ void main() {
       );
       expect(
         find.descendant(of: dialog, matching: find.text('0m')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'Day view: the unscheduled dialog\'s quick-log checkmark logs the '
+    'whole shown duration against that goal for the selected day in one '
+    'tap, and closes the dialog',
+    (WidgetTester tester) async {
+      final container = ProviderContainer(
+        overrides: await _signedInOnboardedNoActivityOverrides(),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(container.read(allTrackedBlocksProvider), isEmpty);
+
+      await tester.tap(_unscheduledLine('30m'));
+      await tester.pumpAndSettle();
+
+      final dialog = find.byType(Dialog);
+      expect(
+        find.descendant(of: dialog, matching: find.byType(QuickLogCheckButton)),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.descendant(of: dialog, matching: find.byType(QuickLogCheckButton)),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      // The dialog closes rather than sitting there showing stale data —
+      // it isn't itself reactive to the write it just triggered.
+      expect(find.byType(Dialog), findsNothing);
+
+      final tracked = container.read(allTrackedBlocksProvider);
+      expect(tracked, hasLength(1));
+      expect(tracked.single.goalId, 'goal-1');
+      expect(tracked.single.duration, const Duration(minutes: 30));
+      expect(tracked.single.start.year, mockDay.year);
+      expect(tracked.single.start.month, mockDay.month);
+      expect(tracked.single.start.day, mockDay.day);
+
+      // Fully credited now — the line is gone entirely, same as any
+      // other goal that's had its whole unscheduled budget claimed.
+      expect(_unscheduledLine('30m'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'Day view: the unscheduled dialog\'s quick-log checkmark is hidden '
+    'once more than one day is visible -- there is no single honest day '
+    'left to credit an aggregated total to',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: await _signedInOnboardedNoActivityOverrides(),
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _selectDayViewMode(tester, '3 Day');
+      await tester.pumpAndSettle();
+
+      await tester.tap(_unscheduledLine('1h 30m'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      final dialog = find.byType(Dialog);
+      expect(find.descendant(of: dialog, matching: find.text('test goal')), findsOneWidget);
+      expect(
+        find.descendant(of: dialog, matching: find.byType(QuickLogCheckButton)),
         findsNothing,
       );
     },

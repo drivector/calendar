@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/firestore/firestore_list_repository.dart';
+import '../models/goal.dart';
 import '../models/goal_progress.dart';
 import '../models/planned_block.dart';
 import '../models/tracked_block.dart';
@@ -166,6 +167,36 @@ Future<void> softDeleteTrackedBlock(WidgetRef ref, TrackedBlock block) {
   return ref
       .read(trackedBlocksRepositoryProvider)
       .upsert(block.copyWithStatus(TrackedBlockStatus.deleted));
+}
+
+/// Logs [duration] of real activity against [goal] on [date] in one call
+/// — the unscheduled dialog's own quick-log checkmark, for a goal whose
+/// schedule entry has no fixed clock time to begin with ("piano, 15 min,
+/// any time"), so there's no real slot to prefill a start/end from the
+/// way every other add-activity entry point does. Rather than asking the
+/// user to pick times for something that was never scheduled at one,
+/// this places the block ending at noon on [date] and starting [duration]
+/// before that — an arbitrary but deterministic point, not meant to claim
+/// anything about when it actually happened.
+Future<void> logUnscheduledGoalTime(
+  WidgetRef ref, {
+  required Goal goal,
+  required DateTime date,
+  required Duration duration,
+}) {
+  final end = DateTime(date.year, date.month, date.day, 12, 0);
+  return ref
+      .read(trackedBlocksRepositoryProvider)
+      .upsert(
+        TrackedBlock(
+          id: 'manual-${DateTime.now().microsecondsSinceEpoch}',
+          start: end.subtract(duration),
+          end: end,
+          title: goal.name,
+          goalId: goal.id,
+          sourceId: 'manual',
+        ),
+      );
 }
 
 final plannedBlocksProvider = Provider<List<PlannedBlock>>((ref) {

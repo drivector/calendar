@@ -52,6 +52,13 @@ class AppColors {
   /// Outlook separates surfaces.
   static const divider = Color(0xFFE0E0E0);
 
+  /// Fluent `sharedSuccessForeground1` — a completion/success green,
+  /// distinct from [accent]'s blue. Only for a glyph that specifically
+  /// means "done"/"mark as done" (e.g. the unscheduled dialog's quick-log
+  /// checkmark) — [accent] stays the one color for ordinary primary
+  /// actions and links.
+  static const success = Color(0xFF107C10);
+
   /// A one-off ink opacity — still handy for hover/selected row tints.
   static Color ink(double opacity) => text.withValues(alpha: opacity);
 }

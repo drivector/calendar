@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart' show Dialog, showDialog;
 import 'package:flutter/widgets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/category.dart';
@@ -7,7 +8,9 @@ import '../../models/day_capacity.dart';
 import '../../models/goal.dart';
 import '../../models/goal_planned_blocks.dart';
 import '../../models/planned_block.dart';
+import '../../shared/widgets/quick_log_check_button.dart';
 import '../../state/categories_providers.dart';
+import '../../state/day_view_providers.dart';
 import '../../state/goals_providers.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_shapes.dart';
@@ -21,20 +24,30 @@ import '../day_view/widgets/plan_block_widget.dart';
 /// that one day's planned blocks, positioned by their real clock time
 /// (with an hour gutter alongside, same idea as the Day view's own) against
 /// the day's own tracking window, or a plain 24h axis if it has none. No
-/// tap-to-add, no tracked/actual blocks, no navigating on to the real Day
-/// view — a quick look, nothing more. A floating pop-up (not a sheet
-/// sliding up from the bottom) — it's a glance at another screen's data,
-/// not a form or a flow of its own.
+/// tap-to-add, no navigating on to the real Day view — a glance at another
+/// screen's data, not a form or a flow of its own. The one exception is the
+/// unscheduled list's own quick-log checkmark (see
+/// `logUnscheduledGoalTime`) — this is the one place [day.date] is always
+/// unambiguous (unlike the Day view legend's own version of this dialog,
+/// which can span more than one visible day), so it's a natural place to
+/// offer it even though nothing else here writes anything. A floating
+/// pop-up (not a sheet sliding up from the bottom), matching the rest of
+/// this dialog's "quick look" framing.
 Future<void> showDayPreviewSheet(
   BuildContext context, {
+  required WidgetRef ref,
   required DayCapacity day,
   required List<Category> categories,
   required List<Goal> goals,
 }) {
   return showDialog<void>(
     context: context,
-    builder: (context) =>
-        _DayPreviewDialog(day: day, categories: categories, goals: goals),
+    builder: (context) => _DayPreviewDialog(
+      ref: ref,
+      day: day,
+      categories: categories,
+      goals: goals,
+    ),
   );
 }
 
@@ -44,11 +57,13 @@ const double _gutterWidth = 34;
 
 class _DayPreviewDialog extends StatelessWidget {
   const _DayPreviewDialog({
+    required this.ref,
     required this.day,
     required this.categories,
     required this.goals,
   });
 
+  final WidgetRef ref;
   final DayCapacity day;
   final List<Category> categories;
   final List<Goal> goals;
@@ -194,18 +209,32 @@ class _DayPreviewDialog extends StatelessWidget {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          entry.goal!.name.toLowerCase(),
-                          style: AppTextStyles.mono(
-                            color: resolveCategory(
-                              categories,
-                              entry.goal!.categoryId,
-                            ).color,
+                        Expanded(
+                          child: Text(
+                            entry.goal!.name.toLowerCase(),
+                            style: AppTextStyles.mono(
+                              color: resolveCategory(
+                                categories,
+                                entry.goal!.categoryId,
+                              ).color,
+                            ),
                           ),
                         ),
                         Text(
                           formatDuration(entry.duration),
                           style: AppTextStyles.mono(color: AppColors.text),
+                        ),
+                        const SizedBox(width: AppSpacing.s2),
+                        QuickLogCheckButton(
+                          onTap: () {
+                            logUnscheduledGoalTime(
+                              ref,
+                              goal: entry.goal!,
+                              date: day.date,
+                              duration: entry.duration,
+                            );
+                            Navigator.of(context).pop();
+                          },
                         ),
                       ],
                     ),
