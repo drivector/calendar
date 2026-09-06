@@ -1,5 +1,29 @@
 # Track My Day (formerly "Calendar Tracker") — session handoff
 
+Updated 2026-09-07. One commit, `c4db8a3`, on branch
+`tracked-block-untimed-shape`, merged into `main` (fast-forward) and
+pushed — `TrackedBlock` no longer stores a fabricated clock span behind
+a `hasNoTime` flag; it is now day + duration + a *nullable* start. See
+**A tracked activity is either timed or untimed** at the very end. This
+replaces the mechanism `5bb7969` introduced (that commit has no section
+of its own here — see its commit message). **Firestore rules were
+redeployed** as part of this — the stored shape changed, so an older
+build still writing `start`/`end`/`hasNoTime` will now be rejected with
+permission-denied. `main` is up to date with `origin/main` at `c4db8a3`,
+**325 tests pass**, `flutter analyze` clean.
+
+Note on the paragraph below: it was accurate when written but `d15d5ee`
+has not been the tip since. Eight commits landed between it and
+`c4db8a3` — `b50df39`, `6672432`, `c6dbcd1`, `304a871`, `e61f705`,
+`c2f9ed6`, `5bb7969` (plus `9fcdf8e`, a HANDOFF update) — and **none of
+them has a section here**. Their subjects, for orientation: editing a
+planned block edits only that occurrence; "+ New goal" moved to the
+Goals header; creating an activity can also create its goal; registered
+actual time is credited against a goal's unscheduled budget; a
+fully-credited goal drops out of the unscheduled dialog; and the
+unscheduled rows gained a quick-log checkmark. Read their commit
+messages for detail — this doc does not cover them.
+
 Updated 2026-09-06 (a further session). One more commit, `d15d5ee`,
 landed directly on `main` (no branch) — tapping a planned block on the
 Day view now opens a chooser instead of guessing what the tap meant, see
@@ -4166,3 +4190,100 @@ analyze` clean. Built (`flutter build ios --release`) and installed on
 the user's iPhone (*Tseligas*), verified present via `xcrun devicectl
 device info apps` — not yet live-verified by tapping through it on the
 device itself.
+
+## A tracked activity is either timed or untimed (2026-09-07, `c4db8a3`)
+
+Raised by the user as a design question — "what if the data model had two
+types of activity, one duration-only and the other start/end-only?" The
+instinct was right about the problem; the answer landed on one class with
+a nullable start rather than two subclasses.
+
+The problem, concretely. `hasNoTime` (added in `5bb7969`, undocumented
+here) kept
+`start`/`end` populated with a fabricated noon-anchored span and asked
+every *display* site to check the flag before trusting them. Only two
+sites ever did. The three that didn't were each wrong in a way a user
+could hit:
+
+- the Activities list sorts a day by `start`, so an "any time" entry was
+  wedged into the middle of the timeline at ~11:45;
+- `matchingPlannedBlockFor` matches by overlap, so an untimed entry
+  silently bound itself to whichever plan for the same goal covered
+  midday;
+- `goals_providers` credited the day via `overlapsDay(start, end)`, so an
+  untimed log over 12h started on the *previous* day and counted there.
+
+The shape now:
+
+```dart
+final DateTime day;        // date-only, always real — what it is credited to
+final Duration duration;   // always real
+final DateTime? start;     // null == genuinely no clock position
+DateTime? get end => start?.add(duration);
+bool get isTimed => start != null;
+```
+
+The default constructor still takes `start`/`end` and derives
+`day`/`duration` from them, so the two can never disagree and the ~40
+existing timed call sites (mocks, tests, live-activity registration)
+needed no change. `TrackedBlock.untimed(day:, duration:)` is the second
+shape, mirroring `DayScheduleEntry`'s own duration-vs-`timeRange` split
+on the planning side.
+
+**Why not two subclasses.** The two shapes differ by one field, not by
+behaviour — everything else (duration, day membership, goal credit, note,
+status, soft delete) is identical. A sealed hierarchy would buy
+exhaustive switching that 23 files would have to perform to reach fields
+that are the same in both arms; a nullable `start` is enforced by the
+compiler at exactly the point of danger instead. The codebase had already
+solved this dichotomy once, in `DayScheduleEntry`, without inheritance.
+
+Every one of the ~190 `.start`/`.end` reads became a compile error and
+was resolved individually — that was the point of the change, not a cost
+of it. Behaviour that follows from it: untimed blocks no longer close
+untracked gaps or cover a plan, they sort to the end of their day, and
+opening one in the Log activity sheet now asks for a real time rather
+than presenting the placeholder as one the user had entered (that sheet
+only ever writes timed blocks, so giving one a time is a deliberate
+conversion).
+
+**Storage and migration.** `day` + `durationSeconds` + a nullable
+`start`. Seconds rather than minutes so Start/Stop runs keep sub-minute
+fidelity. `fromMap` reads the old `start`/`end`/`hasNoTime` shape too, so
+there is **no backfill** — and it takes a legacy untimed block's day from
+its `end`, which fixes the >12h misattribution on read. `firestore.rules`
+now requires `day`/`durationSeconds` and allows a null `start`; this was
+**deployed** (`firebase deploy --only firestore:rules`). The
+rules-contract test parser (`test/support/firestore_rules.dart`) learned
+the `(x == null || x is T)` form, so the new clause can't fall outside
+its checks — without that it would have read the `is string` half and
+demanded the field always be present.
+
+`today()`/`isSameDay()`/`dayBounds()`/`overlapsDay()` moved to
+`lib/utils/day_range.dart` so the model shares the Day view's overnight
+rule rather than restating it; `day_view_providers.dart` re-exports them,
+so no import churn.
+
+**Verification.** Live on the iOS Simulator against real Firestore, not
+just the fake one. Existing `start`/`end` documents render unchanged
+(times, durations, day grouping). Quick-logging piano wrote successfully
+— "0m done" to "15m done", "2h 15m unscheduled" to "2h", the goal dropped
+off the drift footer as fully credited, nothing drawn on the timeline,
+and the Activities list shows "any time". The identical tap *before* the
+rules deploy failed with `Missing or insufficient permissions` in the
+device log while the UI closed the dialog exactly as a success would —
+which is a real gap: the unscheduled dialog's quick-log checkmark
+(`unscheduled_dialog.dart:140`) and the Capacity day preview
+(`day_preview_sheet.dart:230`) fire `logUnscheduledGoalTime` without
+awaiting or catching, so a rejected write is invisible. The other save
+flows already handle this. **Not fixed here — still open.**
+
+Touched: `lib/models/tracked_block.dart`, `lib/models/activity_log.dart`,
+`lib/models/untracked_gap.dart`, `lib/models/goal_completion.dart`,
+`lib/models/goal_planned_blocks.dart`, `lib/utils/day_range.dart` (new),
+`lib/state/day_view_providers.dart`, `lib/state/goals_providers.dart`,
+`lib/state/week_view_providers.dart`, four feature widgets,
+`firestore.rules`, and six test files. Committed on
+`tracked-block-untimed-shape`, merged into `main` (fast-forward) and
+pushed as `c4db8a3`; the branch is now redundant. 325 tests pass,
+`flutter analyze` clean.
