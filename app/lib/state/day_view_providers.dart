@@ -169,15 +169,21 @@ Future<void> softDeleteTrackedBlock(WidgetRef ref, TrackedBlock block) {
       .upsert(block.copyWithStatus(TrackedBlockStatus.deleted));
 }
 
-/// Logs [duration] of real activity against [goal] on [date] in one call
-/// — the unscheduled dialog's own quick-log checkmark, for a goal whose
-/// schedule entry has no fixed clock time to begin with ("piano, 15 min,
-/// any time"), so there's no real slot to prefill a start/end from the
-/// way every other add-activity entry point does. Rather than asking the
-/// user to pick times for something that was never scheduled at one,
-/// this places the block ending at noon on [date] and starting [duration]
-/// before that — an arbitrary but deterministic point, not meant to claim
-/// anything about when it actually happened.
+/// Logs [duration] of real activity against [goal] on [date] in one call,
+/// with no fixed clock time — the unscheduled dialog's own quick-log
+/// checkmark, for a goal whose schedule entry never had a real slot to
+/// begin with ("piano, 15 min, any time"), so there's nothing honest to
+/// prefill a start/end from the way every other add-activity entry point
+/// does.
+///
+/// [TrackedBlock.start]/[end] still need *some* real value — every
+/// duration/day-membership calculation on that class depends on them —
+/// so this places them at an arbitrary, deterministic point (ending at
+/// noon on [date], starting [duration] before that) purely for storage.
+/// [TrackedBlock.hasNoTime] is set alongside them, and is what every
+/// display site actually checks: the Day view timeline leaves this block
+/// off the grid entirely, and the Activities list shows "any time"
+/// rather than a clock range built from values that were never real.
 Future<void> logUnscheduledGoalTime(
   WidgetRef ref, {
   required Goal goal,
@@ -195,6 +201,7 @@ Future<void> logUnscheduledGoalTime(
           title: goal.name,
           goalId: goal.id,
           sourceId: 'manual',
+          hasNoTime: true,
         ),
       );
 }

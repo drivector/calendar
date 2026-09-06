@@ -4436,10 +4436,24 @@ void main() {
       expect(tracked.single.start.year, mockDay.year);
       expect(tracked.single.start.month, mockDay.month);
       expect(tracked.single.start.day, mockDay.day);
+      // No genuine clock time -- start/end are only ever a storage
+      // placeholder for a block logged this way (see
+      // logUnscheduledGoalTime's own doc comment).
+      expect(tracked.single.hasNoTime, isTrue);
 
       // Fully credited now — the line is gone entirely, same as any
       // other goal that's had its whole unscheduled budget claimed.
       expect(_unscheduledLine('30m'), findsNothing);
+      // Never drawn on the timeline as a positioned block -- there's no
+      // real time to position it at.
+      expect(find.byType(ActualBlockWidget), findsNothing);
+
+      // The Activities list shows it without a fabricated clock range.
+      await _tapTab(tester, 'Account');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Activities'));
+      await tester.pumpAndSettle();
+      expect(find.text('any time · manual'), findsOneWidget);
     },
   );
 

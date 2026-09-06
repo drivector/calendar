@@ -289,7 +289,14 @@ class _ActivityRow extends StatelessWidget {
                     ],
                   ),
                   Text(
-                    '${_clock(block.start)}–${_clock(block.end)} · ${block.sourceId}',
+                    // hasNoTime blocks (the unscheduled dialog's own
+                    // quick-log checkmark) carry a start/end purely for
+                    // storage, not a real clock position — showing that
+                    // range here would present a fabricated time as if
+                    // it were genuine.
+                    block.hasNoTime
+                        ? 'any time · ${block.sourceId}'
+                        : '${_clock(block.start)}–${_clock(block.end)} · ${block.sourceId}',
                     style: AppTextStyles.mono(),
                   ),
                   if (block.note != null && block.note!.isNotEmpty) ...[

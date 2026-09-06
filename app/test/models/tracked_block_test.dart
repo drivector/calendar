@@ -139,4 +139,63 @@ void main() {
       expect(trackedBlockWasPlanned(tracked, const []), isFalse);
     });
   });
+
+  group('hasNoTime', () {
+    test('defaults to false', () {
+      final tracked = _tracked(
+        start: DateTime(2026, 8, 20, 16, 0),
+        end: DateTime(2026, 8, 20, 16, 30),
+      );
+
+      expect(tracked.hasNoTime, isFalse);
+    });
+
+    test('round-trips through toMap/fromMap', () {
+      final tracked = TrackedBlock(
+        id: 'tracked-1',
+        start: DateTime(2026, 8, 20, 12, 0),
+        end: DateTime(2026, 8, 20, 12, 30),
+        title: 'Piano',
+        goalId: 'goal-piano',
+        sourceId: 'manual',
+        hasNoTime: true,
+      );
+
+      final restored = TrackedBlock.fromMap('tracked-1', tracked.toMap());
+
+      expect(restored.hasNoTime, isTrue);
+    });
+
+    test(
+      'a document written before this field existed reads back false, not '
+      'a crash',
+      () {
+        final restored = TrackedBlock.fromMap('tracked-1', {
+          'start': DateTime(2026, 8, 20, 12, 0).toIso8601String(),
+          'end': DateTime(2026, 8, 20, 12, 30).toIso8601String(),
+          'title': 'Piano',
+          'goalId': 'goal-piano',
+          'sourceId': 'manual',
+        });
+
+        expect(restored.hasNoTime, isFalse);
+      },
+    );
+
+    test('copyWithStatus preserves hasNoTime', () {
+      final tracked = TrackedBlock(
+        id: 'tracked-1',
+        start: DateTime(2026, 8, 20, 12, 0),
+        end: DateTime(2026, 8, 20, 12, 30),
+        title: 'Piano',
+        goalId: 'goal-piano',
+        sourceId: 'manual',
+        hasNoTime: true,
+      );
+
+      final deleted = tracked.copyWithStatus(TrackedBlockStatus.deleted);
+
+      expect(deleted.hasNoTime, isTrue);
+    });
+  });
 }

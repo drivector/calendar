@@ -419,7 +419,13 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
     // see [DayViewBlockFilter].
     if (blockFilter != DayViewBlockFilter.plannedOnly) {
       final actualItems = <_ActualLikeItem>[
-        for (final block in dayBlocks.tracked)
+        // hasNoTime blocks (the unscheduled dialog's own quick-log
+        // checkmark — see logUnscheduledGoalTime) carry a real start/end
+        // purely for storage, not a genuine clock position — drawing one
+        // here would show a fabricated time as if it were real. They
+        // still count in every total (registered hours, drift, etc.),
+        // just never positioned on this grid.
+        for (final block in dayBlocks.tracked.where((b) => !b.hasNoTime))
           _ActualLikeItem(
             start: clampStart(block.start),
             end: clampEnd(block.end),

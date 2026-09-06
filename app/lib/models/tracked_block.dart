@@ -87,9 +87,19 @@ class TrackedBlock {
     this.plannedBlockId,
     this.note,
     this.status = TrackedBlockStatus.active,
+    this.hasNoTime = false,
   });
 
   final String id;
+
+  /// [start]/[end] still carry a real, storable clock position even when
+  /// [hasNoTime] is true — every duration/day-membership calculation this
+  /// class already has (`duration`, `overlapsDay`, sorting) keeps working
+  /// unchanged rather than needing a second, nullable-times code path
+  /// threaded through all of them. [hasNoTime] is what every *display*
+  /// site checks instead, to skip drawing that position: the Day view
+  /// timeline leaves it off the grid entirely, and the Activities list
+  /// shows "any time" rather than these two values.
   final DateTime start;
   final DateTime end;
   final String title;
@@ -113,6 +123,14 @@ class TrackedBlock {
 
   final TrackedBlockStatus status;
 
+  /// Set only by [logUnscheduledGoalTime] — a goal's untimed schedule
+  /// entry ("piano, 15 min, any time") credited in one tap from the
+  /// unscheduled dialog's own checkmark, rather than logged against a
+  /// real clock slot the way every other entry point here works. [start]/
+  /// [end] are still real, storable values (see their own doc comment
+  /// above) — this is the flag that says not to treat them as meaningful.
+  final bool hasNoTime;
+
   Duration get duration => end.difference(start);
 
   /// A copy with [status] changed — used for the Activities list's soft
@@ -130,6 +148,7 @@ class TrackedBlock {
     plannedBlockId: plannedBlockId,
     note: note,
     status: status,
+    hasNoTime: hasNoTime,
   );
 
   factory TrackedBlock.fromMap(String id, Map<String, dynamic> map) =>
@@ -147,6 +166,7 @@ class TrackedBlock {
           (s) => s.name == map['status'],
           orElse: () => TrackedBlockStatus.active,
         ),
+        hasNoTime: map['hasNoTime'] as bool? ?? false,
       );
 
   Map<String, dynamic> toMap() => {
@@ -159,5 +179,6 @@ class TrackedBlock {
     'plannedBlockId': plannedBlockId,
     'note': note,
     'status': status.name,
+    'hasNoTime': hasNoTime,
   };
 }
