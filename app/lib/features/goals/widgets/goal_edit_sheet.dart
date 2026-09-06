@@ -62,7 +62,13 @@ const _stepCount = 4;
 /// applies when creating (e.g. tapping a specific category's chip during
 /// onboarding) — ignored when [existing] is set, since an edit always
 /// starts from that goal's own category.
-Future<void> showGoalEditSheet(
+///
+/// Resolves to the saved goal's id on a real save, or null on cancel/
+/// discard/dismiss — lets a caller that opened this to create a goal
+/// picked mid-flow (e.g. the goal dropdown's own "+ New goal" row) select
+/// it automatically once the sheet closes, rather than leaving the picker
+/// on its previous, empty selection.
+Future<String?> showGoalEditSheet(
   BuildContext context,
   WidgetRef ref, {
   Goal? existing,
@@ -77,7 +83,7 @@ Future<void> showGoalEditSheet(
     return Future.value();
   }
 
-  return showModalBottomSheet<void>(
+  return showModalBottomSheet<String>(
     context: context,
     backgroundColor: AppColors.surface,
     isScrollControlled: true,
@@ -486,7 +492,7 @@ class _GoalEditSheetState extends State<GoalEditSheet> {
       return;
     }
     if (!mounted) return;
-    Navigator.of(context).pop();
+    Navigator.of(context).pop(goal.id);
   }
 
   Future<void> _delete() async {

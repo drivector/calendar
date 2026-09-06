@@ -2047,6 +2047,63 @@ void main() {
     },
   );
 
+  testWidgets(
+    "Log activity: the goal dropdown's own \"+ New goal\" row creates a "
+    'goal without leaving the sheet, and selects it once saved',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: await _signedInOverrides(),
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('+ Log'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(LogActivitySheet),
+          matching: find.byType(GoalDropdown),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('+ New goal'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('New goal'), findsOneWidget);
+      // Step 1: Category -> Step 2: Name & dates.
+      await _goalSheetNext(tester);
+      final nameField = find.descendant(
+        of: find.byType(GoalEditSheet),
+        matching: find.byType(TextField),
+      );
+      await tester.enterText(nameField, 'Meditation');
+      await tester.pumpAndSettle();
+      // Step 3: Schedule -> Step 4: Reminders.
+      await _goalSheetNext(tester, 2);
+
+      await tester.ensureVisible(find.text('Create goal'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Create goal'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      // Back on the Log activity sheet — the goal wizard is gone, and the
+      // just-created goal is already picked, not left on "Select a goal".
+      expect(find.byType(GoalEditSheet), findsNothing);
+      expect(find.byType(LogActivitySheet), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(LogActivitySheet),
+          matching: find.text('Meditation'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
   testWidgets('Log activity: filling the form computes a duration', (
     WidgetTester tester,
   ) async {

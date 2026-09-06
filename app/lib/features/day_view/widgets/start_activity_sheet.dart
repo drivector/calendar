@@ -11,6 +11,7 @@ import '../../../theme/app_colors.dart';
 import '../../../theme/app_shapes.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../theme/app_text_styles.dart';
+import '../../goals/widgets/goal_edit_sheet.dart';
 
 /// "Start" — picks which goal the run counts toward (same goal-first chip
 /// picker `LogActivitySheet` uses) and an optional title, then writes the
@@ -152,6 +153,7 @@ class _StartActivitySheetState extends ConsumerState<StartActivitySheet> {
                     _goalId = goalId;
                     _errorMessage = null;
                   }),
+                  onCreateGoal: () => showGoalEditSheet(context, widget.ref),
                 ),
               ],
             ),

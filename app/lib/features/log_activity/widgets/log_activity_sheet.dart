@@ -19,6 +19,7 @@ import '../../../theme/app_shapes.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../utils/duration_format.dart';
+import '../../goals/widgets/goal_edit_sheet.dart';
 
 /// The manual-entry form (screen 5, "Log activity") — the "+ LOG" action
 /// on the Activities screen, and also how an existing entry there gets
@@ -400,6 +401,7 @@ class _LogActivitySheetState extends ConsumerState<LogActivitySheet> {
                         setState(() => _errorMessage = null);
                       }
                     },
+                    onCreateGoal: () => showGoalEditSheet(context, widget.ref),
                   ),
                   if (selectedGoal != null) ...[
                     const SizedBox(height: AppSpacing.s3),

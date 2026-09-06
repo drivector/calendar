@@ -38,6 +38,11 @@ class _GoalRow extends StatelessWidget {
   }
 }
 
+/// Sentinel [PopupMenuItem] value for the dropdown's own "+ New goal" row
+/// — never a real goal id (those are always `goal-<...>`), so it can't
+/// collide with one and needs no separate item type.
+const _createGoalValue = '__create_goal__';
+
 /// The goal picker used everywhere a block/entry is filed under a goal
 /// (add-block sheet, start-activity sheet, log-activity sheet) — a single
 /// bordered field matching this app's other form fields (e.g. `_TimeField`),
@@ -50,6 +55,7 @@ class GoalDropdown extends StatelessWidget {
     required this.colorFor,
     required this.selectedGoalId,
     required this.onChanged,
+    this.onCreateGoal,
   });
 
   final List<Goal> goals;
@@ -57,14 +63,30 @@ class GoalDropdown extends StatelessWidget {
   final String? selectedGoalId;
   final ValueChanged<String> onChanged;
 
+  // Optional — when set, the dropdown offers a "+ New goal" row that opens
+  // the goal-creation sheet without leaving this one, and selects whatever
+  // goal it returns (see [showGoalEditSheet]'s own doc comment on its
+  // return value). Omitted where there's nowhere sensible to open that
+  // sheet from (there isn't currently such a caller, but the picker itself
+  // shouldn't assume there never will be).
+  final Future<String?> Function()? onCreateGoal;
+
   @override
   Widget build(BuildContext context) {
     final selected = selectedGoalId == null
         ? null
         : goals.where((g) => g.id == selectedGoalId).firstOrNull;
+    final onCreateGoal = this.onCreateGoal;
 
     return PopupMenuButton<String>(
-      onSelected: onChanged,
+      onSelected: (value) async {
+        if (value == _createGoalValue) {
+          final createdId = await onCreateGoal!();
+          if (createdId != null) onChanged(createdId);
+          return;
+        }
+        onChanged(value);
+      },
       color: AppColors.surface,
       elevation: 8,
       padding: EdgeInsets.zero,
@@ -94,6 +116,23 @@ class GoalDropdown extends StatelessWidget {
               ),
             ),
           ),
+        if (onCreateGoal != null) ...[
+          if (goals.isNotEmpty) const PopupMenuDivider(height: 1),
+          PopupMenuItem<String>(
+            value: _createGoalValue,
+            padding: EdgeInsets.zero,
+            height: 40,
+            child: Container(
+              width: double.infinity,
+              alignment: Alignment.centerLeft,
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s3),
+              child: Text(
+                '+ New goal',
+                style: AppTextStyles.label(color: AppColors.accent),
+              ),
+            ),
+          ),
+        ],
       ],
       child: Container(
         width: double.infinity,

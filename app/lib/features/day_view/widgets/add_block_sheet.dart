@@ -20,6 +20,7 @@ import '../../../theme/app_spacing.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../../utils/duration_format.dart';
 import '../../../utils/time_of_day_utils.dart';
+import '../../goals/widgets/goal_edit_sheet.dart';
 
 /// Only goals with somewhere real to log against — same exclusion as the
 /// Log activity sheet: screen time is auto-tracked, never something you'd
@@ -458,6 +459,7 @@ class _AddBlockSheetState extends State<_AddBlockSheet> {
                         _goalId = goalId;
                         _errorMessage = null;
                       }),
+                      onCreateGoal: () => showGoalEditSheet(context, widget.ref),
                     ),
                     if (widget.editingId != null &&
                         !widget.editingIsGoalGenerated) ...[
