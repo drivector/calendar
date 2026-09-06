@@ -71,4 +71,30 @@ void main() {
     expect(gaps[1].start, at(9, 30));
     expect(gaps[1].end, at(11, 0));
   });
+
+  test(
+    "an untimed block doesn't close a gap — it has no clock position to "
+    'close one at',
+    () {
+      final gaps = computeUntrackedGaps(
+        tracked: [
+          TrackedBlock.untimed(
+            id: 'piano',
+            day: day,
+            duration: const Duration(hours: 2),
+            title: 'Piano',
+            goalId: 'goal-piano',
+            sourceId: 'manual',
+          ),
+        ],
+        windowStart: at(11, 0),
+        windowEnd: at(13, 0),
+        minDuration: const Duration(minutes: 45),
+      );
+
+      expect(gaps, hasLength(1));
+      expect(gaps.single.start, at(11, 0));
+      expect(gaps.single.end, at(13, 0));
+    },
+  );
 }

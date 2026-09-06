@@ -92,12 +92,14 @@ double _actualHoursForGoal(
   DateTime selectedDate,
 ) {
   final (windowStart, windowEnd) = _progressWindowFor(goal, selectedDate);
+  // Keyed off [TrackedBlock.day], not a start time — an untimed block has
+  // no start time at all, and the day is what it was credited to anyway.
   return allTracked
       .where(
         (b) =>
             b.goalId == goal.id &&
-            !b.start.isBefore(windowStart) &&
-            b.start.isBefore(windowEnd),
+            !b.day.isBefore(windowStart) &&
+            b.day.isBefore(windowEnd),
       )
       .fold(0.0, (total, b) => total + b.duration.inMinutes / 60);
 }
@@ -263,9 +265,7 @@ final visibleDayBlocksProvider = Provider<List<DayBlocks>>((ref) {
                 ),
               ]
               ..sort((a, b) => a.start.compareTo(b.start)),
-        tracked: allTracked
-            .where((b) => overlapsDay(b.start, b.end, date))
-            .toList(),
+        tracked: allTracked.where((b) => b.occursOn(date)).toList(),
       ),
     );
   }

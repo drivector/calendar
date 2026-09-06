@@ -70,12 +70,19 @@ service cloud.firestore {
     match /users/{uid}/trackedBlocks/{docId} {
       allow read: if isOwner(uid);
       // Same categoryId -> goalId schema change as plannedBlocks above.
+      // A tracked block is stored as the day it is credited to plus a
+      // duration; 'start' carries its clock position and is null for an
+      // untimed one ("piano, 15 min, any time" — see models/tracked_block
+      // .dart), which is why it isn't in the required-keys list and is
+      // only type-checked when present.
       allow create, update: if isOwner(uid)
           && request.resource.data.keys().hasAll(
-               ['start', 'end', 'title', 'goalId', 'sourceId']
+               ['day', 'durationSeconds', 'title', 'goalId', 'sourceId']
              )
-          && request.resource.data.start is string
-          && request.resource.data.end is string
+          && request.resource.data.day is string
+          && request.resource.data.durationSeconds is int
+          && (request.resource.data.start == null
+              || request.resource.data.start is string)
           && isReasonableString(request.resource.data.title)
           && isReasonableString(request.resource.data.goalId)
           && isReasonableString(request.resource.data.sourceId);

@@ -181,9 +181,16 @@ Map<String, Duration> untimedPlannedDurationByGoalForDate({
     final trackedForGoal = trackedBlocksForDate.where(
       (b) => b.goalId == goalId,
     );
-    bool coveredByTracked(PlannedBlock plan) => trackedForGoal.any(
-      (t) => t.start.isBefore(plan.end) && plan.start.isBefore(t.end),
-    );
+    // Untimed tracked blocks are skipped here for the same reason they
+    // are in [pendingPlannedBlocksForGoal]: with no clock position, one
+    // can't be said to overlap any particular plan. Their duration still
+    // counts in [trackedConsumed] below.
+    bool coveredByTracked(PlannedBlock plan) => trackedForGoal.any((t) {
+      final start = t.start;
+      final end = t.end;
+      if (start == null || end == null) return false;
+      return start.isBefore(plan.end) && plan.start.isBefore(end);
+    });
     final manualConsumed = manualBlocksForDate
         .where(
           (b) =>

@@ -223,12 +223,12 @@ class _DetailDialog extends StatelessWidget {
             ],
             const SizedBox(height: AppSpacing.s2),
             Text(
-              DateFormat('EEE, d MMM y').format(block.start),
+              DateFormat('EEE, d MMM y').format(block.day),
               style: AppTextStyles.mono(),
             ),
             const SizedBox(height: 2),
             Text(
-              '${_clock(block.start)}–${_clock(block.end)} · '
+              '${block.isTimed ? '${_clock(block.start!)}–${_clock(block.end!)}' : 'any time'} · '
               '${formatDuration(block.duration)}',
               style: AppTextStyles.mono(),
             ),

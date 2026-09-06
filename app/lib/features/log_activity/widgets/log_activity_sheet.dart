@@ -100,17 +100,23 @@ class _LogActivitySheetState extends ConsumerState<LogActivitySheet> {
         // than just defaulting the date.
         final goal = goalById(widget.ref.read(goalsProvider), existing.goalId);
         notifier
-          ..setDate(
-            DateTime(
-              existing.start.year,
-              existing.start.month,
-              existing.start.day,
-            ),
-          )
+          ..setDate(existing.day)
           ..setActivity(existing.title)
-          ..setStart(TimeOfDay.fromDateTime(existing.start))
-          ..setEnd(TimeOfDay.fromDateTime(existing.end))
           ..setNote(existing.note ?? '');
+        // An untimed block ("piano, 15 min, any time") has no clock times
+        // to prefill, so they're left unset and _save's own "Set a start
+        // and end time before saving" message asks for them — this sheet
+        // only ever writes timed blocks, so giving one a time here is a
+        // deliberate conversion, not something to fill in silently. It
+        // used to show the placeholder span those blocks carried as if it
+        // were a real time the user had entered.
+        final start = existing.start;
+        final end = existing.end;
+        if (start != null && end != null) {
+          notifier
+            ..setStart(TimeOfDay.fromDateTime(start))
+            ..setEnd(TimeOfDay.fromDateTime(end));
+        }
         if (goal != null) notifier.setGoal(goal.id);
       } else if (widget.ref.read(draftLogEntryProvider).date == null) {
         // Creating — defaults to whatever day the app is currently

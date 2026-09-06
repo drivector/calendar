@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../models/activity_log.dart';
 import '../../../models/goal.dart';
 import '../../../models/goal_planned_blocks.dart';
 import '../../../models/goal_progress.dart';
@@ -118,9 +119,9 @@ class _GoalDetailSheetState extends ConsumerState<GoalDetailSheet> {
     final actualActivity =
         ref
             .watch(allTrackedBlocksProvider)
-            .where((b) => b.goalId == goal!.id && inThisWeek(b.start))
+            .where((b) => b.goalId == goal!.id && inThisWeek(b.day))
             .toList()
-          ..sort((a, b) => a.start.compareTo(b.start));
+          ..sort(compareTrackedBlocksByTime);
 
     final plannedHours = plannedActivity.fold<double>(
       0,
@@ -331,7 +332,7 @@ class _TargetPerDayRow extends StatelessWidget {
   final List<TrackedBlock> actualActivity;
 
   Duration _actualForDay(DateTime day) => actualActivity
-      .where((b) => isSameDay(b.start, day))
+      .where((b) => isSameDay(b.day, day))
       .fold(Duration.zero, (total, b) => total + b.duration);
 
   @override
@@ -494,7 +495,8 @@ class _ActualRow extends StatelessWidget {
                 children: [
                   Text(block.title, style: AppTextStyles.label()),
                   Text(
-                    '${_dayLabel(block.start)} ${_clock(block.start)}–${_clock(block.end)} '
+                    '${_dayLabel(block.day)} '
+                    '${block.isTimed ? '${_clock(block.start!)}–${_clock(block.end!)}' : 'any time'} '
                     '· ${block.sourceId}',
                     style: AppTextStyles.mono(),
                   ),

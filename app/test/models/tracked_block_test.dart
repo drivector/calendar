@@ -140,62 +140,174 @@ void main() {
     });
   });
 
-  group('hasNoTime', () {
-    test('defaults to false', () {
+  group('untimed blocks', () {
+    test('a timed block has a real clock position', () {
       final tracked = _tracked(
         start: DateTime(2026, 8, 20, 16, 0),
         end: DateTime(2026, 8, 20, 16, 30),
       );
 
-      expect(tracked.hasNoTime, isFalse);
+      expect(tracked.isTimed, isTrue);
+      expect(tracked.start, DateTime(2026, 8, 20, 16, 0));
+      expect(tracked.end, DateTime(2026, 8, 20, 16, 30));
+      expect(tracked.day, DateTime(2026, 8, 20));
+      expect(tracked.duration, const Duration(minutes: 30));
     });
 
-    test('round-trips through toMap/fromMap', () {
-      final tracked = TrackedBlock(
+    test('an untimed block has none at all', () {
+      final tracked = TrackedBlock.untimed(
         id: 'tracked-1',
-        start: DateTime(2026, 8, 20, 12, 0),
-        end: DateTime(2026, 8, 20, 12, 30),
+        day: DateTime(2026, 8, 20),
+        duration: const Duration(minutes: 15),
         title: 'Piano',
         goalId: 'goal-piano',
         sourceId: 'manual',
-        hasNoTime: true,
+      );
+
+      expect(tracked.isTimed, isFalse);
+      expect(tracked.start, isNull);
+      expect(tracked.end, isNull);
+      expect(tracked.day, DateTime(2026, 8, 20));
+      expect(tracked.duration, const Duration(minutes: 15));
+    });
+
+    test('an untimed block is never matched to a plan by overlap', () {
+      // The old fabricated span ended at noon, so a plan covering midday
+      // for the same goal silently claimed the block.
+      final tracked = TrackedBlock.untimed(
+        id: 'tracked-1',
+        day: DateTime(2026, 8, 20),
+        duration: const Duration(minutes: 15),
+        title: 'Piano',
+        goalId: 'goal-piano',
+        sourceId: 'manual',
+      );
+      final planned = PlannedBlock(
+        id: 'plan-1',
+        start: DateTime(2026, 8, 20, 11, 0),
+        end: DateTime(2026, 8, 20, 13, 0),
+        title: 'Piano',
+        goalId: 'goal-piano',
+      );
+
+      expect(matchingPlannedBlockFor(tracked, [planned]), isNull);
+      expect(trackedBlockWasPlanned(tracked, [planned]), isFalse);
+    });
+
+    test('a day is credited from `day`, however long the duration', () {
+      // The old form anchored the span at noon and counted backwards, so
+      // anything over 12 hours started on the previous day and was
+      // credited to it as well.
+      final tracked = TrackedBlock.untimed(
+        id: 'tracked-1',
+        day: DateTime(2026, 8, 20),
+        duration: const Duration(hours: 14),
+        title: 'Piano',
+        goalId: 'goal-piano',
+        sourceId: 'manual',
+      );
+
+      expect(tracked.occursOn(DateTime(2026, 8, 20)), isTrue);
+      expect(tracked.occursOn(DateTime(2026, 8, 19)), isFalse);
+    });
+
+    test('a timed overnight block occurs on both days it touches', () {
+      final tracked = _tracked(
+        start: DateTime(2026, 8, 20, 22, 0),
+        end: DateTime(2026, 8, 21, 1, 30),
+      );
+
+      expect(tracked.occursOn(DateTime(2026, 8, 20)), isTrue);
+      expect(tracked.occursOn(DateTime(2026, 8, 21)), isTrue);
+      expect(tracked.day, DateTime(2026, 8, 20));
+    });
+
+    test('round-trips through toMap/fromMap', () {
+      final tracked = TrackedBlock.untimed(
+        id: 'tracked-1',
+        day: DateTime(2026, 8, 20),
+        duration: const Duration(minutes: 15),
+        title: 'Piano',
+        goalId: 'goal-piano',
+        sourceId: 'manual',
       );
 
       final restored = TrackedBlock.fromMap('tracked-1', tracked.toMap());
 
-      expect(restored.hasNoTime, isTrue);
+      expect(restored.isTimed, isFalse);
+      expect(restored.day, DateTime(2026, 8, 20));
+      expect(restored.duration, const Duration(minutes: 15));
     });
 
-    test(
-      'a document written before this field existed reads back false, not '
-      'a crash',
-      () {
-        final restored = TrackedBlock.fromMap('tracked-1', {
-          'start': DateTime(2026, 8, 20, 12, 0).toIso8601String(),
-          'end': DateTime(2026, 8, 20, 12, 30).toIso8601String(),
-          'title': 'Piano',
-          'goalId': 'goal-piano',
-          'sourceId': 'manual',
-        });
-
-        expect(restored.hasNoTime, isFalse);
-      },
-    );
-
-    test('copyWithStatus preserves hasNoTime', () {
-      final tracked = TrackedBlock(
+    test('copyWithStatus preserves the untimed shape', () {
+      final tracked = TrackedBlock.untimed(
         id: 'tracked-1',
-        start: DateTime(2026, 8, 20, 12, 0),
-        end: DateTime(2026, 8, 20, 12, 30),
+        day: DateTime(2026, 8, 20),
+        duration: const Duration(minutes: 15),
         title: 'Piano',
         goalId: 'goal-piano',
         sourceId: 'manual',
-        hasNoTime: true,
       );
 
       final deleted = tracked.copyWithStatus(TrackedBlockStatus.deleted);
 
-      expect(deleted.hasNoTime, isTrue);
+      expect(deleted.isTimed, isFalse);
+      expect(deleted.day, DateTime(2026, 8, 20));
+      expect(deleted.duration, const Duration(minutes: 15));
+      expect(deleted.status, TrackedBlockStatus.deleted);
     });
+  });
+
+  group('reading documents written by the previous schema', () {
+    test('a start/end document reads back as a timed block', () {
+      final restored = TrackedBlock.fromMap('tracked-1', {
+        'start': DateTime(2026, 8, 20, 12, 0).toIso8601String(),
+        'end': DateTime(2026, 8, 20, 12, 30).toIso8601String(),
+        'title': 'Piano',
+        'goalId': 'goal-piano',
+        'sourceId': 'manual',
+      });
+
+      expect(restored.isTimed, isTrue);
+      expect(restored.start, DateTime(2026, 8, 20, 12, 0));
+      expect(restored.end, DateTime(2026, 8, 20, 12, 30));
+      expect(restored.day, DateTime(2026, 8, 20));
+      expect(restored.duration, const Duration(minutes: 30));
+    });
+
+    test('a hasNoTime document reads back as an untimed block', () {
+      // The placeholder span these carried: 15 minutes ending at noon.
+      final restored = TrackedBlock.fromMap('tracked-1', {
+        'start': DateTime(2026, 8, 20, 11, 45).toIso8601String(),
+        'end': DateTime(2026, 8, 20, 12, 0).toIso8601String(),
+        'title': 'Piano',
+        'goalId': 'goal-piano',
+        'sourceId': 'manual',
+        'hasNoTime': true,
+      });
+
+      expect(restored.isTimed, isFalse);
+      expect(restored.start, isNull);
+      expect(restored.day, DateTime(2026, 8, 20));
+      expect(restored.duration, const Duration(minutes: 15));
+    });
+
+    test(
+      "a hasNoTime document over 12 hours is credited to its `end`'s day, "
+      'not the day its placeholder span started on',
+      () {
+        final restored = TrackedBlock.fromMap('tracked-1', {
+          'start': DateTime(2026, 8, 19, 22, 0).toIso8601String(),
+          'end': DateTime(2026, 8, 20, 12, 0).toIso8601String(),
+          'title': 'Piano',
+          'goalId': 'goal-piano',
+          'sourceId': 'manual',
+          'hasNoTime': true,
+        });
+
+        expect(restored.day, DateTime(2026, 8, 20));
+        expect(restored.duration, const Duration(hours: 14));
+      },
+    );
   });
 }

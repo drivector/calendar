@@ -1,3 +1,4 @@
+import '../utils/day_range.dart';
 import 'planned_block.dart';
 
 /// The specific [PlannedBlock] a [start, end) span belonging to [goalId]
@@ -34,16 +35,27 @@ PlannedBlock? matchingPlannedBlockForRange({
 /// over *this specific* plan rather than just somewhere in the shared
 /// time slot — for lining an actual block's own side-by-side column up
 /// with its matching plan's column (see `TimeBodyGrid`'s own layout code).
+/// Returns null for an untimed [tracked] block (see [TrackedBlock]'s own
+/// doc comment) — with no clock position there is nothing to overlap a
+/// plan with, and an explicit [TrackedBlock.plannedBlockId] link is never
+/// set on one. This used to answer from a fabricated span instead, so a
+/// quick-logged "any time" entry silently bound itself to whichever plan
+/// for the same goal happened to cover midday.
 PlannedBlock? matchingPlannedBlockFor(
   TrackedBlock tracked,
   List<PlannedBlock> planned,
-) => matchingPlannedBlockForRange(
-  start: tracked.start,
-  end: tracked.end,
-  goalId: tracked.goalId,
-  planned: planned,
-  plannedBlockId: tracked.plannedBlockId,
-);
+) {
+  final start = tracked.start;
+  final end = tracked.end;
+  if (start == null || end == null) return null;
+  return matchingPlannedBlockForRange(
+    start: start,
+    end: end,
+    goalId: tracked.goalId,
+    planned: planned,
+    plannedBlockId: tracked.plannedBlockId,
+  );
+}
 
 /// Whether [tracked] corresponds to something that was planned — either
 /// explicitly linked via [TrackedBlock.plannedBlockId] (set by the goal
@@ -75,11 +87,35 @@ bool trackedBlockWasPlanned(TrackedBlock tracked, List<PlannedBlock> planned) {
 /// that predate this field entirely (see [TrackedBlock.fromMap]).
 enum TrackedBlockStatus { active, deleted }
 
+/// One logged activity. Two shapes, distinguished by whether [start] is
+/// null:
+///
+/// * **Timed** (the default constructor) — a real clock span the user did
+///   something in, e.g. 09:00–10:30. Drawn on the Day view's timeline,
+///   sorted chronologically, matched against plans by overlap.
+/// * **Untimed** ([TrackedBlock.untimed]) — an amount of time credited to
+///   a [day] with no clock position at all, e.g. "piano, 15 min, any
+///   time". The shape a goal's plain-duration schedule entry produces (see
+///   `logUnscheduledGoalTime`), mirroring [DayScheduleEntry]'s own
+///   duration-vs-time-range split on the planning side.
+///
+/// [day] and [duration] are always real and always meaningful, whichever
+/// shape this is — every day-membership and totalling calculation goes
+/// through them and needs no null handling. [start]/[end] are nullable
+/// precisely so that an untimed block *cannot* be read as having happened
+/// at a clock time it never had: this class used to store a fabricated
+/// span alongside a `hasNoTime` flag, and the fabricated values leaked
+/// into list ordering, plan matching and day attribution wherever a
+/// caller forgot to check the flag.
 class TrackedBlock {
-  const TrackedBlock({
+  /// A timed block, from the real span it occupied. [day] is derived from
+  /// [start] (an overnight block belongs to the day it started on, the
+  /// same convention [groupTrackedBlocksByDay] uses), so the two can never
+  /// disagree.
+  TrackedBlock({
     required this.id,
-    required this.start,
-    required this.end,
+    required DateTime start,
+    required DateTime end,
     required this.title,
     required this.goalId,
     required this.sourceId,
@@ -87,21 +123,65 @@ class TrackedBlock {
     this.plannedBlockId,
     this.note,
     this.status = TrackedBlockStatus.active,
-    this.hasNoTime = false,
+  }) : day = dateOnly(start),
+       start = start,
+       duration = end.difference(start);
+
+  /// An untimed block — [duration] credited to [day], with no clock
+  /// position. Written only by `logUnscheduledGoalTime`, for a goal whose
+  /// schedule entry never had a slot to begin with.
+  TrackedBlock.untimed({
+    required this.id,
+    required DateTime day,
+    required this.duration,
+    required this.title,
+    required this.goalId,
+    required this.sourceId,
+    this.confidence = 1.0,
+    this.plannedBlockId,
+    this.note,
+    this.status = TrackedBlockStatus.active,
+  }) : day = dateOnly(day),
+       start = null;
+
+  TrackedBlock._({
+    required this.id,
+    required this.day,
+    required this.start,
+    required this.duration,
+    required this.title,
+    required this.goalId,
+    required this.sourceId,
+    required this.confidence,
+    required this.plannedBlockId,
+    required this.note,
+    required this.status,
   });
 
   final String id;
 
-  /// [start]/[end] still carry a real, storable clock position even when
-  /// [hasNoTime] is true — every duration/day-membership calculation this
-  /// class already has (`duration`, `overlapsDay`, sorting) keeps working
-  /// unchanged rather than needing a second, nullable-times code path
-  /// threaded through all of them. [hasNoTime] is what every *display*
-  /// site checks instead, to skip drawing that position: the Day view
-  /// timeline leaves it off the grid entirely, and the Activities list
-  /// shows "any time" rather than these two values.
-  final DateTime start;
-  final DateTime end;
+  /// The calendar day (time-of-day zeroed) this block is credited to —
+  /// always meaningful, for both shapes. What every "does this belong to
+  /// this day" filter keys off.
+  final DateTime day;
+
+  /// How long the activity took — always meaningful, for both shapes.
+  final Duration duration;
+
+  /// When it started, or null if it has no clock position at all (see the
+  /// class doc comment). Never a placeholder: null genuinely means "the
+  /// user never said when".
+  final DateTime? start;
+
+  /// Derived from [start] + [duration], and null for exactly the same
+  /// reason [start] is. Rolls past midnight for an overnight block.
+  DateTime? get end => start?.add(duration);
+
+  /// Whether this block has a real clock position — the one check every
+  /// display site that wants to draw or print a time needs to make before
+  /// dereferencing [start]/[end].
+  bool get isTimed => start != null;
+
   final String title;
 
   /// Every tracked activity belongs to a goal — its category is looked up
@@ -123,24 +203,24 @@ class TrackedBlock {
 
   final TrackedBlockStatus status;
 
-  /// Set only by [logUnscheduledGoalTime] — a goal's untimed schedule
-  /// entry ("piano, 15 min, any time") credited in one tap from the
-  /// unscheduled dialog's own checkmark, rather than logged against a
-  /// real clock slot the way every other entry point here works. [start]/
-  /// [end] are still real, storable values (see their own doc comment
-  /// above) — this is the flag that says not to treat them as meaningful.
-  final bool hasNoTime;
-
-  Duration get duration => end.difference(start);
+  /// Whether this block belongs on [date]'s own column. A timed block uses
+  /// [overlapsDay], so an overnight one shows on both days it touches; an
+  /// untimed one has only its [day] to go on.
+  bool occursOn(DateTime date) {
+    final start = this.start;
+    if (start == null) return isSameDay(day, date);
+    return overlapsDay(start, start.add(duration), date);
+  }
 
   /// A copy with [status] changed — used for the Activities list's soft
   /// delete, which is the only mutation this needs; every other field is
   /// reconstructed in full at its own call site (this app's established
   /// pattern — see `LogActivitySheet._save()`).
-  TrackedBlock copyWithStatus(TrackedBlockStatus status) => TrackedBlock(
+  TrackedBlock copyWithStatus(TrackedBlockStatus status) => TrackedBlock._(
     id: id,
+    day: day,
     start: start,
-    end: end,
+    duration: duration,
     title: title,
     goalId: goalId,
     sourceId: sourceId,
@@ -148,30 +228,96 @@ class TrackedBlock {
     plannedBlockId: plannedBlockId,
     note: note,
     status: status,
-    hasNoTime: hasNoTime,
   );
 
-  factory TrackedBlock.fromMap(String id, Map<String, dynamic> map) =>
-      TrackedBlock(
-        id: id,
-        start: DateTime.parse(map['start'] as String),
-        end: DateTime.parse(map['end'] as String),
-        title: map['title'] as String,
-        goalId: map['goalId'] as String,
-        sourceId: map['sourceId'] as String,
-        confidence: (map['confidence'] as num?)?.toDouble() ?? 1.0,
-        plannedBlockId: map['plannedBlockId'] as String?,
-        note: map['note'] as String?,
-        status: TrackedBlockStatus.values.firstWhere(
-          (s) => s.name == map['status'],
-          orElse: () => TrackedBlockStatus.active,
-        ),
-        hasNoTime: map['hasNoTime'] as bool? ?? false,
-      );
+  /// Reads both the current shape (`day` + `durationSeconds`, with `start`
+  /// present only for a timed block) and the original one (`start` + `end`
+  /// + a `hasNoTime` flag), so already-written documents keep loading
+  /// without a backfill. A legacy untimed document's day is taken from its
+  /// `end` — `logUnscheduledGoalTime` used to anchor those at noon and
+  /// count backwards, so `start` could land on the *previous* day for
+  /// anything over 12 hours, while `end` was always on the right one.
+  factory TrackedBlock.fromMap(String id, Map<String, dynamic> map) {
+    final title = map['title'] as String;
+    final goalId = map['goalId'] as String;
+    final sourceId = map['sourceId'] as String;
+    final confidence = (map['confidence'] as num?)?.toDouble() ?? 1.0;
+    final plannedBlockId = map['plannedBlockId'] as String?;
+    final note = map['note'] as String?;
+    final status = TrackedBlockStatus.values.firstWhere(
+      (s) => s.name == map['status'],
+      orElse: () => TrackedBlockStatus.active,
+    );
+    final startRaw = map['start'] as String?;
+    final durationSeconds = map['durationSeconds'] as int?;
 
+    if (durationSeconds != null) {
+      final duration = Duration(seconds: durationSeconds);
+      if (startRaw != null) {
+        return TrackedBlock(
+          id: id,
+          start: DateTime.parse(startRaw),
+          end: DateTime.parse(startRaw).add(duration),
+          title: title,
+          goalId: goalId,
+          sourceId: sourceId,
+          confidence: confidence,
+          plannedBlockId: plannedBlockId,
+          note: note,
+          status: status,
+        );
+      }
+      return TrackedBlock.untimed(
+        id: id,
+        day: DateTime.parse(map['day'] as String),
+        duration: duration,
+        title: title,
+        goalId: goalId,
+        sourceId: sourceId,
+        confidence: confidence,
+        plannedBlockId: plannedBlockId,
+        note: note,
+        status: status,
+      );
+    }
+
+    final start = DateTime.parse(startRaw!);
+    final end = DateTime.parse(map['end'] as String);
+    if (map['hasNoTime'] as bool? ?? false) {
+      return TrackedBlock.untimed(
+        id: id,
+        day: end,
+        duration: end.difference(start),
+        title: title,
+        goalId: goalId,
+        sourceId: sourceId,
+        confidence: confidence,
+        plannedBlockId: plannedBlockId,
+        note: note,
+        status: status,
+      );
+    }
+    return TrackedBlock(
+      id: id,
+      start: start,
+      end: end,
+      title: title,
+      goalId: goalId,
+      sourceId: sourceId,
+      confidence: confidence,
+      plannedBlockId: plannedBlockId,
+      note: note,
+      status: status,
+    );
+  }
+
+  /// `start` is written as null rather than a placeholder for an untimed
+  /// block — that null is the stored form of "this never had a clock
+  /// time", and `firestore.rules` allows it explicitly.
   Map<String, dynamic> toMap() => {
-    'start': start.toIso8601String(),
-    'end': end.toIso8601String(),
+    'day': day.toIso8601String(),
+    'start': start?.toIso8601String(),
+    'durationSeconds': duration.inSeconds,
     'title': title,
     'goalId': goalId,
     'sourceId': sourceId,
@@ -179,6 +325,5 @@ class TrackedBlock {
     'plannedBlockId': plannedBlockId,
     'note': note,
     'status': status.name,
-    'hasNoTime': hasNoTime,
   };
 }

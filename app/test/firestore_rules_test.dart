@@ -72,7 +72,17 @@ void main() {
       );
       expect(
         rules.collections['trackedBlocks']!.requiredKeys,
-        containsAll(['start', 'end', 'title', 'goalId', 'sourceId']),
+        containsAll(['day', 'durationSeconds', 'title', 'goalId', 'sourceId']),
+      );
+      // 'start' is deliberately *not* required — it's null for an untimed
+      // block, so requiring it would reject every quick-logged entry.
+      expect(
+        rules.collections['trackedBlocks']!.requiredKeys,
+        isNot(contains('start')),
+      );
+      expect(
+        rules.collections['trackedBlocks']!.nullableFieldTypes['start'],
+        'string',
       );
       expect(rules.maxStringLength, greaterThan(0));
     });
@@ -169,7 +179,7 @@ service cloud.firestore {
       );
     });
 
-    test('TrackedBlock, manual and live-activity forms', () {
+    test('TrackedBlock, manual, live-activity and untimed forms', () {
       expect(
         rules.violations(
           'trackedBlocks',
@@ -197,6 +207,23 @@ service cloud.firestore {
             goalId: 'goal-1',
             sourceId: 'manual',
             status: TrackedBlockStatus.deleted,
+          ).toMap(),
+        ),
+        isEmpty,
+      );
+      // The untimed form writes a null `start`, which the rules have to
+      // accept explicitly — requiring it (as they once did for `start`/
+      // `end`) would permission-deny every quick-logged entry.
+      expect(
+        rules.violations(
+          'trackedBlocks',
+          TrackedBlock.untimed(
+            id: 'manual-2',
+            day: DateTime(2026, 8, 20),
+            duration: const Duration(minutes: 15),
+            title: 'Piano',
+            goalId: 'goal-2',
+            sourceId: 'manual',
           ).toMap(),
         ),
         isEmpty,
@@ -387,6 +414,27 @@ service cloud.firestore {
       expect(restored.plannedBlockId, block.plannedBlockId);
       expect(restored.note, block.note);
       expect(restored.status, block.status);
+      expect(restored.day, DateTime(2026, 8, 20));
+      expect(restored.duration, const Duration(hours: 1));
+    });
+
+    test('TrackedBlock, untimed', () {
+      final block = TrackedBlock.untimed(
+        id: 'manual-2',
+        day: DateTime(2026, 8, 20),
+        duration: const Duration(minutes: 15),
+        title: 'Piano',
+        goalId: 'goal-2',
+        sourceId: 'manual',
+      );
+      final restored = TrackedBlock.fromMap(block.id, block.toMap());
+      expect(restored.start, isNull);
+      expect(restored.end, isNull);
+      expect(restored.isTimed, isFalse);
+      expect(restored.day, DateTime(2026, 8, 20));
+      expect(restored.duration, const Duration(minutes: 15));
+      expect(restored.title, block.title);
+      expect(restored.goalId, block.goalId);
     });
 
     test('Category', () {

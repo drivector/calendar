@@ -1124,10 +1124,7 @@ void main() {
       final saved = container
           .read(allTrackedBlocksProvider)
           .firstWhere((b) => b.title == 'Third column entry');
-      expect(
-        DateTime(saved.start.year, saved.start.month, saved.start.day),
-        DateTime(2026, 8, 22),
-      );
+      expect(saved.day, DateTime(2026, 8, 22));
     },
   );
 
@@ -1372,9 +1369,7 @@ void main() {
           .toList();
       expect(walkingTracked, hasLength(before + 1));
       final logged = walkingTracked.last;
-      expect(logged.start.year, 2026);
-      expect(logged.start.month, 8);
-      expect(logged.start.day, 17);
+      expect(logged.day, DateTime(2026, 8, 17));
       expect(logged.duration, const Duration(minutes: 30));
     },
   );
@@ -4433,13 +4428,15 @@ void main() {
       expect(tracked, hasLength(1));
       expect(tracked.single.goalId, 'goal-1');
       expect(tracked.single.duration, const Duration(minutes: 30));
-      expect(tracked.single.start.year, mockDay.year);
-      expect(tracked.single.start.month, mockDay.month);
-      expect(tracked.single.start.day, mockDay.day);
-      // No genuine clock time -- start/end are only ever a storage
-      // placeholder for a block logged this way (see
-      // logUnscheduledGoalTime's own doc comment).
-      expect(tracked.single.hasNoTime, isTrue);
+      expect(
+        tracked.single.day,
+        DateTime(mockDay.year, mockDay.month, mockDay.day),
+      );
+      // No genuine clock time at all -- a block logged this way carries
+      // its day and duration and nothing else (see logUnscheduledGoalTime).
+      expect(tracked.single.isTimed, isFalse);
+      expect(tracked.single.start, isNull);
+      expect(tracked.single.end, isNull);
 
       // Fully credited now — the line is gone entirely, same as any
       // other goal that's had its whole unscheduled budget claimed.
@@ -4454,6 +4451,26 @@ void main() {
       await tester.tap(find.text('Activities'));
       await tester.pumpAndSettle();
       expect(find.text('any time · manual'), findsOneWidget);
+
+      // Opening it in the edit sheet shows no clock times either: this
+      // sheet only ever writes timed blocks, so it asks for a real time
+      // rather than presenting a placeholder as one the user had set.
+      await tester.tap(find.text('edit'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Edit activity'), findsOneWidget);
+      expect(find.text('set start'), findsOneWidget);
+      expect(find.text('set end'), findsOneWidget);
+      // And saving without one says so, rather than silently writing the
+      // placeholder back as a real clock range.
+      await tester.ensureVisible(find.text('Save changes'));
+      await tester.tap(find.text('Save changes'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Set a start and end time before saving'),
+        findsOneWidget,
+      );
+      expect(container.read(allTrackedBlocksProvider).single.isTimed, isFalse);
     },
   );
 
@@ -6352,7 +6369,7 @@ void main() {
       final logged = all.firstWhere((b) => b.sourceId == 'manual' && b.id.startsWith('live-'));
       expect(logged.title, 'Walking');
       expect(logged.goalId, 'goal-walking');
-      expect(logged.end.isBefore(logged.start), isFalse);
+      expect(logged.end!.isBefore(logged.start!), isFalse);
     },
   );
 

@@ -70,4 +70,69 @@ void main() {
       },
     );
   });
+
+  group('untimed blocks in a day group', () {
+    test(
+      'an untimed block sorts after every timed one, rather than into the '
+      'middle of the day by a placeholder time',
+      () {
+        final blocks = [
+          _block(id: 'evening', start: DateTime(2026, 8, 20, 18, 0)),
+          TrackedBlock.untimed(
+            id: 'piano',
+            day: DateTime(2026, 8, 20),
+            duration: const Duration(minutes: 15),
+            title: 'Piano',
+            goalId: 'goal-piano',
+            sourceId: 'manual',
+          ),
+          _block(id: 'morning', start: DateTime(2026, 8, 20, 9, 0)),
+        ];
+
+        final groups = groupTrackedBlocksByDay(blocks);
+
+        expect(groups, hasLength(1));
+        expect(
+          groups.single.blocks.map((b) => b.id),
+          ['morning', 'evening', 'piano'],
+        );
+      },
+    );
+
+    test('an untimed block is grouped under the day it was credited to', () {
+      final blocks = [
+        TrackedBlock.untimed(
+          id: 'piano',
+          day: DateTime(2026, 8, 20),
+          duration: const Duration(hours: 14),
+          title: 'Piano',
+          goalId: 'goal-piano',
+          sourceId: 'manual',
+        ),
+      ];
+
+      final groups = groupTrackedBlocksByDay(blocks);
+
+      expect(groups.single.day, DateTime(2026, 8, 20));
+    });
+
+    test('two untimed blocks on one day keep a deterministic order', () {
+      TrackedBlock untimed(String id) => TrackedBlock.untimed(
+        id: id,
+        day: DateTime(2026, 8, 20),
+        duration: const Duration(minutes: 15),
+        title: id,
+        goalId: 'goal-piano',
+        sourceId: 'manual',
+      );
+
+      expect(
+        groupTrackedBlocksByDay([
+          untimed('b'),
+          untimed('a'),
+        ]).single.blocks.map((b) => b.id),
+        ['a', 'b'],
+      );
+    });
+  });
 }

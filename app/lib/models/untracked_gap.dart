@@ -19,20 +19,26 @@ List<UntrackedGap> computeUntrackedGaps({
   required DateTime windowEnd,
   Duration minDuration = const Duration(minutes: 45),
 }) {
-  final sorted = [...tracked]..sort((a, b) => a.start.compareTo(b.start));
+  // Untimed blocks ("piano, 15 min, any time") are skipped outright: with
+  // no clock position they can't close a gap in the window, and they used
+  // to close one wherever their fabricated span happened to land.
+  final sorted = [for (final b in tracked) if (b.isTimed) b]
+    ..sort((a, b) => a.start!.compareTo(b.start!));
 
   final gaps = <UntrackedGap>[];
   var cursor = windowStart;
 
   for (final block in sorted) {
-    if (block.start.isAfter(cursor)) {
-      final gapEnd = block.start.isBefore(windowEnd) ? block.start : windowEnd;
+    final blockStart = block.start!;
+    final blockEnd = block.end!;
+    if (blockStart.isAfter(cursor)) {
+      final gapEnd = blockStart.isBefore(windowEnd) ? blockStart : windowEnd;
       if (gapEnd.difference(cursor) >= minDuration) {
         gaps.add(UntrackedGap(start: cursor, end: gapEnd));
       }
     }
-    if (block.end.isAfter(cursor)) {
-      cursor = block.end;
+    if (blockEnd.isAfter(cursor)) {
+      cursor = blockEnd;
     }
   }
 

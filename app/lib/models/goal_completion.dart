@@ -41,12 +41,17 @@ List<PlannedBlock> pendingPlannedBlocksForGoal({
   // already filled in themselves. Overlap is the same signal the rest of
   // the app already treats as "this tracked block corresponds to that
   // plan" (see [matchingPlannedBlockFor]).
-  bool coveredByOverlap(PlannedBlock plan) => allTracked.any(
-    (t) =>
-        t.goalId == plan.goalId &&
-        t.start.isBefore(plan.end) &&
-        plan.start.isBefore(t.end),
-  );
+  //
+  // An untimed block (see [TrackedBlock.untimed]) is skipped here — it has
+  // no clock position, so it can't be said to overlap any particular plan.
+  bool coveredByOverlap(PlannedBlock plan) => allTracked.any((t) {
+    final start = t.start;
+    final end = t.end;
+    if (start == null || end == null) return false;
+    return t.goalId == plan.goalId &&
+        start.isBefore(plan.end) &&
+        plan.start.isBefore(end);
+  });
 
   return planned
       .where(

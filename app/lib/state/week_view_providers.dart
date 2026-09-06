@@ -72,7 +72,7 @@ final weekDaySummariesProvider = Provider<List<WeekDaySummary>>((ref) {
       ),
     ];
     final dayTracked = allTracked
-        .where((b) => isSameDay(b.start, date))
+        .where((b) => isSameDay(b.day, date))
         .toList();
 
     final plannedByCategory = groupByCategory(

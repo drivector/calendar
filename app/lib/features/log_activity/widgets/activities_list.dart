@@ -294,9 +294,9 @@ class _ActivityRow extends StatelessWidget {
                     // storage, not a real clock position — showing that
                     // range here would present a fabricated time as if
                     // it were genuine.
-                    block.hasNoTime
-                        ? 'any time · ${block.sourceId}'
-                        : '${_clock(block.start)}–${_clock(block.end)} · ${block.sourceId}',
+                    block.isTimed
+                        ? '${_clock(block.start!)}–${_clock(block.end!)} · ${block.sourceId}'
+                        : 'any time · ${block.sourceId}',
                     style: AppTextStyles.mono(),
                   ),
                   if (block.note != null && block.note!.isNotEmpty) ...[

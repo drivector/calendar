@@ -101,7 +101,7 @@ void main() {
 
       final tracked = container
           .read(allTrackedBlocksProvider)
-          .where((b) => isSameDay(b.start, date))
+          .where((b) => isSameDay(b.day, date))
           .toList();
       // No settings saved — defaults to the full day, one range.
       final (windowStart, windowEnd) = dayWindowsFor(

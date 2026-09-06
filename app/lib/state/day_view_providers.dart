@@ -5,36 +5,16 @@ import '../models/goal.dart';
 import '../models/goal_progress.dart';
 import '../models/planned_block.dart';
 import '../models/tracked_block.dart';
+import '../utils/day_range.dart';
 import 'firestore_providers.dart';
 
-DateTime today() {
-  final now = DateTime.now();
-  return DateTime(now.year, now.month, now.day);
-}
+// today()/isSameDay()/dayBounds()/overlapsDay() moved to
+// utils/day_range.dart so the models can share the same overnight rule;
+// re-exported here so every existing `day_view_providers.dart` import
+// keeps resolving them unchanged.
+export '../utils/day_range.dart';
 
 final selectedDateProvider = StateProvider<DateTime>((ref) => today());
-
-bool isSameDay(DateTime a, DateTime b) =>
-    a.year == b.year && a.month == b.month && a.day == b.day;
-
-/// [date]'s own [00:00, 24:00) span, as real `DateTime`s — the boundary
-/// every overnight-block calculation below clamps against.
-(DateTime start, DateTime end) dayBounds(DateTime date) {
-  final start = DateTime(date.year, date.month, date.day);
-  return (start, start.add(const Duration(days: 1)));
-}
-
-/// True if [start, end) overlaps [date]'s own day at all — unlike
-/// [isSameDay], which only ever matches a block's own *start* date, this
-/// is what an overnight block (started one evening, ending after
-/// midnight) needs: it genuinely belongs to *both* days it touches, not
-/// just the one it started on. A real gap a user hit directly — an
-/// activity registered from Wednesday evening to Thursday 1:30am simply
-/// never appeared anywhere on Thursday's own column.
-bool overlapsDay(DateTime start, DateTime end, DateTime date) {
-  final (dayStart, dayEnd) = dayBounds(date);
-  return start.isBefore(dayEnd) && end.isAfter(dayStart);
-}
 
 /// How many day-columns the Day view's timeline shows at once — mirrors the
 /// header's "Day | 3 Day | Working week | Week" segmented control.
@@ -176,32 +156,27 @@ Future<void> softDeleteTrackedBlock(WidgetRef ref, TrackedBlock block) {
 /// prefill a start/end from the way every other add-activity entry point
 /// does.
 ///
-/// [TrackedBlock.start]/[end] still need *some* real value — every
-/// duration/day-membership calculation on that class depends on them —
-/// so this places them at an arbitrary, deterministic point (ending at
-/// noon on [date], starting [duration] before that) purely for storage.
-/// [TrackedBlock.hasNoTime] is set alongside them, and is what every
-/// display site actually checks: the Day view timeline leaves this block
-/// off the grid entirely, and the Activities list shows "any time"
-/// rather than a clock range built from values that were never real.
+/// Writes a [TrackedBlock.untimed], which carries [date] and [duration]
+/// and genuinely no clock position — this used to fabricate a span ending
+/// at noon on [date] and mark it with a flag, and the fabricated values
+/// leaked into activity-list ordering, plan matching and (for anything
+/// over 12 hours) which day the time was credited to.
 Future<void> logUnscheduledGoalTime(
   WidgetRef ref, {
   required Goal goal,
   required DateTime date,
   required Duration duration,
 }) {
-  final end = DateTime(date.year, date.month, date.day, 12, 0);
   return ref
       .read(trackedBlocksRepositoryProvider)
       .upsert(
-        TrackedBlock(
+        TrackedBlock.untimed(
           id: 'manual-${DateTime.now().microsecondsSinceEpoch}',
-          start: end.subtract(duration),
-          end: end,
+          day: date,
+          duration: duration,
           title: goal.name,
           goalId: goal.id,
           sourceId: 'manual',
-          hasNoTime: true,
         ),
       );
 }
@@ -215,5 +190,5 @@ final plannedBlocksProvider = Provider<List<PlannedBlock>>((ref) {
 final trackedBlocksProvider = Provider<List<TrackedBlock>>((ref) {
   final selectedDate = ref.watch(selectedDateProvider);
   final all = ref.watch(allTrackedBlocksProvider);
-  return all.where((b) => isSameDay(b.start, selectedDate)).toList();
+  return all.where((b) => isSameDay(b.day, selectedDate)).toList();
 });

@@ -64,6 +64,7 @@ class FirestoreRules {
       final write = methods['create'] ?? methods['write'] ?? '';
       final required = <String>{};
       final types = <String, String>{};
+      final nullableTypes = <String, String>{};
       final boundedStrings = <String>{};
 
       // Everything below consumes the write condition term by term, so a
@@ -80,6 +81,18 @@ class FirestoreRules {
               r"'([^']*)'",
             ).allMatches(hasAll.group(1)!).map((m) => m.group(1)!),
           );
+          continue;
+        }
+        // `(x == null || x is T)` — an optional field, which the tracked
+        // blocks' `start` is (null for an untimed one). Matched before the
+        // plain `is` form below, which would otherwise see the `is T` half
+        // of this and demand the field always be present and typed.
+        final nullableTyped = RegExp(
+          r'^\(\s*request\.resource\.data\.(\w+)\s*==\s*null\s*\|\|'
+          r'\s*request\.resource\.data\.\1\s+is\s+(\w+)\s*\)$',
+        ).firstMatch(term);
+        if (nullableTyped != null) {
+          nullableTypes[nullableTyped.group(1)!] = nullableTyped.group(2)!;
           continue;
         }
         final typed = RegExp(
@@ -110,6 +123,7 @@ class FirestoreRules {
         collection: name,
         requiredKeys: required,
         fieldTypes: types,
+        nullableFieldTypes: nullableTypes,
         boundedStringFields: boundedStrings,
         conditionsByMethod: methods,
       );
@@ -156,6 +170,7 @@ class CollectionRule {
     required this.collection,
     required this.requiredKeys,
     required this.fieldTypes,
+    required this.nullableFieldTypes,
     required this.boundedStringFields,
     required this.conditionsByMethod,
   });
@@ -167,6 +182,10 @@ class CollectionRule {
 
   /// Field name -> the rules-language type it's asserted to be.
   final Map<String, String> fieldTypes;
+
+  /// Field name -> the type it's asserted to be *when present and
+  /// non-null* — the `(x == null || x is T)` form. Never required.
+  final Map<String, String> nullableFieldTypes;
 
   /// Fields passed through `isReasonableString` — a string, length-capped.
   final Set<String> boundedStringFields;
@@ -197,6 +216,16 @@ class CollectionRule {
         problems.add(
           "$collection: field '$field' is ${data[field].runtimeType}, "
           'which the rules require to be $type',
+        );
+      }
+    });
+    nullableFieldTypes.forEach((field, type) {
+      final value = data[field];
+      if (value == null) return; // Explicitly allowed by the rule.
+      if (!_matchesRulesType(value, type)) {
+        problems.add(
+          "$collection: field '$field' is ${value.runtimeType}, which the "
+          'rules require to be null or $type',
         );
       }
     });
