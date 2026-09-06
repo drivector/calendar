@@ -10,7 +10,20 @@ of its own here — see its commit message). **Firestore rules were
 redeployed** as part of this — the stored shape changed, so an older
 build still writing `start`/`end`/`hasNoTime` will now be rejected with
 permission-denied. `main` is up to date with `origin/main` at `c4db8a3`,
-**325 tests pass**, `flutter analyze` clean.
+`flutter analyze` clean.
+
+**The test suite is deliberately red.** `test/known_defects_test.dart`
+holds six failing tests, one per defect found in the audit at the end of
+that session — they assert the behaviour the app *should* have, and each
+failure message names the bug. Expected state is **326 passing, 6
+failing**; anything else means something genuinely broke. This was a
+deliberate call over marking them `skip:` — the bugs stay loud at the
+cost of red CI. To go green without fixing them, add
+`skip: 'known defect'` to each test. Delete or invert an assertion only
+when its underlying defect is actually fixed. Two audit findings have no
+test on purpose (`Goal.weeklyTargetHours` and `AppTextStyles.mono()` are
+both misnamed rather than misbehaving, and a test cannot fail on a name)
+— the file header says so, so it is not read as an exhaustive list.
 
 Note on the paragraph below: it was accurate when written but `d15d5ee`
 has not been the tip since. Eight commits landed between it and
