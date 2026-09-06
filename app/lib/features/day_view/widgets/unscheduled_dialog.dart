@@ -24,7 +24,15 @@ Future<void> showUnscheduledDialog(
   final entries =
       byGoal.entries
           .map((e) => (goal: goalById(goals, e.key), duration: e.value))
-          .where((e) => e.goal != null)
+          // A goal whose untimed budget is now fully credited (a manual
+          // plan or a real tracked activity covering all of it) sits in
+          // the map at exactly zero rather than being removed from it —
+          // see untimedPlannedDurationByGoalForDate's own clamped-at-zero
+          // behaviour. Filtered out here rather than there, since zero is
+          // still meaningful to that function's other callers (drift
+          // needs the goal to keep contributing to its own totals even
+          // once its untimed portion hits zero).
+          .where((e) => e.goal != null && e.duration > Duration.zero)
           .toList()
         ..sort((a, b) => b.duration.compareTo(a.duration));
   final total = entries.fold(Duration.zero, (t, e) => t + e.duration);

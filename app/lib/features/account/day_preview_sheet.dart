@@ -99,7 +99,12 @@ class _DayPreviewDialog extends StatelessWidget {
               .toList(),
         ).entries
             .map((entry) => (goal: goalById(goals, entry.key), duration: entry.value))
-            .where((e) => e.goal != null)
+            // A goal fully credited for the day (see
+            // untimedPlannedDurationByGoalForDate's own clamped-at-zero
+            // behaviour) sits in the map at exactly zero rather than
+            // being removed — filtered out here so it doesn't linger as
+            // a "0m" row once there's nothing left unscheduled.
+            .where((e) => e.goal != null && e.duration > Duration.zero)
             .toList()
           ..sort((a, b) => b.duration.compareTo(a.duration));
 

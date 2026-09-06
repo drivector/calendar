@@ -4254,6 +4254,81 @@ void main() {
   );
 
   testWidgets(
+    'Day view: a goal fully credited for the day drops out of the '
+    '"unscheduled" dialog entirely, rather than lingering as a "0m" row',
+    (WidgetTester tester) async {
+      final container = ProviderContainer(
+        overrides: await _signedInOnboardedNoActivityOverrides(),
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // A second untimed goal, still owing 20m today, alongside "Test
+      // goal" (30m/day, from the fixture) which this test fully credits.
+      await container.read(goalsRepositoryProvider).upsert(
+        Goal(
+          id: 'goal-2',
+          name: 'Reading',
+          categoryId: 'cat-1',
+          startDate: DateTime(2020, 1, 1),
+          endDate: DateTime(2099, 12, 31),
+          scheduleByWeekday: {
+            for (var weekday = 1; weekday <= 7; weekday++)
+              weekday: [const DayScheduleEntry.duration(Duration(minutes: 20))],
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Before: both goals' full budgets are unscheduled (30m + 20m).
+      expect(_unscheduledLine('50m'), findsOneWidget);
+
+      // "Test goal" fully credited with a matching tracked activity;
+      // "Reading" untouched.
+      await container.read(trackedBlocksRepositoryProvider).upsert(
+        TrackedBlock(
+          id: 'test-tracked-full',
+          start: DateTime(mockDay.year, mockDay.month, mockDay.day, 7, 0),
+          end: DateTime(mockDay.year, mockDay.month, mockDay.day, 7, 30),
+          title: 'Test goal',
+          goalId: 'goal-1',
+          sourceId: 'manual',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(_unscheduledLine('20m'), findsOneWidget);
+
+      await tester.tap(_unscheduledLine('20m'));
+      await tester.pumpAndSettle();
+
+      final dialog = find.byType(Dialog);
+      expect(
+        find.descendant(of: dialog, matching: find.text('reading')),
+        findsOneWidget,
+      );
+      // "test goal" is fully credited (0m) -- it shouldn't show up as a
+      // row here at all, not even one reading "0m".
+      expect(
+        find.descendant(of: dialog, matching: find.text('test goal')),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: dialog, matching: find.text('0m')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
     'Day view: the drift footer also totals every visible day, and drops '
     'the "TODAY" label once more than one day is on screen',
     (WidgetTester tester) async {
