@@ -176,6 +176,23 @@ Future<void> _goalSheetNext(WidgetTester tester, [int times = 1]) async {
 /// elsewhere on screen. (The sharpest case is gone — the first tab is
 /// "Calendar" now, not "Day", which used to also match the Day view's own
 /// view-mode button — but staying scoped keeps the next rename safe.)
+/// Tapping a planned block on the Day view timeline now asks what the tap
+/// meant (see PlanBlockActionsSheet) instead of inferring it — every test
+/// that used to land straight in a sheet goes through this: tap the block,
+/// then pick one of "Edit planned activity" / "Edit goal schedule" /
+/// "New planned activity" / "New actual activity".
+Future<void> _tapPlanBlock(
+  WidgetTester tester,
+  Finder planBlock,
+  String action,
+) async {
+  await tester.ensureVisible(planBlock);
+  await tester.tap(planBlock);
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(action));
+  await tester.pumpAndSettle();
+}
+
 Future<void> _tapTab(WidgetTester tester, String label) async {
   await tester.tap(
     find.descendant(of: find.byType(AppTabBar), matching: find.text(label)),
@@ -4604,9 +4621,7 @@ void main() {
       final planBlock = find.byWidgetPredicate(
         (w) => w is PlanBlockWidget && w.block.id == 'plan-lunch-test',
       );
-      await tester.ensureVisible(planBlock);
-      await tester.tap(planBlock);
-      await tester.pumpAndSettle();
+      await _tapPlanBlock(tester, planBlock, 'New actual activity');
 
       expect(tester.takeException(), isNull);
       expect(find.text('New actual activity'), findsOneWidget);
@@ -4657,6 +4672,123 @@ void main() {
   );
 
   testWidgets(
+    'Day view: tapping a planned block that has already happened offers '
+    'all three of edit / new plan / new actual — editing it was '
+    'unreachable before, which is the bug a real user hit trying to '
+    'correct an already-past "sleep" block',
+    (WidgetTester tester) async {
+      final container = ProviderContainer(
+        overrides: await _signedInOnboardedNoActivityOverrides(),
+      );
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await container.read(plannedBlocksRepositoryProvider).upsert(
+        PlannedBlock(
+          id: 'plan-past-edit-test',
+          start: DateTime(2026, 8, 20, 12, 0),
+          end: DateTime(2026, 8, 20, 12, 30),
+          title: 'Sleep',
+          goalId: 'goal-1',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final planBlock = find.byWidgetPredicate(
+        (w) => w is PlanBlockWidget && w.block.id == 'plan-past-edit-test',
+      );
+      await tester.ensureVisible(planBlock);
+      await tester.tap(planBlock);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Edit planned activity'), findsOneWidget);
+      expect(find.text('New planned activity'), findsOneWidget);
+      expect(find.text('New actual activity'), findsOneWidget);
+      expect(find.text('Planned 12:00–12:30'), findsOneWidget);
+
+      await tester.tap(find.text('Edit planned activity'));
+      await tester.pumpAndSettle();
+
+      // The edit sheet for this exact plan, not a new anything.
+      expect(find.text('Delete planned activity'), findsOneWidget);
+      await tester.enterText(find.byType(TextField).first, 'Sleep, corrected');
+      await tester.tap(find.text('save'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      final planned = container.read(allPlannedBlocksProvider);
+      expect(planned, hasLength(1));
+      expect(planned.single.id, 'plan-past-edit-test');
+      expect(planned.single.title, 'Sleep, corrected');
+      // Editing the plan logs nothing as actually done.
+      expect(container.read(allTrackedBlocksProvider), isEmpty);
+    },
+  );
+
+  testWidgets(
+    'Day view: "New planned activity" on an existing plan adds a second '
+    "plan in that slot rather than editing the tapped one, and doesn't "
+    "carry the tapped plan's title over",
+    (WidgetTester tester) async {
+      final container = ProviderContainer(
+        overrides: await _signedInOnboardedNoActivityOverrides(),
+      );
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const CalendarTrackerApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await container.read(plannedBlocksRepositoryProvider).upsert(
+        PlannedBlock(
+          id: 'plan-second-test',
+          start: DateTime(2026, 8, 20, 12, 0),
+          end: DateTime(2026, 8, 20, 12, 30),
+          title: 'Sleep',
+          goalId: 'goal-1',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final planBlock = find.byWidgetPredicate(
+        (w) => w is PlanBlockWidget && w.block.id == 'plan-second-test',
+      );
+      await _tapPlanBlock(tester, planBlock, 'New planned activity');
+
+      expect(find.text('New planned activity'), findsOneWidget);
+      // Starts from the tapped slot's time, but blank otherwise — this is
+      // a different plan, not a copy of the one tapped.
+      final sheet = find.byType(BottomSheet);
+      expect(
+        find.descendant(of: sheet, matching: find.text('Sleep')),
+        findsNothing,
+      );
+
+      await tester.enterText(find.byType(TextField).first, 'Reading');
+      await _pickGoal(tester, ancestor: sheet, goalName: 'Test goal');
+      await tester.tap(find.text('save'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      final planned = container.read(allPlannedBlocksProvider);
+      expect(planned, hasLength(2));
+      expect(
+        planned.map((b) => b.title),
+        containsAll(<String>['Sleep', 'Reading']),
+      );
+    },
+  );
+
+  testWidgets(
     'Day view: tapping a future manually-added planned block opens an '
     'edit sheet for the plan itself, never an add-actual sheet — nothing '
     'can have happened yet',
@@ -4703,9 +4835,7 @@ void main() {
       final planBlock = find.byWidgetPredicate(
         (w) => w is PlanBlockWidget && w.block.id == 'plan-future-test',
       );
-      await tester.ensureVisible(planBlock);
-      await tester.tap(planBlock);
-      await tester.pumpAndSettle();
+      await _tapPlanBlock(tester, planBlock, 'Edit planned activity');
 
       expect(tester.takeException(), isNull);
       expect(find.text('Edit planned activity'), findsOneWidget);
@@ -4777,9 +4907,7 @@ void main() {
       final planBlock = find.byWidgetPredicate(
         (w) => w is PlanBlockWidget && w.block.id == 'plan-future-delete-test',
       );
-      await tester.ensureVisible(planBlock);
-      await tester.tap(planBlock);
-      await tester.pumpAndSettle();
+      await _tapPlanBlock(tester, planBlock, 'Edit planned activity');
 
       await tester.tap(find.text('Delete planned activity'));
       await tester.pumpAndSettle();
@@ -4844,9 +4972,7 @@ void main() {
       final planBlock = find.byWidgetPredicate(
         (w) => w is PlanBlockWidget && w.block.goalId == 'goal-work-future-test',
       );
-      await tester.ensureVisible(planBlock);
-      await tester.tap(planBlock);
-      await tester.pumpAndSettle();
+      await _tapPlanBlock(tester, planBlock, 'Edit goal schedule');
 
       expect(tester.takeException(), isNull);
       expect(find.byType(GoalDetailSheet), findsOneWidget);

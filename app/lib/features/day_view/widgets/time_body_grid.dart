@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/category.dart';
 import '../../../models/goal.dart';
+import '../../../models/planned_block.dart';
 import '../../../models/running_activity.dart';
 import '../../../models/tracked_block.dart';
 import '../../../models/user_settings.dart';
@@ -21,6 +22,7 @@ import 'actual_block_widget.dart';
 import 'add_block_sheet.dart';
 import 'block_label_style.dart';
 import 'live_activity_running_block.dart';
+import 'plan_block_actions_sheet.dart';
 import 'plan_block_widget.dart';
 
 /// Left gutter reserved for the hour labels ("06", "07", ...).
@@ -137,6 +139,57 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
       date: date,
       initialStart: TimeOfDay(hour: rounded ~/ 60, minute: rounded % 60),
     );
+  }
+
+  // Acts on whichever of the three things tapping a planned block can
+  // mean (see [showPlanBlockActionsSheet]). "Edit" for a goal-generated
+  // plan opens the goal's own detail instead of this sheet: a recurring
+  // schedule has no standalone document to edit in place. "New planned"
+  // deliberately carries only the tapped slot's start time over, not the
+  // plan's title/goal — it's a second, different plan in that slot, not a
+  // copy. "New actual" keeps the old prefilled-from-the-plan behaviour, so
+  // logging what was planned still doesn't mean retyping it.
+  Future<void> _handlePlanTap(PlannedBlock block, DateTime date) async {
+    final action = await showPlanBlockActionsSheet(context, block: block);
+    if (action == null || !mounted) return;
+    switch (action) {
+      case PlanBlockAction.editPlan:
+        if (block.isGoalGenerated) {
+          showGoalDetailSheet(context, ref, block.goalId);
+        } else {
+          showAddBlockSheet(
+            context,
+            ref,
+            isPlan: true,
+            date: date,
+            initialStart: TimeOfDay.fromDateTime(block.start),
+            initialEnd: TimeOfDay.fromDateTime(block.end),
+            initialTitle: block.title,
+            initialGoalId: block.goalId,
+            editingId: block.id,
+          );
+        }
+      case PlanBlockAction.newPlan:
+        showAddBlockSheet(
+          context,
+          ref,
+          isPlan: true,
+          date: date,
+          initialStart: TimeOfDay.fromDateTime(block.start),
+        );
+      case PlanBlockAction.newActual:
+        showAddBlockSheet(
+          context,
+          ref,
+          isPlan: false,
+          date: date,
+          initialStart: TimeOfDay.fromDateTime(block.start),
+          initialEnd: TimeOfDay.fromDateTime(block.end),
+          initialTitle: block.title,
+          initialGoalId: block.goalId,
+          fromPlan: true,
+        );
+    }
   }
 
   @override
@@ -341,47 +394,13 @@ class _TimeBodyGridState extends ConsumerState<TimeBodyGrid> {
             left: slotLeft,
             width: slotWidth,
             pxPerMinute: pxPerMinute,
-            // A plan that hasn't happened yet can't have an actual entry
-            // logged against it — nothing has occurred to log. Tapping it
-            // instead opens something to edit the plan itself: for a
-            // manually-added one, this sheet in edit mode; for one derived
-            // from a goal's own recurring schedule (no standalone document
-            // to edit), the goal's own detail, where that schedule lives.
-            // Only a plan that's already started (or finished) opens the
-            // add-actual sheet, prefilled from the plan itself (time,
-            // title, goal) — logging what was already planned shouldn't
-            // mean retyping it.
+            // Tapping a plan asks what the tap meant rather than guessing
+            // from whether the plan has already started — guessing meant a
+            // plan in the past could only ever be logged against, never
+            // corrected. See [showPlanBlockActionsSheet].
             childBuilder: (labelStyle) => GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: () {
-                if (!block.start.isAfter(DateTime.now())) {
-                  showAddBlockSheet(
-                    context,
-                    ref,
-                    isPlan: false,
-                    date: date,
-                    initialStart: TimeOfDay.fromDateTime(block.start),
-                    initialEnd: TimeOfDay.fromDateTime(block.end),
-                    initialTitle: block.title,
-                    initialGoalId: block.goalId,
-                    fromPlan: true,
-                  );
-                } else if (block.isGoalGenerated) {
-                  showGoalDetailSheet(context, ref, block.goalId);
-                } else {
-                  showAddBlockSheet(
-                    context,
-                    ref,
-                    isPlan: true,
-                    date: date,
-                    initialStart: TimeOfDay.fromDateTime(block.start),
-                    initialEnd: TimeOfDay.fromDateTime(block.end),
-                    initialTitle: block.title,
-                    initialGoalId: block.goalId,
-                    editingId: block.id,
-                  );
-                }
-              },
+              onTap: () => _handlePlanTap(block, date),
               child: PlanBlockWidget(
                 block: block,
                 category: resolveCategory(

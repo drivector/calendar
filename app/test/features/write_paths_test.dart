@@ -349,6 +349,10 @@ void main() {
       await tester.ensureVisible(planBlock);
       await tester.tap(planBlock);
       await tester.pumpAndSettle();
+      // Tapping a plan asks what the tap meant first — see
+      // PlanBlockActionsSheet.
+      await tester.tap(find.text('Edit planned activity'));
+      await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Delete planned activity'));
       await tester.tap(find.text('Delete planned activity'));
       await tester.pumpAndSettle();
