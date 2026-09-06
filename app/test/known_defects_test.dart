@@ -4,6 +4,10 @@
 // message names the bug. They are red on purpose — delete or invert the
 // assertion only when the underlying defect is actually fixed.
 //
+// "An overnight block is counted twice in multi-day totals" (the first
+// defect from that audit) has since been fixed and moved to
+// test/state/derived_providers_test.dart as a regular passing assertion.
+//
 // Two items from that audit are deliberately absent, because neither is
 // expressible as a behavioural assertion:
 //
@@ -33,7 +37,6 @@ import 'package:calendar_tracker/models/tracked_block.dart';
 import 'package:calendar_tracker/shared/widgets/quick_log_check_button.dart';
 import 'package:calendar_tracker/state/auth_providers.dart';
 import 'package:calendar_tracker/state/day_view_providers.dart';
-import 'package:calendar_tracker/state/derived_providers.dart';
 import 'package:calendar_tracker/state/firestore_providers.dart';
 import 'package:calendar_tracker/state/goals_providers.dart';
 import 'package:calendar_tracker/state/week_view_providers.dart';
@@ -79,48 +82,6 @@ ProviderContainer _containerWith({
 );
 
 void main() {
-  group('DEFECT: an overnight block is counted twice in multi-day totals', () {
-    test(
-      'registered time across a 3-day window equals the block\'s real '
-      'duration, not double it',
-      () {
-        final container = _containerWith(
-          selectedDate: DateTime(2026, 8, 19),
-          mode: DayViewMode.threeDay,
-        );
-        addTearDown(container.dispose);
-
-        final (_, _, registered, _) = container.read(dayTotalsProvider);
-
-        // visibleDayBlocksProvider puts the block on both day columns —
-        // correct for *rendering* — but dayTotalsProvider then adds each
-        // column's full duration. Fix by clamping each block to
-        // dayBounds(date) when totalling, leaving rendering alone.
-        expect(
-          registered,
-          const Duration(hours: 8),
-          reason:
-              'An 8h overnight block spans two visible columns and is '
-              'summed twice. Expect 8h, actual is 16h.',
-        );
-      },
-    );
-
-    test('the same block in single-day mode is not affected', () {
-      // The control: the defect only shows once more than one day is
-      // visible, which is why it survived this long.
-      final container = _containerWith(
-        selectedDate: DateTime(2026, 8, 19),
-        mode: DayViewMode.day,
-      );
-      addTearDown(container.dispose);
-
-      final (_, _, registered, _) = container.read(dayTotalsProvider);
-
-      expect(registered, const Duration(hours: 8));
-    });
-  });
-
   group('DEFECT: the Capacity page loses the far side of an overnight block', () {
     test('the hours after midnight are credited to the day they happened on', () {
       final container = _containerWith(

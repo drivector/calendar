@@ -188,6 +188,15 @@ final visibleDayTotalsProvider = Provider<List<VisibleDayTotals>>((ref) {
 /// fixed time yet. A user hit this directly: an untimed goal minute
 /// silently inflating "planned" past what the visible blocks on the
 /// calendar actually added up to, reading as a miscalculation.
+///
+/// "planned"/"registered" are summed from deduplicated blocks (by id)
+/// across every visible day column, not from [visibleDayTotalsProvider]'s
+/// own per-day sums: an overnight block deliberately appears on both of
+/// the columns it touches (see [visibleDayBlocksProvider]'s own doc
+/// comment — that's correct for rendering), so adding each column's full
+/// duration would count it twice. Summing its one real [duration] once,
+/// regardless of how many columns it's drawn on, is what "registered
+/// across this window" actually means.
 final dayTotalsProvider =
     Provider<
       (
@@ -201,13 +210,25 @@ final dayTotalsProvider =
       final dayBlocks = ref.watch(visibleDayBlocksProvider);
       final goals = ref.watch(goalsProvider);
 
-      var plannedTotal = Duration.zero;
+      final plannedById = <String, PlannedBlock>{
+        for (final day in dayBlocks)
+          for (final b in day.planned) b.id: b,
+      };
+      final trackedById = <String, TrackedBlock>{
+        for (final day in dayBlocks)
+          for (final b in day.tracked) b.id: b,
+      };
+      final plannedTotal = plannedById.values.fold<Duration>(
+        Duration.zero,
+        (total, b) => total + b.duration,
+      );
+      final registeredTotal = trackedById.values.fold<Duration>(
+        Duration.zero,
+        (total, b) => total + b.duration,
+      );
       var windowTotal = Duration.zero;
-      var registeredTotal = Duration.zero;
       for (final day in perDay) {
-        plannedTotal += day.planned;
         windowTotal += day.tracked;
-        registeredTotal += day.registered;
       }
       var unscheduledTotal = Duration.zero;
       for (final day in dayBlocks) {

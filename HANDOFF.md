@@ -1,5 +1,23 @@
 # Track My Day (formerly "Calendar Tracker") — session handoff
 
+Updated 2026-09-07 (later, another session). Fixed the first of the six
+known defects from the audit below: an overnight block spanning midnight
+was counted once per visible day column it touched, so a 3-day window
+containing an 8h overnight block reported 16h of registered time instead
+of 8h. `dayTotalsProvider` (`lib/state/derived_providers.dart`) now sums
+planned/registered totals from blocks deduplicated by id across every
+visible day column, rather than adding each column's own per-day sum —
+`visibleDayBlocksProvider` still deliberately draws the block on both
+columns it touches (that part was correct, for rendering), only the
+*total* was double-counting it. The two tests for this moved out of
+`test/known_defects_test.dart` into `test/state/derived_providers_test.dart`
+as regular (now-passing) assertions, per that file's own stated policy of
+inverting/removing a defect's test once it's fixed rather than leaving it
+red. Not committed — uncommitted changes in `lib/state/derived_providers.dart`,
+`test/known_defects_test.dart`, and the new `test/state/derived_providers_test.dart`.
+**327 tests pass, 5 still fail** (the other five known defects below,
+unchanged), `flutter analyze` clean.
+
 Updated 2026-09-07. One commit, `c4db8a3`, on branch
 `tracked-block-untimed-shape`, merged into `main` (fast-forward) and
 pushed — `TrackedBlock` no longer stores a fabricated clock span behind
@@ -13,17 +31,20 @@ permission-denied. `main` is up to date with `origin/main` at `c4db8a3`,
 `flutter analyze` clean.
 
 **The test suite is deliberately red.** `test/known_defects_test.dart`
-holds six failing tests, one per defect found in the audit at the end of
-that session — they assert the behaviour the app *should* have, and each
-failure message names the bug. Expected state is **326 passing, 6
-failing**; anything else means something genuinely broke. This was a
-deliberate call over marking them `skip:` — the bugs stay loud at the
-cost of red CI. To go green without fixing them, add
-`skip: 'known defect'` to each test. Delete or invert an assertion only
-when its underlying defect is actually fixed. Two audit findings have no
-test on purpose (`Goal.weeklyTargetHours` and `AppTextStyles.mono()` are
-both misnamed rather than misbehaving, and a test cannot fail on a name)
-— the file header says so, so it is not read as an exhaustive list.
+holds five failing tests, one per still-unfixed defect found in the audit
+at the end of that session (a sixth, the overnight-block double-count, was
+fixed and moved out — see the paragraph above) — they assert the
+behaviour the app *should* have, and each failure message names the bug.
+Expected state is **327 passing, 5 failing**; anything else means
+something genuinely broke. This was a deliberate call over marking them
+`skip:` — the bugs stay loud at the cost of red CI. To go green without
+fixing them, add `skip: 'known defect'` to each test. Delete or invert an
+assertion (or, as with the fixed one, move it into a regular test file)
+only when its underlying defect is actually fixed. Two audit findings
+have no test on purpose (`Goal.weeklyTargetHours` and
+`AppTextStyles.mono()` are both misnamed rather than misbehaving, and a
+test cannot fail on a name) — the file header says so, so it is not read
+as an exhaustive list.
 
 Note on the paragraph below: it was accurate when written but `d15d5ee`
 has not been the tip since. Eight commits landed between it and
