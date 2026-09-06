@@ -1,5 +1,15 @@
 # Track My Day (formerly "Calendar Tracker") — session handoff
 
+Updated 2026-09-06 (a further session). One more commit, `d15d5ee`,
+landed directly on `main` (no branch) — tapping a planned block on the
+Day view now opens a chooser instead of guessing what the tap meant, see
+**Plan-block tap: ask instead of guess** at the very end. Deployed and
+verified installed on the user's iPhone (*Tseligas*) via `xcrun devicectl`
+after `flutter install` itself failed on a transient wireless-tunnel
+hiccup — the direct `devicectl` command is the fallback if that happens
+again. `main` is up to date with `origin/main` at `d15d5ee`, **298 tests
+pass**, `flutter analyze` clean.
+
 Updated 2026-09-05 (later still, another session on the same day). Four
 more commits landed on top of everything below, all now **merged into
 `main` and pushed** (merge commit `25ff8d6`) — the branch they were on,
@@ -4105,3 +4115,54 @@ Touched: `lib/features/account/day_preview_sheet.dart`,
 and pushed to its own branch, `fix/unscheduled-planned-linkage`, then
 merged into `main` (merge commit `a23c517`) and the branch deleted —
 `main` is fully up to date with `origin/main`. 291 tests pass.
+
+## Plan-block tap: ask instead of guess (2026-09-06, `d15d5ee`)
+
+Reported directly by the user: tapping "sleep" (an already-past planned
+block) to correct it kept opening a *new actual activity* form instead of
+letting them edit the plan.
+
+Root cause: `TimeBodyGrid`'s tap handler for a planned block inferred
+what the tap meant purely from whether the plan had already started — an
+already-past or in-progress plan always opened the add-actual sheet
+(prefilled from the plan), a future one always opened the plan's own edit
+sheet (or the goal detail, for a goal-generated plan). That left an
+already-happened plan with **no route to editing it at all** — exactly
+the bug hit.
+
+Fix: tapping any planned block now opens a small chooser sheet,
+`PlanBlockActionsSheet` (`lib/features/day_view/widgets/
+plan_block_actions_sheet.dart`), headed by the plan's own title and
+`Planned <start>–<end>`, offering all three outcomes every time rather
+than picking one:
+
+- **Edit planned activity** — the plan itself, in place (with its delete
+  option). For a goal-generated plan this instead reads **Edit goal
+  schedule** and opens the goal's own detail sheet, since a recurring
+  schedule has no standalone document to edit.
+- **New planned activity** — a second, independent plan in that slot.
+  Deliberately carries over only the tapped slot's start time, not the
+  tapped plan's title/goal — it's a new plan, not a copy of the one
+  tapped.
+- **New actual activity** — the previous default behaviour, still
+  prefilled from the plan (time, title, goal) so logging what was already
+  planned doesn't mean retyping it.
+
+`TimeBodyGrid`'s own tap handler is now a small `_handlePlanTap` that
+awaits the chooser's result and dispatches on it, replacing the old
+inline if/else on `block.start.isAfter(now)` / `block.isGoalGenerated`.
+
+Five existing widget tests that relied on the old direct-jump behaviour
+now tap through the chooser first (via a new `_tapPlanBlock` test
+helper); two new tests cover the fix directly — editing an already-past
+plan works and logs nothing as done, and "New planned activity" adds a
+genuinely separate plan rather than editing the one tapped.
+
+Touched: `lib/features/day_view/widgets/plan_block_actions_sheet.dart`
+(new), `lib/features/day_view/widgets/time_body_grid.dart`,
+`test/widget_test.dart`, `test/features/write_paths_test.dart`. Committed
+and pushed directly to `main` as `d15d5ee`. 298 tests pass, `flutter
+analyze` clean. Built (`flutter build ios --release`) and installed on
+the user's iPhone (*Tseligas*), verified present via `xcrun devicectl
+device info apps` — not yet live-verified by tapping through it on the
+device itself.
